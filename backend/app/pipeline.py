@@ -11,7 +11,7 @@ import uuid
 from collections import deque
 from collections.abc import Awaitable, Callable
 
-from . import audio, usage
+from . import audio, timing, usage
 from .config import settings
 from .glossary import glossary as _glossary
 from .factcheck import FactChecker, VerifyResult
@@ -155,7 +155,7 @@ class Pipeline:
                 text=claim_text,
                 verdict=Verdict.PENDING,
                 confidence=0,
-                start=chunk.start,
+                start=timing.locate(claim_text, text, chunk.start, chunk.end),
                 end=chunk.end,
                 captured_at=chunk.captured_at or None,
                 extracted_at=time.time(),

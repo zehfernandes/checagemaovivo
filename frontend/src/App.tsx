@@ -90,7 +90,7 @@ export default function App() {
   // Processing is shared per video and cached server-side; for a recording we only reveal
   // what has been said up to the player position; for a delayed live, what the viewer heard.
   const visibleClaims = useMemo(() => {
-    if (!isLive) return session.claims.filter((c) => c.start >= baseline - 1 && c.start <= currentTime + 1)
+    if (!isLive) return session.claims.filter((c) => c.start >= baseline - 1 && c.start <= currentTime)
     if (!delayed) return session.claims
     return session.claims
       .map((c) => ({ ...c, revealAt: revealAt(c.captured_at) }))

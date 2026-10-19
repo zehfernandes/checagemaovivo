@@ -15,9 +15,12 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import feedparser
+import html
 import httpx
 import numpy as np
 import trafilatura
+import xml.etree.ElementTree as ET
+from datetime import datetime
 from openai import AsyncOpenAI
 
 from . import usage
@@ -36,6 +39,8 @@ DEFAULT_FEEDS: dict[str, str] = {
     "CNN Brasil": "https://www.cnnbrasil.com.br/feed/",
     "E-Farsas": "https://www.e-farsas.com/feed",
     "Boatos.org": "https://www.boatos.org/feed",
+    # sitemap source (no RSS): fact-check per statement of the Band debate, by the Lula Memes volunteer front
+    "flaviomentiu.com.br (Lula Memes)": "https://flaviomentiu.com.br/sitemap.xml",
 }
 
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
@@ -97,6 +102,28 @@ def _chunk(text: str) -> list[str]:
 def _published(entry) -> float | None:
     t = entry.get("published_parsed") or entry.get("updated_parsed")
     return float(calendar.timegm(t)) if t else None
+
+
+def _sitemap_entries(xml: bytes) -> list[dict]:
+    """Feed-like entries from a sitemap.xml (sites without RSS). The site root is skipped."""
+    ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
+    out: list[dict] = []
+    for u in ET.fromstring(xml).findall("s:url", ns):
+        loc = (u.findtext("s:loc", default="", namespaces=ns) or "").strip()
+        if not loc or loc.rstrip("/").count("/") <= 2:
+            continue
+        mod = u.findtext("s:lastmod", default="", namespaces=ns) or ""
+        out.append({"link": loc, "title": "", "summary": "", "published_parsed": _iso_to_struct(mod)})
+    return out
+
+
+def _iso_to_struct(iso: str):
+    if not iso:
+        return None
+    try:
+        return datetime.fromisoformat(iso.replace("Z", "+00:00")).utctimetuple()
+    except ValueError:
+        return None
 
 
 class NewsStore:
@@ -266,11 +293,18 @@ class NewsStore:
     # ---------- ingest ----------
     async def _fetch_article(self, http: httpx.AsyncClient, url: str) -> tuple[str, str]:
         """Return (final_url, text)."""
+        final, text, _ = await self._fetch_page(http, url)
+        return final, text
+
+    async def _fetch_page(self, http: httpx.AsyncClient, url: str) -> tuple[str, str, str]:
+        """Return (final_url, text, html_title)."""
         r = await http.get(url)
         r.raise_for_status()
         text = await asyncio.to_thread(
             trafilatura.extract, r.text, include_comments=False, include_tables=False, favor_recall=True)
-        return str(r.url), text or ""
+        m = re.search(r"<title[^>]*>(.*?)</title>", r.text, re.S | re.I)
+        title = html.unescape(re.sub(r"\s+", " ", m.group(1))).strip() if m else ""
+        return str(r.url), text or "", title
 
     async def refresh(self, max_age_days: int = 14, concurrency: int = 8) -> dict:
         async with self._refresh_lock:
@@ -285,8 +319,8 @@ class NewsStore:
                     if isinstance(res, Exception):
                         log.warning("feed %s failed: %s", source, res)
                         continue
-                    parsed = feedparser.parse(res.content)
-                    for e in parsed.entries:
+                    entries = _sitemap_entries(res.content) if b"<urlset" in res.content[:600] else feedparser.parse(res.content).entries
+                    for e in entries:
                         link = (e.get("link") or "").strip()
                         if "*http" in link:  # folha redirector
                             link = "http" + link.split("*http", 1)[1]
@@ -301,14 +335,16 @@ class NewsStore:
                 async def grab(c: dict) -> dict | None:
                     async with sem:
                         try:
-                            final, text = await self._fetch_article(http, c["url"])
+                            final, text, page_title = await self._fetch_page(http, c["url"])
                         except Exception as ex:  # noqa: BLE001
                             log.debug("article %s failed: %s", c["url"], ex)
-                            final, text = c["url"], ""
+                            final, text, page_title = c["url"], "", ""
                     if len(text) < 200:
                         text = trafilatura.html2txt(c["summary"]) if c["summary"] else ""
                     if len(text) < 120:
                         return None
+                    if not c["title"]:
+                        c["title"] = (page_title or text.split("\n", 1)[0])[:160]
                     c["text"] = text
                     return c
 

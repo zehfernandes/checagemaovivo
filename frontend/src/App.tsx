@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { ClaimCard } from './components/ClaimCard'
-import { Overlay } from './components/Overlay'
+import { Danmu } from './components/Danmu'
 import { Player } from './components/Player'
 import { TranscriptRail } from './components/TranscriptRail'
 import { useSession } from './useSession'
@@ -24,6 +24,8 @@ export default function App() {
   const [language, setLanguage] = useState('pt')
   const [currentTime, setCurrentTime] = useState(0)
   const [tab, setTab] = useState<'claims' | 'transcript'>('claims')
+  const [danmu, setDanmu] = useState(() => localStorage.getItem('danmu') !== 'off')
+  useEffect(() => localStorage.setItem('danmu', danmu ? 'on' : 'off'), [danmu])
   const session = useSession()
 
   const videoId = session.info?.video_id || extractVideoId(url)
@@ -105,6 +107,15 @@ export default function App() {
           {session.statusText || 'Idle'}
           {session.info?.is_live && <span className="live-tag">LIVE</span>}
         </div>
+        <button
+          type="button"
+          className={`toggle ${danmu ? 'toggle--on' : ''}`}
+          onClick={() => setDanmu((d) => !d)}
+          title="Danmu overlay: claims fly across the video"
+          aria-pressed={danmu}
+        >
+          <span className="toggle__knob" /> Danmu {danmu ? 'On' : 'Off'}
+        </button>
         <div className="news-pill" title={news ? Object.entries(news.sources).map(([k, v]) => `${k}: ${v}`).join('\n') : ''}>
           <span className="news-pill__label">News DB</span>
           <strong>{news ? news.docs : '–'}</strong> articles
@@ -124,7 +135,7 @@ export default function App() {
           ) : (
             <div className="player player--empty">Paste a YouTube URL to begin</div>
           )}
-          <Overlay claims={session.claims} isLive={isLive} currentTime={currentTime} />
+          <Danmu claims={session.claims} isLive={isLive} currentTime={currentTime} enabled={danmu} />
           <div className="scoreboard">
             <Score label="Fake" n={counts.fake} kind="fake" />
             <Score label="Valid" n={counts.valid} kind="valid" />

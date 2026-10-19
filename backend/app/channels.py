@@ -115,6 +115,8 @@ class Channel:
         if row:
             self.processed_to = max(self.processed_to, row["processed_to"] or 0)
             self.complete = row["status"] == "complete" and not info.is_live
+            if self.complete:
+                self.status = {"state": "listening", "message": "Processado por completo · servido do cache"}
 
     # ---- fan-out ---------------------------------------------------------------------------
     def subscribe(self) -> asyncio.Queue:

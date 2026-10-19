@@ -30,16 +30,18 @@ class Pipeline:
         self.checker = checker
         self.emit = emit
         self.tasks: set[asyncio.Task] = set()
+        self.verify_tasks: set[asyncio.Task] = set()
         self.context: deque[str] = deque(maxlen=CONTEXT_SEGMENTS)
         self.recent_claims: deque[str] = deque(maxlen=RECENT_CLAIMS)
         self.verify_sem = asyncio.Semaphore(MAX_CONCURRENT_VERIFICATIONS)
         self._stopped = False
         self.run_id = uuid.uuid4().hex[:6]
 
-    def _spawn(self, coro) -> None:
+    def _spawn(self, coro, *, verification: bool = False) -> None:
         t = asyncio.create_task(coro)
-        self.tasks.add(t)
-        t.add_done_callback(self.tasks.discard)
+        bucket = self.verify_tasks if verification else self.tasks
+        bucket.add(t)
+        t.add_done_callback(bucket.discard)
 
     async def run(self, url: str, language: str | None, start_seconds: float) -> None:
         await self.emit({"type": "status", "state": "resolving", "message": "Resolving stream…"})
@@ -100,7 +102,7 @@ class Pipeline:
                 end=chunk.end,
             )
             await self.emit({"type": "claim", "claim": claim.model_dump()})
-            self._spawn(self._verify(claim, f"{context} {text}"))
+            self._spawn(self._verify(claim, f"{context} {text}"), verification=True)
 
     async def _verify(self, claim: Claim, context: str) -> None:
         async with self.verify_sem:
@@ -113,9 +115,12 @@ class Pipeline:
             r.verdict, r.confidence, r.explanation, r.sources, r.method)
         await self.emit({"type": "claim", "claim": claim.model_dump()})
 
-    async def stop(self) -> None:
+    async def stop(self, keep_verifications: bool = False) -> None:
+        """Stop ingestion. With keep_verifications, in-flight verdicts still get
+        delivered (used on re-sync so pending cards never stay 'Checking…')."""
         self._stopped = True
-        for t in list(self.tasks):
+        doomed = list(self.tasks) + ([] if keep_verifications else list(self.verify_tasks))
+        for t in doomed:
             t.cancel()
-        if self.tasks:
-            await asyncio.gather(*self.tasks, return_exceptions=True)
+        if doomed:
+            await asyncio.gather(*doomed, return_exceptions=True)

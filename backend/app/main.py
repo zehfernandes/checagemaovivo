@@ -104,13 +104,13 @@ async def ws_endpoint(ws: WebSocket):
             await emit({"type": "error", "message": str(e)})
             await emit({"type": "status", "state": "error", "message": "Stopped"})
 
-    async def stop() -> None:
+    async def stop(keep_verifications: bool = False) -> None:
         nonlocal run_task, pipeline
         if run_task and not run_task.done():
             run_task.cancel()
             await asyncio.gather(run_task, return_exceptions=True)
         if pipeline:
-            await pipeline.stop()
+            await pipeline.stop(keep_verifications)
         run_task, pipeline = None, None
 
     try:
@@ -123,7 +123,7 @@ async def ws_endpoint(ws: WebSocket):
                 except ValidationError as e:
                     await emit({"type": "error", "message": e.errors()[0]["msg"]})
                     continue
-                await stop()
+                await stop(keep_verifications=True)
                 run_task = asyncio.create_task(run(req))
             elif kind == "stop":
                 await stop()

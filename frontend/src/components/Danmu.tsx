@@ -68,7 +68,7 @@ export function Danmu({ claims, isLive, currentTime, enabled }: Props) {
       for (const id of [...seen.current.keys()]) if (!ids.has(id)) seen.current.delete(id)
     }
     for (const c of claims) {
-      if (!isLive && c.start > currentTime + 1) continue
+      if (!isLive && c.start > currentTime) continue
       const prev = seen.current.get(c.id)
       if (prev === c.verdict) continue
       seen.current.set(c.id, c.verdict)

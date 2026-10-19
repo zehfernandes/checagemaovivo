@@ -31,6 +31,21 @@ class Settings(BaseSettings):
     claim_gate_min: float = 0.35  # with decider=jev: drop candidate claims below this "checkable" probability
     claim_gate_min_save: float = 0.5  # save mode: stricter gate -> fewer verifications
     save_max_claims_per_min: int = 6
+    # Empty = everyone is admin (dev). Set it in production: only admins can start processing,
+    # re-check, refresh the news DB or edit verdicts; visitors only watch cached/ongoing runs.
+    admin_password: str = ""
+    # Only process/play a slice of given recordings: "VIDEO_ID=start-end,VIDEO_ID2=start-end" (seconds)
+    video_clips: str = ""
+
+    @property
+    def clip_map(self) -> dict[str, tuple[float, float]]:
+        out: dict[str, tuple[float, float]] = {}
+        for part in self.video_clips.split(","):
+            if "=" in part and "-" in part:
+                vid, rng = part.strip().split("=", 1)
+                a, b = rng.split("-", 1)
+                out[vid] = (float(a), float(b))
+        return out
     chunk_seconds: int = 8
     language: str = ""
     cors_origins: str = "http://localhost:5173"

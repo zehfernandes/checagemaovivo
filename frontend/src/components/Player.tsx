@@ -26,9 +26,13 @@ interface Props {
   /** seconds behind the live edge to play (0 = live edge); needs the stream's DVR window */
   liveDelay?: number
   onDelay?: (behindLive: number) => void
+  /** recordings limited to [start, end] seconds: the player opens at start and is kept inside */
+  clip?: [number, number]
 }
 
-export function Player({ videoId, onTime, liveDelay = 0, onDelay }: Props) {
+export function Player({ videoId, onTime, liveDelay = 0, onDelay, clip }: Props) {
+  const clipRef = useRef(clip)
+  clipRef.current = clip
   const host = useRef<HTMLDivElement>(null)
   const player = useRef<YT.Player | null>(null)
   const onTimeRef = useRef(onTime)
@@ -104,13 +108,24 @@ export function Player({ videoId, onTime, liveDelay = 0, onDelay }: Props) {
         events: {
           onReady: (e: YT.PlayerEvent) => {
             e.target.mute()
+            const c = clipRef.current
+            if (c && e.target.getCurrentTime() < c[0]) e.target.seekTo(c[0], true)
             e.target.playVideo()
           },
         },
       })
       timer = window.setInterval(() => {
         const p = player.current
-        if (p && typeof p.getCurrentTime === 'function') onTimeRef.current(p.getCurrentTime())
+        if (p && typeof p.getCurrentTime === 'function') {
+          const c = clipRef.current
+          const pos = p.getCurrentTime()
+          if (c && (pos < c[0] - 1 || pos > c[1] + 1)) {
+            p.seekTo(pos < c[0] - 1 ? c[0] : c[1] - 1, true)
+            if (pos > c[1] + 1) p.pauseVideo()
+            return
+          }
+          onTimeRef.current(pos)
+        }
       }, 500)
     })
     return () => {

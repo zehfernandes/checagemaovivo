@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { ClaimCard } from './components/ClaimCard'
+import { adminHeaders, adminPassword } from './admin'
 import { Danmu } from './components/Danmu'
 import { Player } from './components/Player'
 import { useSession } from './useSession'
@@ -32,6 +33,32 @@ export default function App() {
   const [save, setSave] = useState(() => localStorage.getItem('save') === 'on')
   const [sideOpen, setSideOpen] = useState(() => localStorage.getItem('side') !== 'closed')
   const [details, setDetails] = useState(false)
+  const [admin, setAdmin] = useState(false)
+  const [pwd, setPwd] = useState('')
+  const [pwdError, setPwdError] = useState(false)
+  useEffect(() => {
+    fetch('/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: adminPassword() }) })
+      .then((r) => r.json()).then((d) => setAdmin(Boolean(d.ok))).catch(() => {})
+  }, [])
+  async function login(e: FormEvent) {
+    e.preventDefault()
+    const r = await fetch('/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: pwd }) })
+    const d = await r.json()
+    if (d.ok) {
+      localStorage.setItem('admin', pwd)
+      setAdmin(true)
+      setPwdError(false)
+    } else setPwdError(true)
+    setPwd('')
+  }
+  function logout() {
+    localStorage.removeItem('admin')
+    setAdmin(false)
+  }
+  async function override(id: string, verdict: 'fake' | 'valid' | 'inconclusive', explanation: string) {
+    await fetch('/admin/claim', { method: 'POST', headers: { 'content-type': 'application/json', ...adminHeaders() },
+      body: JSON.stringify({ url: url.trim(), claim_id: id, verdict, explanation }) })
+  }
   // recordings: show only what is said from the position where Start was pressed (no backlog dump)
   const [baseline, setBaseline] = useState(0)
   useEffect(() => localStorage.setItem('side', sideOpen ? 'open' : 'closed'), [sideOpen])
@@ -78,7 +105,7 @@ export default function App() {
   async function refreshNews() {
     setRefreshing(true)
     try {
-      const r = await fetch('/news/refresh', { method: 'POST' })
+      const r = await fetch('/news/refresh', { method: 'POST', headers: adminHeaders() })
       setNews(await r.json())
     } finally {
       setRefreshing(false)
@@ -131,6 +158,10 @@ export default function App() {
   }
 
   const progress = session.progress
+  const clip = useMemo<[number, number] | undefined>(() => {
+    const i = session.info
+    return i?.clip_start != null && i?.clip_end != null ? [i.clip_start, i.clip_end] : undefined
+  }, [session.info])
   const usage = progress?.usage
   const usageTitle = usage
     ? `Esta execução: ${usage.calls} chamadas de modelo · ${(usage.tokens_in / 1000).toFixed(1)}k tokens de entrada / ${(usage.tokens_out / 1000).toFixed(1)}k de saída · ${usage.searches} buscas na web · ${Math.round(usage.audio_seconds / 60)} min de áudio — estimativa pelos preços de tabela`
@@ -150,7 +181,7 @@ export default function App() {
             required
           />
           <button type="submit" className={running ? 'btn btn--stop' : 'btn'}>
-            {running ? 'Parar' : 'Iniciar'}
+            {running ? 'Parar' : admin ? 'Iniciar' : 'Assistir'}
           </button>
           <span className={`indicator status--${session.state}`}>
             {session.state === 'listening' && <span className="dot" />}
@@ -192,25 +223,36 @@ export default function App() {
               <span>Danmu sobre o vídeo</span>
               <input type="checkbox" checked={danmu} onChange={(e) => setDanmu(e.target.checked)} />
             </label>
-            <label className="menu__row menu__row--check" title="Mesma experiência com menos chamadas de IA: sem checagem profunda automática (o botão Rechecar continua funcionando), filtro de afirmações mais rígido, no máximo 6 afirmações/min.">
+            {admin && <label className="menu__row menu__row--check" title="Mesma experiência com menos chamadas de IA: sem checagem profunda automática (o botão Rechecar continua funcionando), filtro de afirmações mais rígido, no máximo 6 afirmações/min.">
               <span>Modo econômico</span>
               <input type="checkbox" checked={save} onChange={(e) => setSave(e.target.checked)} disabled={running} />
-            </label>
-            <label className="menu__row menu__row--check" title="Processa de novo do zero, em um canal privado, sem ler nem gravar o cache compartilhado. Serve para medir a latência real.">
+            </label>}
+            {admin && <label className="menu__row menu__row--check" title="Processa de novo do zero, em um canal privado, sem ler nem gravar o cache compartilhado. Serve para medir a latência real.">
               <span>Sem cache (teste)</span>
               <input type="checkbox" checked={fresh} onChange={(e) => setFresh(e.target.checked)} disabled={running} />
-            </label>
+            </label>}
             <div className="menu__row menu__row--info" title={news ? Object.entries(news.sources).map(([k, v]) => `${k}: ${v}`).join('\n') : ''}>
               <span>Base de notícias</span>
               <span>
                 {news ? `${news.docs} artigos` : '–'}
                 {news?.last_refresh && <span className="muted"> · {ago(news.last_refresh)}</span>}
-                <button type="button" className="link" onClick={refreshNews} disabled={refreshing || !news}>
+                {admin && <button type="button" className="link" onClick={refreshNews} disabled={refreshing || !news}>
                   {refreshing ? 'atualizando…' : 'atualizar'}
-                </button>
+                </button>}
               </span>
             </div>
-            <a className="menu__row menu__row--link" href="#review">Revisão offline →</a>
+            {admin && <a className="menu__row menu__row--link" href="#review">Revisão offline →</a>}
+            {admin ? (
+              <div className="menu__row menu__row--info">
+                <span>Administrador</span>
+                <button type="button" className="link" onClick={logout}>sair</button>
+              </div>
+            ) : (
+              <form className={`menu__row menu__row--login${pwdError ? ' menu__row--error' : ''}`} onSubmit={login}>
+                <input type="password" value={pwd} onChange={(e) => setPwd(e.target.value)} placeholder="Senha de administrador" />
+                <button type="submit" className="link" disabled={!pwd}>entrar</button>
+              </form>
+            )}
           </div>
         </details>
       </header>
@@ -261,7 +303,7 @@ export default function App() {
             {!sideOpen && visibleClaims.length > 0 && <span className="side-toggle__count">{visibleClaims.length}</span>}
           </button>
           {videoId ? (
-            <Player videoId={videoId} onTime={setCurrentTime} liveDelay={delayed ? delay : 0} onDelay={setBehind} />
+            <Player videoId={videoId} onTime={setCurrentTime} liveDelay={delayed ? delay : 0} onDelay={setBehind} clip={clip} />
           ) : (
             <div className="player player--empty">Cole uma URL do YouTube para começar</div>
           )}
@@ -289,7 +331,7 @@ export default function App() {
                 <p className="muted empty">{tab === 'recent' ? 'Nada nos últimos 5 minutos.' : 'As afirmações verificadas aparecem aqui.'}</p>
               )}
               {[...(tab === 'recent' ? recentClaims : visibleClaims)].reverse().map((c) => (
-                <ClaimCard key={c.id} claim={c} onRecheck={session.recheck} />
+                <ClaimCard key={c.id} claim={c} onRecheck={admin ? session.recheck : undefined} onOverride={admin ? override : undefined} />
               ))}
           </div>
         </aside>

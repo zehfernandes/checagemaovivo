@@ -1,9 +1,11 @@
 import asyncio
+import hmac
+from typing import Literal
 import json
 import logging
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Header, WebSocket, WebSocketDisconnect
 from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AsyncOpenAI
@@ -13,6 +15,7 @@ from .config import settings
 from .factcheck import make_factchecker
 from .models import StartRequest
 from .news import NewsStore
+from . import audio
 from .channels import ChannelManager
 from .pipeline import Pipeline
 from .review import LABELS, ReviewStore, run_eval
@@ -68,12 +71,55 @@ async def _startup() -> None:
         t.add_done_callback(_bg_tasks.discard)
 
 
+def is_admin(password: str | None) -> bool:
+    return not settings.admin_password or hmac.compare_digest(password or "", settings.admin_password)
+
+
+def require_admin(x_admin_password: str = Header(default="")) -> None:
+    if not is_admin(x_admin_password):
+        raise HTTPException(403, "Senha de administrador inválida")
+
+
+class LoginRequest(BaseModel):
+    password: str = ""
+
+
+@app.post("/admin/login")
+async def admin_login(req: LoginRequest):
+    return {"ok": is_admin(req.password), "open": not settings.admin_password}
+
+
+class OverrideRequest(BaseModel):
+    url: str
+    claim_id: str
+    verdict: Literal["fake", "valid", "inconclusive"]
+    explanation: str = ""
+    sources: list[dict] | None = None
+
+
+@app.post("/admin/claim", dependencies=[Depends(require_admin)])
+async def admin_claim(req: OverrideRequest):
+    """Human fact-check: overrides a claim's verdict for everyone watching and in the cache + verdict memory."""
+    vid = audio.extract_video_id(req.url) or req.url
+    channel = channels.channels.get(vid) or await channels.get(req.url)
+    c = await channel.override(req.claim_id, req.verdict, req.explanation, req.sources)
+    if c is None:
+        raise HTTPException(404, "Afirmação não encontrada")
+    if store:
+        try:
+            vec = (await store.embed([c["text"]]))[0]
+            store.remember_verdict(c["text"], vec, c["verdict"], 1.0, c["explanation"], c.get("sources") or [], "human")
+        except Exception:  # noqa: BLE001
+            log.exception("verdict memory write failed")
+    return {"ok": True, "claim": c}
+
+
 @app.get("/news")
 async def news_stats():
     return store.stats() if store else {"docs": 0, "chunks": 0, "sources": {}, "last_refresh": None}
 
 
-@app.post("/news/refresh")
+@app.post("/news/refresh", dependencies=[Depends(require_admin)])
 async def news_refresh():
     if not store:
         return {"error": "news DB disabled (mock provider)"}
@@ -120,7 +166,7 @@ class LabelRequest(BaseModel):
     source_url: str = ""
 
 
-@app.post("/review/label")
+@app.post("/review/label", dependencies=[Depends(require_admin)])
 async def review_label(req: LabelRequest):
     if req.label not in LABELS:
         raise HTTPException(400, f"label must be one of {LABELS}")
@@ -142,12 +188,12 @@ class MissedRequest(BaseModel):
     note: str = ""
 
 
-@app.post("/review/missed")
+@app.post("/review/missed", dependencies=[Depends(require_admin)])
 async def review_missed(req: MissedRequest):
     return {"id": review.add_missed(req.run, req.start, req.segment, req.claim, req.note)}
 
 
-@app.delete("/review/missed/{mid}")
+@app.delete("/review/missed/{mid}", dependencies=[Depends(require_admin)])
 async def review_missed_delete(mid: str):
     review.delete_missed(mid)
     return {"ok": True}
@@ -199,6 +245,15 @@ async def ws_endpoint(ws: WebSocket) -> None:
                 except ValidationError as e:
                     await ws.send_json({"type": "error", "message": e.errors()[0]["msg"]})
                     continue
+                admin = is_admin(data.get("admin"))
+                if not admin:
+                    # visitors only watch shared results: no fresh/save runs, never start processing
+                    req.fresh = False
+                    req.save = False
+                    if not channels.cached(req.url):
+                        await ws.send_json({"type": "status", "state": "error",
+                                            "message": "Este vídeo ainda não foi processado. Só um administrador pode iniciar a checagem."})
+                        continue
                 await leave()
                 await ws.send_json({"type": "status", "state": "resolving", "message": "Abrindo o vídeo…"})
                 try:
@@ -211,13 +266,15 @@ async def ws_endpoint(ws: WebSocket) -> None:
                 for ev in channel.snapshot():
                     await ws.send_json(ev)
                 sender = asyncio.create_task(pump(queue))
+                if not admin:
+                    continue
                 await channel.ensure_running(req.language or settings.language or None,
                                              start_seconds=req.start_seconds if (req.fresh or len(channel.subscribers) <= 1) else None)
             elif kind == "stop":
                 await leave()
                 await ws.send_json({"type": "status", "state": "idle", "message": "Parado"})
             elif kind == "recheck":
-                if channel:
+                if channel and is_admin(data.get("admin")):
                     await channel.recheck(str(data.get("claim_id", "")))
             elif kind == "ping":
                 await ws.send_json({"type": "pong"})

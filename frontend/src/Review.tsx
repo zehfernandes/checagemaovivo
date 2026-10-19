@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { adminHeaders } from './admin'
 import type { Source, Verdict } from './types'
 import { VERDICT_LABEL } from './types'
 
@@ -70,7 +71,7 @@ export function Review() {
       note: extra.note ?? item.note ?? '', source_url: extra.source_url ?? item.source_url ?? '',
     }
     setItems((is) => is.map((i) => (i.id === item.id ? { ...i, ...body } : i)))
-    await fetch('/review/label', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+    await fetch('/review/label', { method: 'POST', headers: { 'content-type': 'application/json', ...adminHeaders() }, body: JSON.stringify(body) })
     fetch(`/review/items?run=${encodeURIComponent(run)}`).then((r) => r.json()).then((d) => setMetrics(d.metrics)).catch(() => {})
     fetch('/review/runs').then((r) => r.json()).then(setRuns).catch(() => {})
   }
@@ -78,12 +79,12 @@ export function Review() {
   async function addMissed(seg: Segment) {
     const claim = window.prompt('Afirmação que deveria ter sido checada (uma frase factual curta):', '')
     if (!claim) return
-    await fetch('/review/missed', { method: 'POST', headers: { 'content-type': 'application/json' },
+    await fetch('/review/missed', { method: 'POST', headers: { 'content-type': 'application/json', ...adminHeaders() },
       body: JSON.stringify({ run, start: seg.start, segment: seg.text, claim }) })
     load()
   }
   async function removeMissed(id: string) {
-    await fetch(`/review/missed/${id}`, { method: 'DELETE' })
+    await fetch(`/review/missed/${id}`, { method: 'DELETE', headers: adminHeaders() })
     load()
   }
   async function runEval() {

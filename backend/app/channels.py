@@ -102,6 +102,9 @@ class Channel:
         self._retries = 0
         self._language: str | None = None
         self._start_override: float | None = None
+        clip = settings.clip_map.get(self.video_id)
+        if clip and not info.is_live:
+            info.clip_start, info.clip_end = clip
         for kind, ev in ([] if private else manager.cache.events(video_id)):
             if kind == "transcript":
                 self.transcripts[ev["segment"]["id"]] = ev
@@ -164,6 +167,12 @@ class Channel:
             self.transcripts[seg["id"]] = ev
             self.processed_to = max(self.processed_to, seg["end"])
             self._put("transcript", seg["id"], seg["start"], ev)
+            if self.info.clip_end is not None and seg["end"] >= self.info.clip_end and not self.complete:
+                self.complete = True
+                self.status = {"state": "listening", "message": "Processado por completo · servido do cache"}
+                self._save("complete")
+                self.broadcast({"type": "status", **self.status})
+                asyncio.get_running_loop().call_soon(lambda: asyncio.create_task(self.stop_pipeline()))
         elif kind == "claim":
             c = ev["claim"]
             self.claims[c["id"]] = ev
@@ -227,6 +236,8 @@ class Channel:
         self._language = language
         self.pipeline = self.manager.make_pipeline(self.emit, self.save)
         start = 0.0 if self.info.is_live else (self._start_override if self._start_override is not None else self.processed_to)
+        if self.info.clip_start is not None:
+            start = max(start, self.info.clip_start)
         self.status = {"state": "resolving", "message": "Abrindo o vídeo…"}
         self.broadcast({"type": "status", **self.status})
         self._save("processing")
@@ -254,6 +265,18 @@ class Channel:
         self.broadcast({"type": "status", **self.status})
         if self.private:
             self.manager.private_channels.discard(self)
+
+    async def override(self, claim_id: str, verdict: str, explanation: str, sources: list[dict] | None = None) -> dict | None:
+        """Human correction by an admin: replaces the verdict for every viewer (live fan-out) and in the cache."""
+        entry = self.claims.get(claim_id)
+        if not entry:
+            return None
+        c = {**entry["claim"], "verdict": verdict, "explanation": explanation, "method": "human",
+             "confidence": 1.0, "deep_pending": False}
+        if sources is not None:
+            c["sources"] = sources
+        await self.emit({**entry, "claim": c})
+        return c
 
     async def recheck(self, claim_id: str) -> None:
         if self.pipeline is None:
@@ -294,6 +317,11 @@ class ChannelManager:
             if ch.video_id != vid:
                 self.channels[vid] = ch
             return ch
+
+    def cached(self, url: str) -> bool:
+        """True if the video has (or is getting) shared results a visitor can watch."""
+        vid = audio.extract_video_id(url) or url
+        return vid in self.channels or self.cache.video(vid) is not None
 
     async def private(self, url: str, save: bool = False) -> Channel:
         """A one-off channel for a single viewer: fresh pipeline, no cache read/write, not shared.

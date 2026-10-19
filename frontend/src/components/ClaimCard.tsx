@@ -6,18 +6,24 @@ interface Props {
   claim: Claim
   compact?: boolean
   onRecheck?: (id: string) => void
+  onOverride?: (id: string, verdict: 'fake' | 'valid' | 'inconclusive', explanation: string) => Promise<void>
 }
 
-const METHOD_LABEL = { cache: 'memória', db: 'base de notícias', web: 'busca na web', deep: 'checagem profunda' } as const
+const METHOD_LABEL = { cache: 'memória', db: 'base de notícias', web: 'busca na web', deep: 'checagem profunda', human: 'revisão humana' } as const
 const METHOD_TITLE = {
   cache: 'Reaproveitou o veredito de uma afirmação idêntica já checada (sem chamadas de IA)',
   db: 'Respondida pela base de notícias',
   web: 'Respondida por busca na web',
   deep: 'Respondida pela checagem profunda (modelo mais forte, várias buscas)',
+  human: 'Veredito corrigido por um revisor humano',
 } as const
 
-export function ClaimCard({ claim, compact, onRecheck }: Props) {
+export function ClaimCard({ claim, compact, onRecheck, onOverride }: Props) {
   const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [verdict, setVerdict] = useState<'fake' | 'valid' | 'inconclusive'>(claim.verdict === 'pending' ? 'inconclusive' : claim.verdict)
+  const [explanation, setExplanation] = useState(claim.explanation)
+  const [saving, setSaving] = useState(false)
   const expanded = compact || open
   return (
     <article
@@ -69,7 +75,36 @@ export function ClaimCard({ claim, compact, onRecheck }: Props) {
               rechecar
             </button>
           )}
+          {onOverride && claim.verdict !== 'pending' && (
+            <button type="button" className="link" onClick={(e) => { e.stopPropagation(); setExplanation(claim.explanation); setEditing((v) => !v) }}>
+              {editing ? 'cancelar' : 'corrigir'}
+            </button>
+          )}
         </footer>
+      )}
+      {expanded && !compact && editing && onOverride && (
+        <form
+          className="claim__edit"
+          onClick={(e) => e.stopPropagation()}
+          onSubmit={async (e) => {
+            e.preventDefault()
+            setSaving(true)
+            try {
+              await onOverride(claim.id, verdict, explanation)
+              setEditing(false)
+            } finally {
+              setSaving(false)
+            }
+          }}
+        >
+          <select value={verdict} onChange={(e) => setVerdict(e.target.value as typeof verdict)}>
+            <option value="fake">Falso</option>
+            <option value="valid">Verdadeiro</option>
+            <option value="inconclusive">Inconclusivo</option>
+          </select>
+          <textarea value={explanation} onChange={(e) => setExplanation(e.target.value)} rows={3} placeholder="Explicação para quem está assistindo" />
+          <button type="submit" disabled={saving}>{saving ? 'salvando…' : 'Publicar correção para todos'}</button>
+        </form>
       )}
     </article>
   )

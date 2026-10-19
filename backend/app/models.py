@@ -26,7 +26,7 @@ class Claim(BaseModel):
     start: float
     end: float
     speaker: str | None = None
-    method: Literal["cache", "db", "web", "deep"] | None = None
+    method: Literal["cache", "db", "web", "deep", "human"] | None = None
     deep_pending: bool = False
     # latency instrumentation (server wall clock, seconds since epoch)
     captured_at: float | None = None  # audio of this claim finished arriving from YouTube
@@ -48,6 +48,8 @@ class StreamInfo(BaseModel):
     title: str
     is_live: bool
     duration: float | None = None
+    clip_start: float | None = None  # recordings limited to a slice (VIDEO_CLIPS)
+    clip_end: float | None = None
 
 
 class StartRequest(BaseModel):

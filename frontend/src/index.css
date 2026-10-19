@@ -219,3 +219,10 @@ button { font: inherit; }
 .review__segment .btn--small { margin-left: 8px; margin-top: 0; }
 .review__missed { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
 .review__missed p { margin: 4px 0; }
+
+.claim__edit { display: grid; gap: 6px; margin-top: 8px; }
+.claim__edit select, .claim__edit textarea { font: inherit; font-size: 12px; background: #14161a; color: inherit; border: 1px solid #2a2d33; border-radius: 6px; padding: 6px 8px; }
+.claim__edit button { font: inherit; font-size: 12px; background: #e8e8ea; color: #111; border: 0; border-radius: 6px; padding: 6px 10px; cursor: pointer; justify-self: start; }
+.menu__row--login { display: flex; gap: 8px; }
+.menu__row--login input { flex: 1; font: inherit; font-size: 12px; background: #14161a; color: inherit; border: 1px solid #2a2d33; border-radius: 6px; padding: 4px 8px; }
+.menu__row--error input { border-color: #e5484d; }

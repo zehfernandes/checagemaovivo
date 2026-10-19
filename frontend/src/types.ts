@@ -14,7 +14,7 @@ export interface Claim {
   sources: Source[]
   start: number
   end: number
-  method?: 'cache' | 'db' | 'web' | 'deep' | null
+  method?: 'cache' | 'db' | 'web' | 'deep' | 'human' | null
   deep_pending?: boolean
   captured_at?: number | null
   extracted_at?: number | null
@@ -34,6 +34,8 @@ export interface TranscriptSegment {
 }
 
 export interface StreamInfo {
+  clip_start?: number | null
+  clip_end?: number | null
   video_id: string
   title: string
   is_live: boolean

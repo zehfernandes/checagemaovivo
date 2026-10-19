@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { adminPassword } from './admin'
 import type { Claim, Progress, ServerMessage, SessionState, StreamInfo, TranscriptSegment } from './types'
 
 const MAX_TRANSCRIPT = 5000
@@ -87,7 +88,7 @@ export function useSession() {
       setState('connecting')
       setStatusText(keep ? 'Ressincronizando…' : 'Conectando…')
       const socket = connect()
-      const payload = JSON.stringify({ type: 'start', url, language: language || null, start_seconds: startSeconds, fresh, save })
+      const payload = JSON.stringify({ type: 'start', url, language: language || null, start_seconds: startSeconds, fresh, save, admin: adminPassword() })
       if (socket.readyState === WebSocket.OPEN) socket.send(payload)
       else socket.addEventListener('open', () => socket.send(payload), { once: true })
     },
@@ -95,7 +96,7 @@ export function useSession() {
   )
 
   const recheck = useCallback((claimId: string) => {
-    ws.current?.send(JSON.stringify({ type: 'recheck', claim_id: claimId }))
+    ws.current?.send(JSON.stringify({ type: 'recheck', claim_id: claimId, admin: adminPassword() }))
   }, [])
 
   const stop = useCallback(() => {

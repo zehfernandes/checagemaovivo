@@ -5,8 +5,8 @@ import json
 import logging
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, HTTPException, Header, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi import Depends, FastAPI, HTTPException, Header, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AsyncOpenAI
@@ -36,6 +36,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_LOCAL_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0"}
+
+
+@app.middleware("http")
+async def canonical_host(request: Request, call_next):
+    host = request.headers.get("host", "").split(":")[0]
+    if settings.canonical_host and host and host != settings.canonical_host and host not in _LOCAL_HOSTS:
+        url = request.url.replace(scheme="https", netloc=settings.canonical_host)
+        return RedirectResponse(str(url), status_code=301)
+    return await call_next(request)
 
 client = (
     AsyncOpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url or None)

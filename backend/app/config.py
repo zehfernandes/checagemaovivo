@@ -57,6 +57,8 @@ class Settings(BaseSettings):
     chunk_seconds: int = 8
     language: str = ""
     cors_origins: str = "http://localhost:5173"
+    # When set, HTTP requests for any other public host (old fly.dev URL, apex domain) 301 to this host.
+    canonical_host: str = ""
     # News/evidence DB (first-level lookup before web search)
     news_db_path: str = "data/news.db"
     cache_db_path: str = "data/cache.db"

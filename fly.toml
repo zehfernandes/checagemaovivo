@@ -10,7 +10,8 @@ primary_region = "gru"
   LANGUAGE = "pt"
   DECIDER = "jev"               # Jev gates + decides from the news DB in ~0.3 s; needs the AI_GATEWAY_API_KEY secret (falls back to OpenAI without it)
   VIDEO_CLIPS = "Amwukq3hviM=7740-14640"
-  CORS_ORIGINS = "https://debate-fact-check.fly.dev"
+  CANONICAL_HOST = "www.checagemaovivo.org"   # fly.dev + apex redirect here
+  CORS_ORIGINS = "https://www.checagemaovivo.org,https://checagemaovivo.org,https://debate-fact-check.fly.dev"
 
 [[mounts]]
   source = "data"

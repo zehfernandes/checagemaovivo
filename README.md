@@ -52,8 +52,8 @@ every `NEWS_REFRESH_MINUTES`. `backend/data/` is gitignored — every clone star
 3. An OpenAI API key of their own (or `PROVIDER=mock` for UI work).
 4. `cp .env.example .env`, set `PROVIDER`/`OPENAI_API_KEY`; optionally `ADMIN_PASSWORD`.
 5. Backend + frontend as above; `cd frontend && npm run lint && npx tsc -b` before pushing.
-6. To test the production site no setup is needed: https://debate-fact-check.fly.dev (viewer) and
-   https://debate-fact-check.fly.dev/admin (newsroom, needs the deployed `ADMIN_PASSWORD`).
+6. To test the production site no setup is needed: https://www.checagemaovivo.org (viewer) and
+   https://www.checagemaovivo.org/admin (newsroom, needs the deployed `ADMIN_PASSWORD`).
 7. If yt-dlp says *Sign in to confirm you're not a bot*, see `YTDLP_ARGS` below.
 
 ## Admin (`/admin`)
@@ -114,6 +114,7 @@ fly deploy --remote-only                    # every release (builds on Fly, no l
 | `CHUNK_SECONDS` | `8` | audio chunk size; smaller = lower latency, more API calls |
 | `LANGUAGE` | `pt` | transcription language hint (ISO-639-1), empty for auto |
 | `CORS_ORIGINS` | `http://localhost:5173` | allowed frontend origins |
+| `CANONICAL_HOST` | | if set, HTTP requests for other hosts 301 to it (prod: `www.checagemaovivo.org`) |
 | `ADMIN_PASSWORD` | | password for `/admin` and admin WebSocket actions; **empty = everyone is admin** (dev only) |
 | `DEFAULT_ROOM_URL` / `DEFAULT_ROOM_NAME` | Band debate | room created on an empty DB; empty URL = none |
 | `VIDEO_CLIPS` | | only process a slice of recordings: `VIDEO_ID=start-end,...` (seconds) |

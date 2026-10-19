@@ -92,6 +92,26 @@ two independent sources required for fake/valid). While it runs the card shows "
 replaces the verdict with a `Deep` badge. Every settled card also has a **Re-check** button that triggers
 the same pass manually (`{"type":"recheck","claim_id":"…"}` over the WebSocket).
 
+## Offline review loop (learn from human checks)
+
+Process a whole recording offline, label every claim, and measure the live pipeline against the labels:
+
+```bash
+cd backend
+# 1) transcript: whisper verbose_json dumps (one per 10-min part) or a jsonl of {start,end,text}
+python -m app.review batch band-2turno /path/to/whisper-json --from 9000 --to 10800 --title "Debate 150–180 min"
+# 2) open the UI: http://localhost:5173/#review  -> Correct / Wrong verdict (+correct verdict, source URL) / Not a claim / Unsure
+#    Transcript tab: "+ missed claim" on windows where nothing was extracted
+# 3) golden set + metrics
+python -m app.review export band-2turno > eval/golden.jsonl
+python -m app.review eval band-2turno --rerun     # re-verifies labelled claims with the current prompts/models
+```
+
+Endpoints: `GET /review/runs`, `GET /review/items?run=`, `GET /review/segments?run=`, `POST /review/label`,
+`POST /review/missed`, `DELETE /review/missed/{id}`, `GET /review/export?run=`, `GET /review/eval?run=&rerun=`.
+A source URL given with a *Wrong verdict* label is ingested into the news DB (source `human-review`), so the
+next similar claim is answered from it. Data lives in `backend/data/review.db` (gitignored).
+
 ## WebSocket protocol (`/ws`)
 
 Client → server: `{"type":"start","url":"...","language":"pt","start_seconds":0}` · `{"type":"stop"}`

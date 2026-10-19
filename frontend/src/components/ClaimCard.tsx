@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { Claim } from '../types'
 import { VERDICT_LABEL } from '../types'
 
@@ -16,8 +17,14 @@ const METHOD_TITLE = {
 } as const
 
 export function ClaimCard({ claim, compact, onRecheck }: Props) {
+  const [open, setOpen] = useState(false)
+  const expanded = compact || open
   return (
-    <article className={`claim claim--${claim.verdict}${compact ? ' claim--compact' : ''}`}>
+    <article
+      className={`claim claim--${claim.verdict}${compact ? ' claim--compact' : ''}${expanded ? '' : ' claim--collapsed'}`}
+      onClick={() => !compact && setOpen((o) => !o)}
+      title={compact ? undefined : open ? 'Clique para recolher' : 'Clique para ver explicação e fontes'}
+    >
       <header className="claim__header">
         <span className="claim__badge">
           {claim.verdict === 'pending' && <span className="spinner" aria-hidden />}
@@ -38,18 +45,18 @@ export function ClaimCard({ claim, compact, onRecheck }: Props) {
       </header>
       <p className="claim__text">“{claim.text}”</p>
       {claim.explanation && <p className="claim__explanation">{claim.explanation}</p>}
-      {!compact && claim.sources.length > 0 && (
+      {expanded && !compact && claim.sources.length > 0 && (
         <ul className="claim__sources">
           {claim.sources.map((s) => (
             <li key={s.url}>
-              <a href={s.url} target="_blank" rel="noreferrer">
+              <a href={s.url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
                 {s.title || hostname(s.url)}
               </a>
             </li>
           ))}
         </ul>
       )}
-      {!compact && (
+      {expanded && !compact && (
         <footer className="claim__footer">
           {claim.captured_at && claim.extracted_at && (
             <span className="claim__latency" title="Segundos depois de o áudio chegar do YouTube (medido no servidor)">
@@ -58,7 +65,7 @@ export function ClaimCard({ claim, compact, onRecheck }: Props) {
             </span>
           )}
           {onRecheck && claim.verdict !== 'pending' && !claim.deep_pending && (
-            <button type="button" className="link" onClick={() => onRecheck(claim.id)}>
+            <button type="button" className="link" onClick={(e) => { e.stopPropagation(); onRecheck(claim.id) }}>
               rechecar
             </button>
           )}

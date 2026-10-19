@@ -33,6 +33,8 @@ export default function App() {
   const [save, setSave] = useState(() => localStorage.getItem('save') === 'on')
   const [sideOpen, setSideOpen] = useState(() => localStorage.getItem('side') !== 'closed')
   const [details, setDetails] = useState(false)
+  // recordings: show only what is said from the position where Start was pressed (no backlog dump)
+  const [baseline, setBaseline] = useState(0)
   useEffect(() => localStorage.setItem('side', sideOpen ? 'open' : 'closed'), [sideOpen])
   const [delay, setDelay] = useState(() => Number(localStorage.getItem('delay') ?? 20))
   const [nudge, setNudge] = useState(0)
@@ -55,6 +57,10 @@ export default function App() {
     const t = setInterval(() => setNow(Date.now()), 500)
     return () => clearInterval(t)
   }, [delayed])
+  useEffect(() => {
+    if (!isLive && currentTime < baseline - 2) setBaseline(Math.max(0, currentTime))
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTime, isLive])
   const revealAt = (capturedAt?: number | null) =>
     capturedAt ? (capturedAt + delay + nudge + PLAYER_EDGE_LAG_S + session.clockOffset) * 1000 : 0
 
@@ -83,19 +89,19 @@ export default function App() {
   // Processing is shared per video and cached server-side; for a recording we only reveal
   // what has been said up to the player position; for a delayed live, what the viewer heard.
   const visibleClaims = useMemo(() => {
-    if (!isLive) return session.claims.filter((c) => c.start <= currentTime + 1)
+    if (!isLive) return session.claims.filter((c) => c.start >= baseline - 1 && c.start <= currentTime + 1)
     if (!delayed) return session.claims
     return session.claims
       .map((c) => ({ ...c, revealAt: revealAt(c.captured_at) }))
       .filter((c) => c.revealAt <= now)
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- revealAt is derived from delay/nudge/clockOffset listed below
-  }, [session.claims, currentTime, isLive, delayed, now, delay, nudge, session.clockOffset])
+  }, [session.claims, currentTime, isLive, delayed, now, delay, nudge, session.clockOffset, baseline])
   const visibleTranscript = useMemo(() => {
-    if (!isLive) return session.transcript.filter((s) => s.start <= currentTime + 1)
+    if (!isLive) return session.transcript.filter((s) => s.start >= baseline - 1 && s.start <= currentTime + 1)
     if (!delayed) return session.transcript
     return session.transcript.filter((s) => revealAt(s.captured_at) <= now)
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.transcript, currentTime, isLive, delayed, now, delay, nudge, session.clockOffset])
+  }, [session.transcript, currentTime, isLive, delayed, now, delay, nudge, session.clockOffset, baseline])
 
   const latency = useMemo(() => {
     const recent = session.claims.filter((c) => c.captured_at && c.extracted_at).slice(-20)
@@ -119,6 +125,7 @@ export default function App() {
     if (running) session.stop()
     else {
       setBehind(null)
+      setBaseline(Math.max(0, currentTime))
       session.start(url.trim(), language, currentTime, false, fresh, save)
     }
   }

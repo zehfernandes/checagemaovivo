@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { ClaimCard } from './components/ClaimCard'
 import { Danmu } from './components/Danmu'
 import { Player } from './components/Player'
-import { TranscriptRail } from './components/TranscriptRail'
 import { useSession } from './useSession'
 import type { NewsStats, Verdict } from './types'
 
@@ -27,7 +26,7 @@ export default function App() {
   const [url, setUrl] = useState(DEFAULT_URL)
   const [language, setLanguage] = useState('pt')
   const [currentTime, setCurrentTime] = useState(0)
-  const [tab, setTab] = useState<'recent' | 'all' | 'transcript'>('recent')
+  const [tab, setTab] = useState<'recent' | 'all'>('recent')
   const [danmu, setDanmu] = useState(() => localStorage.getItem('danmu') !== 'off')
   const [fresh, setFresh] = useState(false)
   const [save, setSave] = useState(() => localStorage.getItem('save') === 'on')
@@ -96,12 +95,6 @@ export default function App() {
       .filter((c) => c.revealAt <= now)
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- revealAt is derived from delay/nudge/clockOffset listed below
   }, [session.claims, currentTime, isLive, delayed, now, delay, nudge, session.clockOffset, baseline])
-  const visibleTranscript = useMemo(() => {
-    if (!isLive) return session.transcript.filter((s) => s.start >= baseline - 1 && s.start <= currentTime + 1)
-    if (!delayed) return session.transcript
-    return session.transcript.filter((s) => revealAt(s.captured_at) <= now)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.transcript, currentTime, isLive, delayed, now, delay, nudge, session.clockOffset, baseline])
 
   const latency = useMemo(() => {
     const recent = session.claims.filter((c) => c.captured_at && c.extracted_at).slice(-20)
@@ -289,22 +282,15 @@ export default function App() {
             <button className={tab === 'all' ? 'active' : ''} onClick={() => setTab('all')}>
               Todas {visibleClaims.length > 0 && <span className="muted">{visibleClaims.length}</span>}
             </button>
-            <button className={tab === 'transcript' ? 'active' : ''} onClick={() => setTab('transcript')}>
-              Transcrição
-            </button>
           </nav>
-          {tab !== 'transcript' ? (
-            <div className="claims-list">
+          <div className="claims-list">
               {(tab === 'recent' ? recentClaims : visibleClaims).length === 0 && (
                 <p className="muted empty">{tab === 'recent' ? 'Nada nos últimos 5 minutos.' : 'As afirmações verificadas aparecem aqui.'}</p>
               )}
               {[...(tab === 'recent' ? recentClaims : visibleClaims)].reverse().map((c) => (
                 <ClaimCard key={c.id} claim={c} onRecheck={session.recheck} />
               ))}
-            </div>
-          ) : (
-            <TranscriptRail segments={visibleTranscript} />
-          )}
+          </div>
         </aside>
         )}
       </main>

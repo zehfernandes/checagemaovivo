@@ -86,6 +86,20 @@ previous turn and now replies, "meu governo"/"meu pai"/"minha gestão" (speaker'
 partido"/"o senhor" (addressee). Then resolve every pronoun with that: "eu/nós/meu governo" = speaker (or the
 speaker's government), "você/seu/o senhor" = addressee. Never attach "você pegou X" to a third person who was merely
 named nearby. If speaker and addressee cannot be told apart, do NOT extract claims that depend on them.
+ONLY the CANDIDATES (or the politician being interviewed) are fact-checked — never the moderators, presenters,
+journalists, reporters or commentators. Tag every claim with "said_by": "candidate", "moderator" (anyone on the
+broadcast's side: moderator, presenter, anchor, journalist asking a question, field reporter, commentator, analyst) or
+"unknown". Only "candidate" claims are checked, so tag "candidate" only when the sentence is clearly a candidate speaking.
+Broadcast-side clues: running the debate ("boa noite", "vamos ao próximo bloco", "tempo esgotado", "direito de resposta",
+"sua pergunta", "o senhor tem um minuto"), addressing candidates as "candidato X"/"candidata X", reading questions from
+journalists or viewers, facts stated as the PREMISE of a question ("o desemprego subiu 2%, o que o senhor vai fazer?"),
+and coverage before/after/around the debate: live reports and hand-offs between reporters ("fala, Isa", "nossa
+reportagem", "aqui ao vivo", "vou chamar a colega"), narrating candidates in the THIRD PERSON — their arrival, schedule,
+entourage, what they will do ("o presidente Lula deve chegar às 19h", "ele fala com jornalistas após desembarcar"),
+polls and analysis presented by the channel. A candidate speaks in the FIRST PERSON or to the opponent ("eu fiz",
+"no meu governo", "você/o senhor"). A segment can contain a moderator's hand-off followed by a candidate's answer:
+tag each claim by who said that sentence.
+Never extract claims about the broadcast itself or its logistics (schedules, arrivals, who is in the studio, accredited press).
 Write each claim as a short declarative sentence stating the fact itself (never "the speaker says that…"),
 in the SAME LANGUAGE as the transcript (e.g. Portuguese stays Portuguese).
 Every claim must be SELF-CONTAINED: resolve pronouns and vague references ("ele", "esse governo",
@@ -109,7 +123,7 @@ If the transcript garbled a name, use the context/known names to write it correc
 A claim that merely restates, narrows or extends one in RECENT CLAIMS (same fact, different wording,
 "part of", "more than") is a duplicate — skip it. Only extract a second claim when it is about a
 genuinely different fact.
-Respond with JSON: {"speaker": "...", "addressee": "...", "claims": ["...", "..."]}"""
+Respond with JSON: {"speaker": "...", "addressee": "...", "claims": [{"text": "...", "said_by": "candidate"}]}"""
 
 VERIFY_SYSTEM = """You are a rigorous, neutral fact-checker working live during a political debate.
 Verify whether the CLAIM is TRUE ABOUT THE REAL WORLD using web search.
@@ -224,7 +238,15 @@ CLAIMS_SCHEMA = {
         "properties": {
             "speaker": {"type": "string"},
             "addressee": {"type": "string"},
-            "claims": {"type": "array", "items": {"type": "string"}},
+            "claims": {"type": "array", "items": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"},
+                    "said_by": {"type": "string", "enum": ["candidate", "moderator", "unknown"]},
+                },
+                "required": ["text", "said_by"],
+                "additionalProperties": False,
+            }},
         },
         "required": ["speaker", "addressee", "claims"],
         "additionalProperties": False,
@@ -330,7 +352,15 @@ class OpenAIFactChecker:
         data = _parse_json(res.output_text)
         if data.get("speaker") or data.get("addressee"):
             log.info("extract: speaker=%r addressee=%r", data.get("speaker"), data.get("addressee"))
-        claims = [c.strip() for c in data.get("claims", []) if isinstance(c, str) and c.strip()]
+        claims = []
+        for c in data.get("claims", []):
+            text = (c.get("text") if isinstance(c, dict) else c) or ""
+            if not isinstance(text, str) or not text.strip():
+                continue
+            if settings.candidates_only and isinstance(c, dict) and c.get("said_by") != "candidate":
+                log.info("extract: dropped %s claim: %s", c.get("said_by") or "unattributed", text[:80])
+                continue
+            claims.append(text.strip())
         if claims and _MODERATOR.search(str(data.get("speaker", ""))):  # the moderator reading the rules got a "Falso"
             log.info("extract: dropped moderator segment: %s", claims[0][:80])
             claims = []

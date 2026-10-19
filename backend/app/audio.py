@@ -1,6 +1,7 @@
 """Pull audio from a YouTube URL (live or VOD) as fixed-size 16 kHz mono PCM chunks."""
 import asyncio
 import glob
+import importlib.util
 import io
 import json
 import logging
@@ -8,6 +9,7 @@ import os
 import re
 import shlex
 import shutil
+import sys
 import time
 import wave
 from collections.abc import AsyncIterator
@@ -48,11 +50,18 @@ def _node_path() -> str | None:
     return candidates[-1] if candidates else None
 
 
+def _ffmpeg_path() -> str:
+    # An ffmpeg installed into this interpreter's environment (e.g. conda-forge in .venv) wins over PATH.
+    return shutil.which("ffmpeg", path=os.path.dirname(sys.executable)) or "ffmpeg"
+
+
 def _ytdlp_cmd() -> list[str]:
+    # Prefer the yt-dlp installed with this interpreter (requirements.txt): one found on PATH may be an
+    # older copy (e.g. Anaconda's) that lacks options we pass, like --js-runtimes.
+    if importlib.util.find_spec("yt_dlp"):
+        return [sys.executable, "-m", "yt_dlp"]
     exe = shutil.which("yt-dlp")
-    if exe:
-        return [exe]
-    return ["python3", "-m", "yt_dlp"]
+    return [exe] if exe else ["python3", "-m", "yt_dlp"]
 
 
 async def resolve_stream(url: str, attempts: int = 3) -> tuple[StreamInfo, str]:
@@ -83,11 +92,9 @@ FORMATS = ["bestaudio[protocol^=m3u8]/bestaudio/best", "bestaudio*/best*", None]
 
 
 async def _resolve_once(url: str, fmt: str | None = FORMATS[0]) -> tuple[StreamInfo, str]:
-    cmd = [*_ytdlp_cmd(), *shlex.split(settings.ytdlp_args), *(["-f", fmt] if fmt else []),
-           "-j", "--no-playlist", "--no-warnings", url]
     node = _node_path()
-    if node:
-        cmd[1:1] = ["--js-runtimes", f"node:{node}"]
+    cmd = [*_ytdlp_cmd(), *(["--js-runtimes", f"node:{node}"] if node else []), *shlex.split(settings.ytdlp_args),
+           *(["-f", fmt] if fmt else []), "-j", "--no-playlist", "--no-warnings", url]
     proc = await asyncio.create_subprocess_exec(
         *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
     )
@@ -212,7 +219,7 @@ async def iter_chunks(
     Live streams are read from the live edge. VOD is decoded at real-time speed
     (-re) so verdicts stay roughly in sync with the embedded player.
     """
-    cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin"]
+    cmd = [_ffmpeg_path(), "-hide_banner", "-loglevel", "error", "-nostdin"]
     if is_live:
         if "m3u8" in media_url or "/hls" in media_url:
             cmd += ["-live_start_index", "-1"]  # HLS only: start at the live edge

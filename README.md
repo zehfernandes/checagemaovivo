@@ -117,6 +117,7 @@ no Fly account or production secrets required. Production secrets (`OPENAI_API_K
 | `TRANSCRIBE_MODEL` | `gpt-4o-mini-transcribe` | speech-to-text model |
 | `FACTCHECK_MODEL` | `gpt-4.1-mini` | model for claim extraction and verification |
 | `DEEP_MODEL` | `gpt-5-mini` | reasoning model for the deep check (third level / Rechecar in `/admin`); `reasoning.effort=low`, no `temperature` |
+| `CANDIDATES_ONLY` | `true` | only fact-check candidates/interviewees: claims the extractor attributes to moderators, presenters or journalists (e.g. a question's premise) are dropped; set `false` for news broadcasts |
 | `DEEP_CHECK` | `true` | automatically run the deep check on claims the fast pass left inconclusive |
 | `DECIDER` | `openai` | `jev`: TypeSafe Jev decision model via Vercel AI Gateway decides from DB evidence in ~0.3 s and gates non-checkable claims; falls back to OpenAI on low confidence/error |
 | `AI_GATEWAY_API_KEY` | – | Vercel AI Gateway key (required for `DECIDER=jev`; the team needs paid credits) |

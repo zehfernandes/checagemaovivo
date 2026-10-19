@@ -85,11 +85,14 @@ Decide whether the CLAIM is TRUE ABOUT THE REAL WORLD using ONLY the numbered EV
 (from trusted news outlets, fact-checkers and official sources). The transcript context only
 disambiguates the claim; the fact that someone said it is NOT evidence.
 Classify as:
-- "fake": the evidence shows the claim is false or substantially misleading.
-- "valid": the evidence shows the claim is accurate or essentially accurate.
-- "inconclusive": the evidence does not settle it (off-topic, partial, outdated, or the claim is
-  a promise/opinion/too vague).
-Interpret relative time expressions against TODAY, given in the input.
+- "fake": an excerpt DIRECTLY contradicts the specific fact claimed (the number, date, person, event).
+  Absence of a fact from the evidence is NOT contradiction — never answer "fake" because the
+  excerpts do not mention the figure or event.
+- "valid": an excerpt directly confirms the specific fact claimed.
+- "inconclusive": the evidence does not settle it (off-topic, partial, outdated, only loosely related,
+  or the claim is a promise/opinion/too vague).
+When in doubt between fake/valid and inconclusive, choose inconclusive with "sufficient": false so a
+deeper check can run. Interpret relative time expressions against TODAY, given in the input.
 Set "sufficient": true only when the evidence genuinely supports your fake/valid decision; otherwise
 false (a web search will then be performed). "used" lists the evidence numbers you relied on.
 "explanation" is 1-2 plain sentences in the SAME LANGUAGE as the claim, no links. Respond ONLY with JSON:

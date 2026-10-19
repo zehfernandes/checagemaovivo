@@ -21,6 +21,7 @@ interface Metrics {
 
 const LABEL_TEXT: Record<Label, string> = { correct: 'Correto', wrong: 'Veredito errado', not_claim: 'Não é afirmação', unsure: 'Não sei' }
 const FINALS: Final[] = ['fake', 'valid', 'inconclusive']
+const METHOD_PT: Record<string, string> = { cache: 'memória', db: 'base', web: 'web', deep: 'profunda' }
 const FILTER_TEXT: Record<string, string> = {
   unlabelled: 'sem rótulo', all: 'todas', correct: 'corretas', wrong: 'erradas', not_claim: 'não é afirmação', unsure: 'não sei',
   fake: 'falsas', valid: 'verdadeiras', inconclusive: 'inconclusivas',
@@ -117,7 +118,7 @@ export function Review() {
           <span>Cobertura da extração <strong>{pct(metrics.extraction_recall)}</strong> ({metrics.missed} perdidas)</span>
           <span>Acerto dos vereditos <strong>{pct(metrics.verdict_accuracy)}</strong></span>
           {Object.entries(metrics.per_method).map(([m, v]) => (
-            <span key={m}>{m}: <strong>{pct(v.accuracy)}</strong> ({v.correct + v.wrong})</span>
+            <span key={m}>{METHOD_PT[m] ?? m}: <strong>{pct(v.accuracy)}</strong> ({v.correct + v.wrong})</span>
           ))}
         </div>
       )}
@@ -174,7 +175,7 @@ function ReviewItem({ item, onSave }: { item: Item; onSave: (i: Item, l: Label, 
       <header className="claim__header">
         <span className="claim__badge">{VERDICT_LABEL[item.verdict]}</span>
         <span className="claim__confidence">{Math.round(item.confidence * 100)}%</span>
-        {item.method && <span className={`claim__method claim__method--${item.method}`}>{item.method.toUpperCase()}</span>}
+        {item.method && <span className={`claim__method claim__method--${item.method}`}>{METHOD_PT[item.method] ?? item.method}</span>}
         <span className="claim__time">{fmt(item.start)}</span>
       </header>
       <p className="claim__text">“{item.claim}”</p>

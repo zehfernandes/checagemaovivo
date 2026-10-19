@@ -7,7 +7,7 @@ import { useSession } from './useSession'
 import type { NewsStats, Verdict } from './types'
 
 const DEFAULT_URL = 'https://www.youtube.com/watch?v=Amwukq3hviM'
-const PLAYER_EDGE_LAG_S = 10
+const PLAYER_EDGE_LAG_S = 8
 
 function extractVideoId(url: string): string | null {
   try {

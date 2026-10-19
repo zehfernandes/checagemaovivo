@@ -46,38 +46,46 @@ export function Player({ videoId, onTime, liveDelay = 0, onDelay }: Props) {
   // snapping back to the edge are handled by re-checking and re-seeking a few times; the final
   // distance behind the edge is reported via onDelay.
   const prevDelay = useRef(0)
+  const edgeRef = useRef<{ pos: number; wall: number } | null>(null)
+  // YouTube's getDuration() is unreliable on live streams (stale / off by an hour), so the live
+  // edge is estimated from the first PLAYING position (autoplay starts at the edge) + wall time.
   useEffect(() => {
     const was = prevDelay.current
     prevDelay.current = liveDelay
     if (!liveDelay) {
-      // delay switched off on a stream we had pulled back: return to the live edge
       const p = player.current
-      if (was && p && typeof p.getDuration === 'function' && p.getDuration() > 0) p.seekTo(p.getDuration(), true)
+      const e = edgeRef.current
+      if (was && p && e) p.seekTo(e.pos + (Date.now() - e.wall) / 1000 + 60, true) // past the edge -> live
       return
     }
     let attempts = 0
     let seekedAt = 0
     const poll = window.setInterval(() => {
       const p = player.current
-      if (!p || typeof p.getDuration !== 'function' || p.getPlayerState() !== 1) return
-      const edge = p.getDuration()
-      if (edge < liveDelay + 5) return
-      const behind = edge - p.getCurrentTime()
+      if (!p || typeof p.getCurrentTime !== 'function' || p.getPlayerState() !== 1) return
+      const pos = p.getCurrentTime()
       const now = Date.now()
+      if (pos < liveDelay + 5) return
+      let e = edgeRef.current
+      if (!e) e = edgeRef.current = { pos, wall: now }
+      const edgeNow = e.pos + (now - e.wall) / 1000
+      const behind = edgeNow - pos
       if (seekedAt && now - seekedAt < 5000) return
       if (seekedAt && Math.abs(behind - liveDelay) <= 5) {
         onDelayRef.current?.(behind)
         clearInterval(poll)
         return
       }
+      // snapped back to the edge (no DVR) or the content started after an ad: re-sample the edge
+      if (seekedAt && behind < 3) e = edgeRef.current = { pos, wall: now }
       if (attempts >= 6) {
-        onDelayRef.current?.(behind)
+        onDelayRef.current?.(Math.max(0, behind))
         clearInterval(poll)
         return
       }
       attempts += 1
       seekedAt = now
-      p.seekTo(edge - liveDelay, true)
+      p.seekTo(e.pos + (now - e.wall) / 1000 - liveDelay, true)
     }, 1000)
     return () => clearInterval(poll)
   }, [liveDelay, videoId])
@@ -89,6 +97,7 @@ export function Player({ videoId, onTime, liveDelay = 0, onDelay }: Props) {
       if (cancelled || !host.current) return
       const el = document.createElement('div')
       host.current.replaceChildren(el)
+      edgeRef.current = null
       player.current = new YT.Player(el, {
         videoId,
         playerVars: { autoplay: 1, rel: 0, modestbranding: 1 },

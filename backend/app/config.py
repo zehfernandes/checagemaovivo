@@ -19,6 +19,9 @@ class Settings(BaseSettings):
         "Rui Costa, Jaques Wagner, Lulinha, Tarcísio, Michelle Bolsonaro, CACs, Pix, Bolsa Família."
     )
     factcheck_model: str = "gpt-4.1-mini"
+    # Deeper second pass for claims the fast pass left inconclusive (stronger model, more searches).
+    deep_model: str = "gpt-4.1"
+    deep_check: bool = True
     chunk_seconds: int = 8
     language: str = ""
     cors_origins: str = "http://localhost:5173"

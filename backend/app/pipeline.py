@@ -36,6 +36,7 @@ class Pipeline:
         self.verify_sem = asyncio.Semaphore(MAX_CONCURRENT_VERIFICATIONS)
         self._stopped = False
         self.run_id = uuid.uuid4().hex[:6]
+        self.claims: dict[str, tuple[Claim, str]] = {}
 
     def _spawn(self, coro, *, verification: bool = False) -> None:
         t = asyncio.create_task(coro)
@@ -103,6 +104,7 @@ class Pipeline:
                 start=chunk.start,
                 end=chunk.end,
             )
+            self.claims[claim.id] = (claim, f"{context} {text}")
             await self.emit({"type": "claim", "claim": claim.model_dump()})
             self._spawn(self._verify(claim, f"{context} {text}"), verification=True)
 
@@ -113,9 +115,40 @@ class Pipeline:
             except Exception as e:  # noqa: BLE001
                 log.exception("verification failed")
                 r = VerifyResult(Verdict.INCONCLUSIVE, 0.0, f"Verification failed: {e}")
-        claim.verdict, claim.confidence, claim.explanation, claim.sources, claim.method = (
-            r.verdict, r.confidence, r.explanation, r.sources, r.method)
+        self._apply(claim, r)
+        if r.verdict == Verdict.INCONCLUSIVE and settings.deep_check:
+            claim.deep_pending = True
+            self._spawn(self._deep(claim, context), verification=True)
         await self.emit({"type": "claim", "claim": claim.model_dump()})
+
+    async def _deep(self, claim: Claim, context: str) -> None:
+        async with self.verify_sem:
+            try:
+                r = await self.checker.deep_verify(claim.text, context)
+            except Exception as e:  # noqa: BLE001
+                log.exception("deep verification failed")
+                r = VerifyResult(claim.verdict, claim.confidence, claim.explanation, claim.sources, claim.method or "web")
+        self._apply(claim, r)
+        claim.deep_pending = False
+        await self.emit({"type": "claim", "claim": claim.model_dump()})
+
+    async def recheck(self, claim_id: str) -> None:
+        """Manual re-check from the UI: run the deep pass on an already-settled claim."""
+        entry = self.claims.get(claim_id)
+        if not entry:
+            await self.emit({"type": "error", "message": "Claim not found for re-check"})
+            return
+        claim, context = entry
+        if claim.deep_pending or claim.verdict == Verdict.PENDING:
+            return
+        claim.deep_pending = True
+        await self.emit({"type": "claim", "claim": claim.model_dump()})
+        self._spawn(self._deep(claim, context), verification=True)
+
+    @staticmethod
+    def _apply(claim: Claim, r: VerifyResult) -> None:
+        claim.verdict, claim.confidence, claim.explanation, claim.sources, claim.method = (
+            r.verdict, r.confidence, r.explanation, r.sources, r.method)  # type: ignore[assignment]
 
     async def stop(self, keep_verifications: bool = False) -> None:
         """Stop ingestion. With keep_verifications, in-flight verdicts still get

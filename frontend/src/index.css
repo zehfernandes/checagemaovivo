@@ -187,3 +187,8 @@ a { color: #93c5fd; }
   background: rgba(56, 189, 248, 0.18);
   color: #7dd3fc;
 }
+
+/* deep check */
+.claim__deep { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--inconclusive); }
+.claim__method--deep { background: #3b2a6b; color: #ddd6fe; }
+.btn--small { font-size: 11px; padding: 3px 8px; margin-top: 6px; }

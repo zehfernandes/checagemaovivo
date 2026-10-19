@@ -53,11 +53,14 @@ verdicts); leave the URL empty in mock mode to skip YouTube entirely.
 | `NEWS_FEEDS` | built-in list | override feeds: `Name=url,Name2=url2` |
 | `TRANSCRIBE_MODEL` | `gpt-4o-mini-transcribe` | speech-to-text model |
 | `FACTCHECK_MODEL` | `gpt-4.1-mini` | model for claim extraction and verification |
+| `DEEP_MODEL` | `gpt-4.1` | stronger model for the deep check (third level / Re-check button) |
+| `DEEP_CHECK` | `true` | automatically run the deep check on claims the fast pass left inconclusive |
+| `TRANSCRIBE_GLOSSARY` | debate names | names/terms passed to the speech model so they are spelled correctly (Vorcaro, Galípolo…) |
 | `CHUNK_SECONDS` | `8` | audio chunk size; smaller = lower latency, more API calls |
 | `LANGUAGE` | `pt` | transcription language hint (ISO-639-1), empty for auto |
 | `CORS_ORIGINS` | `http://localhost:5173` | allowed frontend origins |
 
-## News database (first level) + web search (fallback)
+## News database (first level) + web search (fallback) + deep check (third level)
 
 Verification is two-level:
 
@@ -80,6 +83,14 @@ python -m app.news refresh 14          # ingest the last 14 days
 python -m app.news search "maioridade penal PT"
 python -m app.news stats
 ```
+
+### Deep check (third level)
+
+A claim that is still `inconclusive` after the DB and web passes is automatically re-run through a
+slower, stronger pass (`DEEP_MODEL`, several web searches targeting fact-checkers and official sources,
+two independent sources required for fake/valid). While it runs the card shows "Deep check…"; the result
+replaces the verdict with a `Deep` badge. Every settled card also has a **Re-check** button that triggers
+the same pass manually (`{"type":"recheck","claim_id":"…"}` over the WebSocket).
 
 ## WebSocket protocol (`/ws`)
 

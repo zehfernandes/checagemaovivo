@@ -128,6 +128,9 @@ async def ws_endpoint(ws: WebSocket):
             elif kind == "stop":
                 await stop(keep_verifications=True)
                 await emit({"type": "status", "state": "idle", "message": "Stopped"})
+            elif kind == "recheck":
+                if pipeline:
+                    await pipeline.recheck(str(data.get("claim_id", "")))
             elif kind == "ping":
                 await emit({"type": "pong"})
     except WebSocketDisconnect:

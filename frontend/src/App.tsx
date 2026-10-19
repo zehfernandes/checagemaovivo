@@ -157,7 +157,7 @@ export default function App() {
             <div className="claims-list">
               {session.claims.length === 0 && <p className="muted">Checked claims will appear here…</p>}
               {[...session.claims].reverse().map((c) => (
-                <ClaimCard key={c.id} claim={c} />
+                <ClaimCard key={c.id} claim={c} onRecheck={session.recheck} />
               ))}
             </div>
           ) : (

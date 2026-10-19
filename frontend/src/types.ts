@@ -14,7 +14,8 @@ export interface Claim {
   sources: Source[]
   start: number
   end: number
-  method?: 'db' | 'web' | null
+  method?: 'db' | 'web' | 'deep' | null
+  deep_pending?: boolean
   receivedAt: number
   settledAt?: number
 }

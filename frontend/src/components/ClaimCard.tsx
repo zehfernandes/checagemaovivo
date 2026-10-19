@@ -4,9 +4,17 @@ import { VERDICT_LABEL } from '../types'
 interface Props {
   claim: Claim
   compact?: boolean
+  onRecheck?: (id: string) => void
 }
 
-export function ClaimCard({ claim, compact }: Props) {
+const METHOD_LABEL = { db: 'DB', web: 'Web', deep: 'Deep' } as const
+const METHOD_TITLE = {
+  db: 'Answered from the news database',
+  web: 'Answered via live web search',
+  deep: 'Answered by the deep check (stronger model, multiple searches)',
+} as const
+
+export function ClaimCard({ claim, compact, onRecheck }: Props) {
   return (
     <article className={`claim claim--${claim.verdict}${compact ? ' claim--compact' : ''}`}>
       <header className="claim__header">
@@ -18,14 +26,24 @@ export function ClaimCard({ claim, compact }: Props) {
           <span className="claim__confidence">{Math.round(claim.confidence * 100)}%</span>
         )}
         {claim.method && (
-          <span className={`claim__method claim__method--${claim.method}`} title={claim.method === 'db' ? 'Answered from the news database' : 'Answered via live web search'}>
-            {claim.method === 'db' ? 'DB' : 'Web'}
+          <span className={`claim__method claim__method--${claim.method}`} title={METHOD_TITLE[claim.method]}>
+            {METHOD_LABEL[claim.method]}
+          </span>
+        )}
+        {claim.deep_pending && (
+          <span className="claim__deep" title="Running a deeper check: stronger model, several web searches">
+            <span className="spinner" aria-hidden /> Deep check…
           </span>
         )}
         <span className="claim__time">{fmt(claim.start)}</span>
       </header>
       <p className="claim__text">“{claim.text}”</p>
       {claim.explanation && <p className="claim__explanation">{claim.explanation}</p>}
+      {!compact && onRecheck && claim.verdict !== 'pending' && !claim.deep_pending && (
+        <button type="button" className="btn btn--ghost btn--small" onClick={() => onRecheck(claim.id)}>
+          Re-check
+        </button>
+      )}
       {!compact && claim.sources.length > 0 && (
         <ul className="claim__sources">
           {claim.sources.map((s) => (

@@ -39,6 +39,7 @@ class VerifyResult:
 class FactChecker(Protocol):
     async def extract_claims(self, context: str, latest: str, recent_claims: list[str]) -> list[str]: ...
     async def verify(self, claim: str, context: str) -> VerifyResult: ...
+    async def deep_verify(self, claim: str, context: str) -> VerifyResult: ...
 
 
 DUPLICATE_SIMILARITY = 0.90
@@ -76,6 +77,23 @@ and major news outlets). Classify as:
 Relative time expressions ("faltam sete dias", "ontem", "este ano") must be interpreted against TODAY,
 given in the input. Be fast. "explanation" is 1-2 plain sentences in the SAME LANGUAGE as the claim, without links or
 citations (sources go in the "sources" array). Respond ONLY with JSON:
+{"verdict": "fake|valid|inconclusive", "confidence": 0.0-1.0, "explanation": "...",
+ "sources": [{"title": "...", "url": "https://..."}]}"""
+
+
+DEEP_SYSTEM = """You are a senior fact-checker doing a SECOND, DEEPER pass on a claim from a political debate
+that a fast first pass left inconclusive. Work carefully:
+1. Restate the claim precisely: who, what figure/event, which period. Use the transcript context only to
+   disambiguate; the fact that someone said it is NOT evidence.
+2. Run at least 3 different web searches: (a) in Portuguese with the key entities and figure; (b) targeting
+   fact-checkers and official sources (lupa.uol.com.br, aosfatos.org, g1.globo.com/fato-ou-fake,
+   projetocomprova.com.br, gov.br, ibge.gov.br, tse.jus.br, camara.leg.br, senado.leg.br, stf.jus.br,
+   bcb.gov.br); (c) alternative wording, synonyms or the underlying statistic.
+3. Weigh the results. Answer "fake" or "valid" only with at least two independent reliable sources that
+   address the specific fact; otherwise "inconclusive" and say in the explanation exactly what evidence
+   would settle it (e.g. which official series or document).
+Interpret relative time expressions against TODAY. "explanation" is 2-3 plain sentences in the SAME
+LANGUAGE as the claim, no links or citations (sources go in the array). Respond ONLY with JSON:
 {"verdict": "fake|valid|inconclusive", "confidence": 0.0-1.0, "explanation": "...",
  "sources": [{"title": "...", "url": "https://..."}]}"""
 
@@ -161,9 +179,10 @@ def _parse_json(text: str) -> dict:
 
 class OpenAIFactChecker:
     def __init__(self, client: AsyncOpenAI, model: str, store: NewsStore | None = None,
-                 min_similarity: float = 0.55):
+                 min_similarity: float = 0.55, deep_model: str | None = None):
         self.client = client
         self.model = model
+        self.deep_model = deep_model or model
         self.store = store
         self.min_similarity = min_similarity
         self._bg: set[asyncio.Task] = set()
@@ -226,12 +245,25 @@ class OpenAIFactChecker:
                     return result
         result = await self._verify_with_web(claim, context)
         log.info("verify[web] %.1fs %s -> %s", time.monotonic() - t0, claim[:60], result.verdict.value)
-        if self.store is not None:
-            summary = f"{claim}\n\nVeredito da busca na web: {result.verdict.value} — {result.explanation}"
-            for src in result.sources:
-                self._spawn(self.store.add_url(src.url, src.title, source=urlparse(src.url).netloc,
-                                               fallback_text=summary))
+        self._write_back(claim, result)
         return result
+
+    async def deep_verify(self, claim: str, context: str) -> VerifyResult:
+        """Third level: slower, stronger pass for claims left inconclusive (or a manual re-check)."""
+        t0 = time.monotonic()
+        result = await self._verify_with_web(claim, context, model=self.deep_model, system=DEEP_SYSTEM,
+                                             context_size="high", method="deep")
+        log.info("verify[deep] %.1fs %s -> %s", time.monotonic() - t0, claim[:60], result.verdict.value)
+        self._write_back(claim, result)
+        return result
+
+    def _write_back(self, claim: str, result: VerifyResult) -> None:
+        if self.store is None or result.verdict == Verdict.INCONCLUSIVE:
+            return
+        summary = f"{claim}\n\nVeredito da busca na web: {result.verdict.value} — {result.explanation}"
+        for src in result.sources:
+            self._spawn(self.store.add_url(src.url, src.title, source=urlparse(src.url).netloc,
+                                           fallback_text=summary))
 
     def _spawn(self, coro) -> None:
         t = asyncio.create_task(coro)
@@ -259,13 +291,15 @@ class OpenAIFactChecker:
             _add_source(sources, e.title or e.source, e.url)
         return VerifyResult(verdict, confidence, _clean_explanation(str(data.get("explanation", ""))), sources, "db")
 
-    async def _verify_with_web(self, claim: str, context: str) -> VerifyResult:
+    async def _verify_with_web(self, claim: str, context: str, *, model: str | None = None,
+                               system: str = VERIFY_SYSTEM, context_size: str = "low",
+                               method: str = "web") -> VerifyResult:
         user = f"TODAY: {_today()}\nCLAIM: {claim}\n\nTRANSCRIPT CONTEXT: {context[-800:]}"
         res = await self.client.responses.create(
-            model=self.model,
-            instructions=VERIFY_SYSTEM,
+            model=model or self.model,
+            instructions=system,
             input=user,
-            tools=[{"type": "web_search_preview", "search_context_size": "low"}],
+            tools=[{"type": "web_search_preview", "search_context_size": context_size}],
             temperature=0,
         )
         data = _parse_json(res.output_text)
@@ -281,7 +315,7 @@ class OpenAIFactChecker:
                     url = getattr(ann, "url", None)
                     if url:
                         _add_source(sources, getattr(ann, "title", "") or "", url)
-        return VerifyResult(verdict, confidence, _clean_explanation(str(data.get("explanation", ""))), sources, "web")
+        return VerifyResult(verdict, confidence, _clean_explanation(str(data.get("explanation", ""))), sources, method)
 
 
 class MockFactChecker:
@@ -290,6 +324,11 @@ class MockFactChecker:
         if "Boa noite" in latest or not latest.strip():
             return []
         return [latest.strip()]
+
+    async def deep_verify(self, claim: str, context: str) -> VerifyResult:
+        r = await self.verify(claim, context)
+        r.method = "deep"
+        return r
 
     async def verify(self, claim: str, context: str) -> VerifyResult:
         await asyncio.sleep(random.uniform(2, 5))
@@ -310,5 +349,5 @@ class MockFactChecker:
 
 def make_factchecker(client: AsyncOpenAI | None, store: NewsStore | None = None) -> FactChecker:
     if settings.provider == "openai" and client:
-        return OpenAIFactChecker(client, settings.factcheck_model, store, settings.news_min_similarity)
+        return OpenAIFactChecker(client, settings.factcheck_model, store, settings.news_min_similarity, deep_model=settings.deep_model)
     return MockFactChecker()

@@ -85,6 +85,10 @@ export function useSession() {
     [connect],
   )
 
+  const recheck = useCallback((claimId: string) => {
+    ws.current?.send(JSON.stringify({ type: 'recheck', claim_id: claimId }))
+  }, [])
+
   const stop = useCallback(() => {
     ws.current?.send(JSON.stringify({ type: 'stop' }))
     setState('idle')
@@ -92,5 +96,5 @@ export function useSession() {
 
   useEffect(() => () => ws.current?.close(), [])
 
-  return { state, statusText, info, transcript, claims, error, start, stop }
+  return { state, statusText, info, transcript, claims, error, start, stop, recheck }
 }

@@ -26,6 +26,8 @@ class OpenAITranscriber:
         kwargs = {"model": self.model, "file": f, "response_format": "text"}
         if language:
             kwargs["language"] = language
+        if settings.transcribe_glossary.strip():
+            kwargs["prompt"] = settings.transcribe_glossary.strip()
         res = await self.client.audio.transcriptions.create(**kwargs)
         return (res if isinstance(res, str) else getattr(res, "text", "")).strip()
 

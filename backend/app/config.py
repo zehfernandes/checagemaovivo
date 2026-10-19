@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_base_url: str = ""
     transcribe_model: str = "gpt-4o-mini-transcribe"
+    # Names/terms the speech model should spell correctly (passed as the transcription prompt).
+    transcribe_glossary: str = (
+        "Debate presidencial 2026 na Band. Lula, Flávio Bolsonaro, Jair Bolsonaro, Haddad, Galípolo, "
+        "Daniel Vorcaro, Banco Master, André Mendonça, STF, TCU, Polícia Federal, Banco Central, "
+        "Rui Costa, Jaques Wagner, Lulinha, Tarcísio, Michelle Bolsonaro, CACs, Pix, Bolsa Família."
+    )
     factcheck_model: str = "gpt-4.1-mini"
     chunk_seconds: int = 8
     language: str = ""

@@ -31,6 +31,8 @@ export default function App() {
   const [danmu, setDanmu] = useState(() => localStorage.getItem('danmu') !== 'off')
   const [fresh, setFresh] = useState(false)
   const [save, setSave] = useState(() => localStorage.getItem('save') === 'on')
+  const [sideOpen, setSideOpen] = useState(() => localStorage.getItem('side') !== 'closed')
+  useEffect(() => localStorage.setItem('side', sideOpen ? 'open' : 'closed'), [sideOpen])
   const [delay, setDelay] = useState(() => Number(localStorage.getItem('delay') ?? 20))
   const [nudge, setNudge] = useState(0)
   const [behind, setBehind] = useState<number | null>(null)
@@ -223,8 +225,18 @@ export default function App() {
 
       {session.error && <div className="banner banner--error">{session.error}</div>}
 
-      <main className="layout">
+      <main className={`layout${sideOpen ? '' : ' layout--collapsed'}`}>
         <section className="stage">
+          <button
+            type="button"
+            className="side-toggle"
+            onClick={() => setSideOpen((o) => !o)}
+            title={sideOpen ? 'Recolher a barra lateral' : 'Mostrar afirmações e transcrição'}
+            aria-expanded={sideOpen}
+          >
+            {sideOpen ? '›' : '‹'}
+            {!sideOpen && visibleClaims.length > 0 && <span className="side-toggle__count">{visibleClaims.length}</span>}
+          </button>
           {videoId ? (
             <Player videoId={videoId} onTime={setCurrentTime} liveDelay={delayed ? delay : 0} onDelay={setBehind} />
           ) : (
@@ -239,6 +251,7 @@ export default function App() {
           </div>
         </section>
 
+        {sideOpen && (
         <aside className="side">
           <nav className="tabs">
             <button className={tab === 'claims' ? 'active' : ''} onClick={() => setTab('claims')}>
@@ -259,6 +272,7 @@ export default function App() {
             <TranscriptRail segments={visibleTranscript} />
           )}
         </aside>
+        )}
       </main>
     </div>
   )

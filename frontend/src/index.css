@@ -86,6 +86,15 @@ button { font: inherit; }
 /* ---- stage ---- */
 .layout { display: grid; grid-template-columns: 1fr 360px; flex: 1; min-height: 0; border-top: 1px solid var(--border); }
 @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
+.layout--collapsed { grid-template-columns: 1fr; }
+.side-toggle {
+  position: absolute; top: 10px; right: 10px; z-index: 5; display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(0,0,0,.55); color: var(--text); border: 1px solid rgba(255,255,255,.12); border-radius: 999px;
+  width: 28px; height: 28px; justify-content: center; font-size: 18px; line-height: 1; cursor: pointer; opacity: .6; backdrop-filter: blur(4px);
+}
+.side-toggle:hover { opacity: 1; }
+.side-toggle__count { font-size: 11px; font-weight: 600; }
+.layout--collapsed .side-toggle { width: auto; padding: 0 10px 0 8px; }
 
 .stage { position: relative; background: black; display: flex; flex-direction: column; min-height: 0; }
 .player { flex: 1; min-height: 0; }

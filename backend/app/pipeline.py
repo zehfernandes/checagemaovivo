@@ -34,6 +34,7 @@ class Pipeline:
         self.recent_claims: deque[str] = deque(maxlen=RECENT_CLAIMS)
         self.verify_sem = asyncio.Semaphore(MAX_CONCURRENT_VERIFICATIONS)
         self._stopped = False
+        self.run_id = uuid.uuid4().hex[:6]
 
     def _spawn(self, coro) -> None:
         t = asyncio.create_task(coro)
@@ -77,7 +78,7 @@ class Pipeline:
             return
         if not text:
             return
-        seg = TranscriptSegment(id=f"seg-{chunk.index}", text=text, start=chunk.start, end=chunk.end)
+        seg = TranscriptSegment(id=f"seg-{self.run_id}-{chunk.index}", text=text, start=chunk.start, end=chunk.end)
         await self.emit({"type": "transcript", "segment": seg.model_dump()})
 
         context = " ".join(self.context)

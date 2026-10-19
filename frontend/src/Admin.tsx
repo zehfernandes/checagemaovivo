@@ -64,14 +64,16 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [toast, setToast] = useState<string | null>(null)
   const notify = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(null), 4000) }, [])
 
-  const loadRooms = useCallback(async () => {
+  async function loadRooms() {
     try { setRooms(await api<Room[]>('/admin/rooms')) } catch (e) { notify((e as Error).message) }
-  }, [notify])
+  }
   useEffect(() => {
+    // oxlint-disable-next-line react-hooks/set-state-in-effect -- initial load + 5s poll of room state
     loadRooms()
     const t = setInterval(loadRooms, 5000)
     return () => clearInterval(t)
-  }, [loadRooms])
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- poll once per mount
+  }, [])
   useEffect(() => {
     const p = new URLSearchParams()
     p.set('tab', tab)

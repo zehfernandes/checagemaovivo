@@ -26,12 +26,12 @@ class Claim(BaseModel):
     start: float
     end: float
     speaker: str | None = None
-    method: Literal["db", "web", "deep"] | None = None
+    method: Literal["cache", "db", "web", "deep"] | None = None
     deep_pending: bool = False
     # latency instrumentation (server wall clock, seconds since epoch)
     captured_at: float | None = None  # audio of this claim finished arriving from YouTube
     extracted_at: float | None = None  # claim emitted as pending
-    verified_at: float | None = None  # last verdict emitted
+    verified_at: float | None = None  # first settled verdict emitted
 
 
 class TranscriptSegment(BaseModel):

@@ -126,7 +126,7 @@ class Pipeline:
                 log.exception("verification failed")
                 r = VerifyResult(Verdict.INCONCLUSIVE, 0.0, f"Verification failed: {e}")
         self._apply(claim, r)
-        claim.verified_at = time.time()
+        claim.verified_at = claim.verified_at or time.time()  # first settled verdict; deep/re-check keep it
         if r.verdict == Verdict.INCONCLUSIVE and settings.deep_check:
             claim.deep_pending = True
             self._spawn(self._deep(claim, context), verification=True)
@@ -140,7 +140,7 @@ class Pipeline:
                 log.exception("deep verification failed")
                 r = VerifyResult(claim.verdict, claim.confidence, claim.explanation, claim.sources, claim.method or "web")
         self._apply(claim, r)
-        claim.verified_at = time.time()
+        claim.verified_at = claim.verified_at or time.time()  # first settled verdict; deep/re-check keep it
         claim.deep_pending = False
         await self.emit({"type": "claim", "claim": claim.model_dump()})
 

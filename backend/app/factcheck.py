@@ -192,6 +192,7 @@ class OpenAIFactChecker:
         self.min_similarity = min_similarity
         self._bg: set[asyncio.Task] = set()
         self._recent_vecs: deque[np.ndarray] = deque(maxlen=RECENT_VEC_WINDOW)
+        self._vec_cache: dict[str, np.ndarray] = {}  # claim text -> embedding, computed once in dedup and reused by verify
 
     async def extract_claims(self, context: str, latest: str, recent_claims: list[str]) -> list[str]:
         if not latest.strip():
@@ -249,14 +250,46 @@ class OpenAIFactChecker:
                 continue
             kept.append(text)
             self._recent_vecs.append(v)
+            if len(self._vec_cache) > 500:
+                self._vec_cache.clear()
+            self._vec_cache[text] = v
         return kept
+
+    async def _claim_vec(self, claim: str) -> np.ndarray | None:
+        if self.store is None:
+            return None
+        v = self._vec_cache.get(claim)
+        if v is None:
+            try:
+                v = (await self.store.embed([claim]))[0]
+            except Exception:  # noqa: BLE001
+                log.exception("claim embedding failed")
+                return None
+        return v
+
+    def _remember(self, claim: str, vec: np.ndarray | None, result: VerifyResult) -> None:
+        if self.store is None or vec is None or result.verdict == Verdict.INCONCLUSIVE:
+            return
+        self.store.remember_verdict(claim, vec, result.verdict.value, result.confidence, result.explanation,
+                                    [{"title": s.title, "url": s.url} for s in result.sources], result.method)
 
     async def verify(self, claim: str, context: str) -> VerifyResult:
         """First level: local news DB. Second level (fallback): live web search + write-back."""
         t0 = time.monotonic()
+        vec = await self._claim_vec(claim)
+        if vec is not None:
+            # level 0: a near-identical claim was already settled (this or another video) -> reuse, no AI calls
+            hit = self.store.recall_verdict(vec, settings.verdict_cache_similarity, settings.verdict_cache_days)
+            if hit is not None:
+                row, sim = hit
+                log.info("verify[cache] %.2fs sim=%.2f %s -> %s (was %s: %s)", time.monotonic() - t0, sim,
+                         claim[:60], row["verdict"], row["method"], row["claim"][:60])
+                return VerifyResult(Verdict(row["verdict"]), float(row["confidence"]), row["explanation"],
+                                    [Source(title=s.get("title", ""), url=s["url"]) for s in row["sources"] if s.get("url")],
+                                    "cache")
         if self.store is not None:
             try:
-                evidence = [e for e in await self.store.search(claim, k=5) if e.score >= self.min_similarity]
+                evidence = [e for e in await self.store.search(claim, k=5, vec=vec) if e.score >= self.min_similarity]
             except Exception:  # noqa: BLE001
                 log.exception("news DB search failed")
                 evidence = []
@@ -265,10 +298,12 @@ class OpenAIFactChecker:
                 if result is not None:
                     log.info("verify[db] %.1fs top=%.2f %s -> %s", time.monotonic() - t0,
                              evidence[0].score, claim[:60], result.verdict.value)
+                    self._remember(claim, vec, result)
                     return result
         result = await self._verify_with_web(claim, context)
         log.info("verify[web] %.1fs %s -> %s", time.monotonic() - t0, claim[:60], result.verdict.value)
         self._write_back(claim, result)
+        self._remember(claim, vec, result)
         return result
 
     async def deep_verify(self, claim: str, context: str) -> VerifyResult:
@@ -278,6 +313,7 @@ class OpenAIFactChecker:
                                              context_size="high", method="deep")
         log.info("verify[deep] %.1fs %s -> %s", time.monotonic() - t0, claim[:60], result.verdict.value)
         self._write_back(claim, result)
+        self._remember(claim, await self._claim_vec(claim), result)
         return result
 
     def _write_back(self, claim: str, result: VerifyResult) -> None:
@@ -300,11 +336,10 @@ class OpenAIFactChecker:
             flag = " [unverified summary from an earlier web search — weak evidence]" if e.kind == "web-summary" else ""
             blocks.append(f"[{i}] {e.source} — {e.title} ({when}){flag}\n{e.text[:1200]}")
         if self.jev is not None:
-            jev_result, skip_llm = await self._decide_with_jev(claim, evidence, blocks)
-            if jev_result is not None:
-                return jev_result
-            if skip_llm:
-                return None  # Jev is confident the DB evidence cannot settle it -> straight to web
+            # Jev decides in ~0.2 s; when it is unsure we go straight to web search instead of
+            # spending another ~1 s asking the LLM over the same evidence
+            jev_result, _ = await self._decide_with_jev(claim, evidence, blocks)
+            return jev_result
         user = (f"TODAY: {_today()}\nCLAIM: {claim}\n\nTRANSCRIPT CONTEXT: {context[-600:]}\n\n"
                 f"EVIDENCE:\n\n" + "\n\n".join(blocks))
         res = await self.client.responses.create(

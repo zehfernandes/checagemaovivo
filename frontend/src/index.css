@@ -22,12 +22,12 @@ a { color: #93c5fd; }
 .app { display: flex; flex-direction: column; height: 100%; }
 
 .topbar {
-  display: flex; align-items: center; gap: 16px; padding: 10px 16px;
+  display: flex; align-items: center; gap: 12px 16px; padding: 10px 16px; flex-wrap: wrap;
   border-bottom: 1px solid var(--border); background: var(--panel);
 }
 .topbar h1 { font-size: 16px; margin: 0; white-space: nowrap; }
 .logo { color: var(--accent); }
-.controls { display: flex; gap: 8px; flex: 1; }
+.controls { display: flex; gap: 8px; flex: 1 1 520px; align-items: center; }
 .controls input, .controls select {
   background: var(--panel-2); color: var(--text); border: 1px solid var(--border);
   border-radius: 6px; padding: 8px 10px; font-size: 14px;
@@ -38,7 +38,7 @@ a { color: #93c5fd; }
   padding: 8px 16px; font-weight: 600; cursor: pointer;
 }
 .btn--stop { background: var(--fake); }
-.status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.status { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); flex-wrap: wrap; min-width: 0; }
 .status--listening { color: var(--valid); }
 .status--error { color: var(--fake); }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--valid); animation: pulse 1.2s infinite; }
@@ -191,6 +191,7 @@ a { color: #93c5fd; }
 /* deep check */
 .claim__deep { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--inconclusive); }
 .claim__method--deep { background: #3b2a6b; color: #ddd6fe; }
+.claim__method--cache { background: rgba(74, 222, 128, 0.16); color: #86efac; }
 .btn--small { font-size: 11px; padding: 3px 8px; margin-top: 6px; }
 
 /* review page */

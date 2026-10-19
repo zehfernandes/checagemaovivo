@@ -6,6 +6,7 @@ search are written back so the next similar claim becomes a DB hit.
 """
 import asyncio
 import calendar
+import json
 import logging
 import re
 import sqlite3
@@ -50,6 +51,9 @@ CREATE TABLE IF NOT EXISTS chunks (
   idx INTEGER, text TEXT, embedding BLOB);
 CREATE INDEX IF NOT EXISTS chunks_doc ON chunks(doc_id);
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS verdicts (
+  id INTEGER PRIMARY KEY, claim TEXT, verdict TEXT, confidence REAL, explanation TEXT,
+  sources TEXT, method TEXT, ts REAL, embedding BLOB);
 """
 
 
@@ -105,7 +109,10 @@ class NewsStore:
         self._refresh_lock = asyncio.Lock()
         self._mat = np.zeros((0, 1), dtype=np.float32)
         self._rows: list[tuple] = []  # doc_id, url, source, title, published, text, kind
+        self._vmat = np.zeros((0, 1), dtype=np.float32)  # verdict memory: settled claims + their verdicts
+        self._vrows: list[dict] = []
         self._load()
+        self._load_verdicts()
 
     # ---------- storage ----------
     def _load(self) -> None:
@@ -118,6 +125,49 @@ class NewsStore:
             vecs.append(np.frombuffer(emb, dtype=np.float32))
         self._rows = rows
         self._mat = np.vstack(vecs) if vecs else np.zeros((0, 1), dtype=np.float32)
+
+    def _load_verdicts(self) -> None:
+        cur = self.db.execute(
+            "SELECT claim, verdict, confidence, explanation, sources, method, ts, embedding FROM verdicts ORDER BY id")
+        rows, vecs = [], []
+        for claim, verdict, conf, expl, sources, method, ts, emb in cur:
+            rows.append({"claim": claim, "verdict": verdict, "confidence": conf, "explanation": expl,
+                         "sources": json.loads(sources or "[]"), "method": method, "ts": ts})
+            vecs.append(np.frombuffer(emb, dtype=np.float32))
+        self._vrows = rows
+        self._vmat = np.vstack(vecs) if vecs else np.zeros((0, 1), dtype=np.float32)
+
+    # ---------- verdict memory (claim -> settled verdict, reused across videos) ----------
+    def remember_verdict(self, claim: str, vec: np.ndarray, verdict: str, confidence: float,
+                         explanation: str, sources: list[dict], method: str) -> None:
+        ts = time.time()
+        vec = vec.astype(np.float32)
+        self.db.execute(
+            "INSERT INTO verdicts (claim, verdict, confidence, explanation, sources, method, ts, embedding) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (claim, verdict, confidence, explanation, json.dumps(sources), method, ts, vec.tobytes()))
+        self.db.commit()
+        self._vrows.append({"claim": claim, "verdict": verdict, "confidence": confidence, "explanation": explanation,
+                            "sources": sources, "method": method, "ts": ts})
+        self._vmat = vec[None, :] if len(self._vrows) == 1 else np.vstack([self._vmat, vec[None, :]])
+
+    def recall_verdict(self, vec: np.ndarray, min_similarity: float = 0.9,
+                       max_age_days: float = 7) -> tuple[dict, float] | None:
+        """Most similar remembered claim above `min_similarity` that is not older than `max_age_days`."""
+        if not self._vrows:
+            return None
+        sims = self._vmat @ vec
+        cutoff = time.time() - max_age_days * 86400
+        for i in np.argsort(-sims):
+            s = float(sims[i])
+            if s < min_similarity:
+                return None
+            if self._vrows[i]["ts"] >= cutoff:
+                return self._vrows[i], s
+        return None
+
+    def verdict_count(self) -> int:
+        return len(self._vrows)
 
     def has_url(self, url: str) -> bool:
         return self.db.execute("SELECT 1 FROM docs WHERE url = ?", (url,)).fetchone() is not None
@@ -265,10 +315,10 @@ class NewsStore:
         return n > 0
 
     # ---------- query ----------
-    async def search(self, query: str, k: int = 5) -> list[Evidence]:
+    async def search(self, query: str, k: int = 5, vec: np.ndarray | None = None) -> list[Evidence]:
         if not self._rows:
             return []
-        q = (await self._embed([query]))[0]
+        q = vec if vec is not None else (await self._embed([query]))[0]
         sims = self._mat @ q
         best: dict[int, tuple[float, int]] = {}
         for i in np.argsort(-sims)[: k * 4]:

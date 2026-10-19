@@ -7,8 +7,9 @@ interface Props {
   onRecheck?: (id: string) => void
 }
 
-const METHOD_LABEL = { db: 'DB', web: 'Web', deep: 'Deep' } as const
+const METHOD_LABEL = { cache: 'Cache', db: 'DB', web: 'Web', deep: 'Deep' } as const
 const METHOD_TITLE = {
+  cache: 'Reused the verdict of an identical claim settled earlier (no AI calls)',
   db: 'Answered from the news database',
   web: 'Answered via live web search',
   deep: 'Answered by the deep check (stronger model, multiple searches)',

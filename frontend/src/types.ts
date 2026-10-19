@@ -14,7 +14,7 @@ export interface Claim {
   sources: Source[]
   start: number
   end: number
-  method?: 'db' | 'web' | 'deep' | null
+  method?: 'cache' | 'db' | 'web' | 'deep' | null
   deep_pending?: boolean
   captured_at?: number | null
   extracted_at?: number | null

@@ -68,8 +68,13 @@ verdicts); leave the URL empty in mock mode to skip YouTube entirely.
 
 ## News database (first level) + web search (fallback) + deep check (third level)
 
-Verification is two-level:
+Verification ladder (fastest first):
 
+0. **Verdict memory** – every settled verdict (DB, web or deep; not inconclusive) is stored with the
+   claim's embedding (`verdicts` table in the news DB). A new claim ≥ `VERDICT_CACHE_SIMILARITY`
+   (0.9) similar to one settled in the last `VERDICT_CACHE_DAYS` (7) reuses it instantly — no AI
+   calls, **Cache** badge. Debates repeat talking points, and the same claim across videos is free.
+   The claim embedding is computed once (in the duplicate filter) and reused here and in step 1.
 1. **News DB** – `backend/app/news.py` ingests RSS from Brazilian fact-checkers and outlets
    (Lupa, g1 Fato ou Fake, g1 Política, Agência Brasil, Folha Poder, CNN Brasil, Poder360,
    E-Farsas, Boatos.org), extracts article text, embeds it (`text-embedding-3-small`) and stores
@@ -83,6 +88,7 @@ Verification is two-level:
    home-made elevator) are not a contradiction. The claim gate also requires public interest
    (public figures, institutions, statistics, laws, public events), so a reportage subject's personal
    story is not fact-checked.
+   When Jev is unsure the claim goes straight to web search (no second LLM pass over the same evidence).
 2. **Web search** – when the DB has nothing relevant, or the model says the evidence is not
    sufficient, the claim goes to OpenAI web search (~4–6 s, **Web** badge). Pages cited by the
    search are written back into the DB so the next similar claim is a DB hit.

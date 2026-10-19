@@ -29,7 +29,8 @@ export default function App() {
   useEffect(() => localStorage.setItem('danmu', danmu ? 'on' : 'off'), [danmu])
   const session = useSession()
 
-  const videoId = session.info?.video_id || extractVideoId(url)
+  const typedId = extractVideoId(url)
+  const videoId = session.info?.video_id || (typedId && typedId.length === 11 ? typedId : null)
   const running = session.state === 'connecting' || session.state === 'resolving' || session.state === 'listening'
   const isLive = session.info?.is_live ?? true
 
@@ -122,13 +123,13 @@ export default function App() {
           {session.state === 'listening' && <span className="dot" />}
           {session.statusText || 'Idle'}
           {session.info?.is_live && <span className="live-tag">LIVE</span>}
-          {session.progress && (
+          {running && session.progress && (
             <span className="muted" title="Processing is shared by all viewers of this video and cached">
               {' '}· {session.progress.fresh ? 'fresh run · not cached' : `${session.progress.viewers} viewer${session.progress.viewers === 1 ? '' : 's'}`}
               {!isLive && ` · ${session.progress.complete ? 'fully processed' : `processed to ${fmtTime(session.progress.processed_to)}`}`}
             </span>
           )}
-          {latency && (isLive || session.progress?.fresh) && (
+          {running && latency && (isLive || session.progress?.fresh) && (
             <span className="latency" title={`Average over the last ${latency.n} claims, measured on the server from the moment the audio arrived from YouTube`}>
               ⏱ claim +{latency.claim!.toFixed(1)}s{latency.verdict != null && ` · verdict +${latency.verdict.toFixed(1)}s`}
             </span>

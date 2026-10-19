@@ -13,6 +13,7 @@ from collections.abc import Awaitable, Callable
 
 from . import audio, usage
 from .config import settings
+from .glossary import glossary as _glossary
 from .factcheck import FactChecker, VerifyResult
 from .models import Claim, StreamInfo, TranscriptSegment, Verdict
 from .transcribe import Transcriber
@@ -37,7 +38,7 @@ _STOP = {"Agora", "Então", "Mas", "Porque", "Não", "Sim", "Olha", "Ou", "Eu", 
 
 def _entities(text: str) -> list[str]:
     """Proper names mentioned recently (transcript + glossary hits), most recent last, deduplicated."""
-    glossary = [g.strip() for g in settings.transcribe_glossary.replace(".", ",").split(",") if g.strip()]
+    glossary = _glossary.names()
     found: list[str] = []
     low = text.lower()
     for g in glossary:

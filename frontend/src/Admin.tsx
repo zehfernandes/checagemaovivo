@@ -5,7 +5,7 @@ import type { Claim, NewsStats, Room as PublicRoom, Source, UsageSummary, Verdic
 import { VERDICT_LABEL } from './types'
 
 type Final = Exclude<Verdict, 'pending'>
-type Tab = 'rooms' | 'claims' | 'news'
+type Tab = 'rooms' | 'claims' | 'news' | 'glossary'
 
 interface Room extends PublicRoom {
   created: number; viewers: number; processed_to: number; state: string; message: string; usage: UsageSummary | null
@@ -90,6 +90,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           <button className={tab === 'rooms' ? 'active' : ''} onClick={() => setTab('rooms')}>Salas {rooms.length > 0 && <span className="muted">{rooms.length}</span>}</button>
           <button className={tab === 'claims' ? 'active' : ''} onClick={() => setTab('claims')}>Checagens</button>
           <button className={tab === 'news' ? 'active' : ''} onClick={() => setTab('news')}>Base de notícias</button>
+          <button className={tab === 'glossary' ? 'active' : ''} onClick={() => setTab('glossary')}>Glossário</button>
         </nav>
         <span className="admin__spacer" />
         <a className="link" href="/#review">Revisão offline</a>
@@ -101,6 +102,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         {tab === 'rooms' && <Rooms rooms={rooms} reload={loadRooms} notify={notify} onOpen={(id) => { setRoomId(id); setTab('claims') }} />}
         {tab === 'claims' && <Claims rooms={rooms} room={room} onPick={setRoomId} reload={loadRooms} notify={notify} />}
         {tab === 'news' && <News notify={notify} />}
+        {tab === 'glossary' && <Glossary notify={notify} />}
       </main>
     </div>
   )
@@ -366,6 +368,45 @@ function AdminClaim({ claim: c, onSave, onDelete, onRecheck, notify }: {
         </footer>
       )}
     </article>
+  )
+}
+
+// ---- Glossário da transcrição -----------------------------------------------------------------
+function Glossary({ notify }: { notify: (m: string) => void }) {
+  const [terms, setTerms] = useState('')
+  const [fixes, setFixes] = useState('')
+  const [updated, setUpdated] = useState<number | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  useEffect(() => {
+    api<{ terms: string; replacements: { from: string; to: string }[]; updated_at: number | null }>('/admin/glossary')
+      .then((d) => { setTerms(d.terms); setFixes(d.replacements.map((x) => `${x.from} → ${x.to}`).join('\n')); setUpdated(d.updated_at) })
+      .catch((e) => notify((e as Error).message))
+  }, [notify])
+  async function save(e: FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    try {
+      const replacements = fixes.split('\n').map((l) => l.split(/\s*(?:→|->|=>)\s*/)).filter((p) => p.length >= 2 && p[0].trim() && p[1].trim())
+        .map((p) => ({ from: p[0].trim(), to: p[1].trim() }))
+      const d = await api<{ updated_at: number | null; replacements: { from: string; to: string }[] }>('/admin/glossary', { method: 'PUT', body: JSON.stringify({ terms, replacements }) })
+      setUpdated(d.updated_at); setFixes(d.replacements.map((x) => `${x.from} → ${x.to}`).join('\n')); setDirty(false)
+    } catch (err) { notify((err as Error).message) } finally { setBusy(false) }
+  }
+  return (
+    <div className="admin__section">
+      <p className="muted">Vale para as próximas transcrições de qualquer sala (gravação ou ao vivo), sem reiniciar. O que já está no cache não muda.</p>
+      <form className="admin__form admin__form--doc" onSubmit={save}>
+        <label className="muted">Nomes e termos que a transcrição deve acertar (separados por vírgula; vão como contexto para o modelo de voz)</label>
+        <textarea value={terms} onChange={(e) => { setTerms(e.target.value); setDirty(true) }} rows={5} placeholder="Lula, Flávio Bolsonaro, Daniel Vorcaro, Banco Master, Galípolo…" />
+        <label className="muted">Correções aplicadas ao texto transcrito, uma por linha, no formato <code>errado → certo</code> (palavra inteira, sem diferenciar maiúsculas)</label>
+        <textarea value={fixes} onChange={(e) => { setFixes(e.target.value); setDirty(true) }} rows={6} placeholder={'Bocaro → Vorcaro\nVocaro → Vorcaro'} />
+        <div className="admin__actions">
+          <button type="submit" className="btn" disabled={busy || !dirty}>{busy ? 'Salvando…' : 'Salvar glossário'}</button>
+          <span className="muted">{updated ? `Salvo ${ago(updated)}` : 'Usando os padrões do servidor'}</span>
+        </div>
+      </form>
+    </div>
   )
 }
 

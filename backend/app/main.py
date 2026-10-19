@@ -16,6 +16,7 @@ from .config import settings
 from .factcheck import make_factchecker
 from .models import StartRequest
 from .news import NewsStore
+from .glossary import glossary
 from . import audio
 from .channels import ChannelManager
 from .pipeline import Pipeline
@@ -121,6 +122,22 @@ async def admin_claim(req: OverrideRequest):
         except Exception:  # noqa: BLE001
             log.exception("verdict memory write failed")
     return {"ok": True, "claim": c}
+
+
+class GlossaryRequest(BaseModel):
+    terms: str = ""
+    replacements: list[dict] = []
+
+
+@app.get("/admin/glossary", dependencies=[Depends(require_admin)])
+async def admin_glossary():
+    return glossary.dump()
+
+
+@app.put("/admin/glossary", dependencies=[Depends(require_admin)])
+async def admin_glossary_save(req: GlossaryRequest):
+    """Glossary (names the speech model must spell right) + term fixes applied to every new transcript."""
+    return glossary.save(req.terms, {str(r.get("from", "")): str(r.get("to", "")) for r in req.replacements})
 
 
 @app.get("/news")

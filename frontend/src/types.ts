@@ -50,6 +50,7 @@ export type ServerMessage =
   | { type: 'transcript'; segment: TranscriptSegment }
   | { type: 'claim'; claim: Omit<Claim, 'receivedAt' | 'settledAt'> }
   | { type: 'error'; message: string }
+  | { type: 'claim_removed'; id: string }
   | { type: 'progress'; processed_to: number; complete: boolean; viewers: number; fresh?: boolean; server_time?: number; save?: boolean; usage?: UsageSummary | null }
   | { type: 'pong' }
 
@@ -83,4 +84,18 @@ export interface NewsStats {
   chunks: number
   sources: Record<string, number>
   last_refresh: number | null
+}
+
+export interface Room {
+  id: string
+  name: string
+  url: string
+  video_id: string
+  kind: string
+  active: boolean
+  title: string | null
+  is_live: boolean
+  processing: boolean
+  complete: boolean
+  claims: number
 }

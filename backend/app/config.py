@@ -6,6 +6,7 @@ class Settings(BaseSettings):
 
     provider: str = "mock"
     openai_api_key: str = ""
+    openai_base_url: str = ""
     transcribe_model: str = "gpt-4o-mini-transcribe"
     factcheck_model: str = "gpt-4.1-mini"
     chunk_seconds: int = 8

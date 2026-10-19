@@ -44,6 +44,7 @@ verdicts); leave the URL empty in mock mode to skip YouTube entirely.
 | --- | --- | --- |
 | `PROVIDER` | `mock` | `openai` or `mock` |
 | `OPENAI_API_KEY` | | required for `openai` |
+| `OPENAI_BASE_URL` | | optional OpenAI-compatible base URL (e.g. Vercel AI Gateway) |
 | `TRANSCRIBE_MODEL` | `gpt-4o-mini-transcribe` | speech-to-text model |
 | `FACTCHECK_MODEL` | `gpt-4.1-mini` | model for claim extraction and verification |
 | `CHUNK_SECONDS` | `8` | audio chunk size; smaller = lower latency, more API calls |

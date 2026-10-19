@@ -23,7 +23,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-client = AsyncOpenAI(api_key=settings.openai_api_key) if settings.openai_api_key else None
+client = (
+    AsyncOpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url or None)
+    if settings.openai_api_key
+    else None
+)
 if settings.provider == "openai" and client is None:
     log.warning("PROVIDER=openai but OPENAI_API_KEY is empty; falling back to mock")
 

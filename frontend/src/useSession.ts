@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Claim, ServerMessage, SessionState, StreamInfo, TranscriptSegment } from './types'
+import { adminPassword } from './admin'
+import type { Claim, Progress, ServerMessage, SessionState, StreamInfo, TranscriptSegment } from './types'
 
-const MAX_TRANSCRIPT = 200
+const MAX_TRANSCRIPT = 5000
 
 function wsUrl() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
@@ -11,11 +12,15 @@ function wsUrl() {
 export function useSession() {
   const ws = useRef<WebSocket | null>(null)
   const [state, setState] = useState<SessionState>('idle')
+  const [lost, setLost] = useState(false)
   const [statusText, setStatusText] = useState('')
   const [info, setInfo] = useState<StreamInfo | null>(null)
   const [transcript, setTranscript] = useState<TranscriptSegment[]>([])
   const [claims, setClaims] = useState<Claim[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [progress, setProgress] = useState<Progress | null>(null)
+  // browser clock minus server clock (s); lets the UI schedule claims by the server's captured_at
+  const [clockOffset, setClockOffset] = useState(0)
 
   const handle = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
@@ -27,7 +32,7 @@ export function useSession() {
         setInfo(msg.info)
         break
       case 'transcript':
-        setTranscript((t) => [...t, msg.segment].slice(-MAX_TRANSCRIPT))
+        setTranscript((t) => (t.some((s) => s.id === msg.segment.id) ? t : [...t, msg.segment].slice(-MAX_TRANSCRIPT)))
         break
       case 'claim':
         setClaims((cs) => {
@@ -46,6 +51,11 @@ export function useSession() {
       case 'error':
         setError(msg.message)
         break
+      case 'progress':
+        setProgress({ processed_to: msg.processed_to, complete: msg.complete, viewers: msg.viewers, fresh: !!msg.fresh,
+          save: !!msg.save, usage: msg.usage ?? null })
+        if (msg.server_time) setClockOffset(Date.now() / 1000 - msg.server_time)
+        break
     }
   }, [])
 
@@ -57,7 +67,8 @@ export function useSession() {
       ws.current = null
       setState((s) => {
         if (s === 'connecting' || s === 'resolving' || s === 'listening') {
-          setStatusText('Disconnected from backend')
+          setStatusText('Conexão com o servidor perdida')
+          setLost(true)
           return 'error'
         }
         return s
@@ -68,20 +79,28 @@ export function useSession() {
   }, [handle])
 
   const start = useCallback(
-    (url: string, language: string, startSeconds = 0) => {
+    (url: string, language: string, startSeconds = 0, keep = false, fresh = false, save = false) => {
       setError(null)
-      setInfo(null)
-      setTranscript([])
-      setClaims([])
+      setLost(false)
+      if (!keep) {
+        setInfo(null)
+        setTranscript([])
+        setClaims([])
+        setProgress(null)
+      }
       setState('connecting')
-      setStatusText('Connecting…')
+      setStatusText(keep ? 'Ressincronizando…' : 'Conectando…')
       const socket = connect()
-      const payload = JSON.stringify({ type: 'start', url, language: language || null, start_seconds: startSeconds })
+      const payload = JSON.stringify({ type: 'start', url, language: language || null, start_seconds: startSeconds, fresh, save, admin: adminPassword() })
       if (socket.readyState === WebSocket.OPEN) socket.send(payload)
       else socket.addEventListener('open', () => socket.send(payload), { once: true })
     },
     [connect],
   )
+
+  const recheck = useCallback((claimId: string) => {
+    ws.current?.send(JSON.stringify({ type: 'recheck', claim_id: claimId, admin: adminPassword() }))
+  }, [])
 
   const stop = useCallback(() => {
     ws.current?.send(JSON.stringify({ type: 'stop' }))
@@ -90,5 +109,5 @@ export function useSession() {
 
   useEffect(() => () => ws.current?.close(), [])
 
-  return { state, statusText, info, transcript, claims, error, start, stop }
+  return { state, lost, statusText, info, transcript, claims, error, progress, clockOffset, start, stop, recheck }
 }

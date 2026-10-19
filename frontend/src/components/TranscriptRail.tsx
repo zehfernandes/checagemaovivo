@@ -6,7 +6,7 @@ export function TranscriptRail({ segments }: { segments: TranscriptSegment[] }) 
   useEffect(() => end.current?.scrollIntoView({ behavior: 'smooth' }), [segments.length])
   return (
     <div className="transcript">
-      {segments.length === 0 && <p className="muted">Transcript will appear here…</p>}
+      {segments.length === 0 && <p className="muted">A transcrição aparece aqui.</p>}
       {segments.map((s) => (
         <p key={s.id} className="transcript__line">
           <span className="transcript__time">{fmt(s.start)}</span> {s.text}

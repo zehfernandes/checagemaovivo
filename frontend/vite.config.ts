@@ -9,6 +9,9 @@ export default defineConfig({
     proxy: {
       '/ws': { target: backend, ws: true },
       '/health': backend,
+      '/news': backend,
+      '/review': backend,
+      '/admin': backend,
     },
   },
 })

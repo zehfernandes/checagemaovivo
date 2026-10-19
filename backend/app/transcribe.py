@@ -1,12 +1,17 @@
 import asyncio
 import io
+import logging
+import re
 import random
 from typing import Protocol
 
 from openai import AsyncOpenAI
 
 from .audio import AudioChunk
+from . import usage
 from .config import settings
+
+log = logging.getLogger(__name__)
 
 
 class Transcriber(Protocol):
@@ -26,8 +31,27 @@ class OpenAITranscriber:
         kwargs = {"model": self.model, "file": f, "response_format": "text"}
         if language:
             kwargs["language"] = language
+        if settings.transcribe_glossary.strip():
+            kwargs["prompt"] = settings.transcribe_glossary.strip()
         res = await self.client.audio.transcriptions.create(**kwargs)
-        return (res if isinstance(res, str) else getattr(res, "text", "")).strip()
+        usage.track_audio(chunk.end - chunk.start)
+        text = (res if isinstance(res, str) else getattr(res, "text", "")).strip()
+        if _echoes_prompt(text, kwargs.get("prompt", "")):
+            log.info("transcript dropped: echoes the glossary prompt (music/noise chunk): %s", text[:80])
+            return ""
+        return text
+
+
+def _echoes_prompt(text: str, prompt: str, threshold: float = 0.6) -> bool:
+    """On music/noise chunks the transcription model sometimes returns the glossary prompt itself
+    instead of speech; drop a transcript whose words mostly come from the prompt."""
+    if not prompt or not text:
+        return False
+    words = [w for w in re.findall(r"\w+", text.lower()) if len(w) > 2]
+    if len(words) < 4:
+        return False
+    vocab = set(re.findall(r"\w+", prompt.lower()))
+    return sum(w in vocab for w in words) / len(words) >= threshold
 
 
 _MOCK_LINES = [

@@ -25,23 +25,65 @@ class FactChecker(Protocol):
 
 
 EXTRACT_SYSTEM = """You are a fact-checking assistant watching a live political debate / broadcast.
-You receive a rolling transcript. Extract ONLY from the LATEST segment the factual, checkable claims
-(statistics, dates, events, attributions, cause-effect statements about the real world).
-Skip opinions, promises, questions, greetings, rhetoric, and anything already present in RECENT CLAIMS.
-Rewrite each claim as a short self-contained sentence in the transcript's language, resolving pronouns
-with the surrounding context when possible. Return at most 3 claims.
+You receive a rolling transcript. From the LATEST segment only, extract factual claims about the real
+world that can be verified against public evidence: statistics, numbers, dates, past events, laws,
+what someone did or did not do, comparisons, cause-effect statements.
+
+Do NOT extract: promises or intentions about the future ("vou fazer", "vamos acabar com"), opinions,
+values, insults, questions, greetings, procedural talk, hypotheticals, or anything already in RECENT CLAIMS.
+If several sentences make the same point, merge them into ONE claim. Return at most 2 claims; usually 0 or 1.
+
+Write each claim as a short declarative sentence stating the fact itself (never "the speaker says that…"),
+in the SAME LANGUAGE as the transcript (e.g. Portuguese stays Portuguese). Resolve pronouns using context
+(e.g. replace "ele" by the named person when the context makes it clear).
 Respond with JSON: {"claims": ["...", "..."]}"""
 
-VERIFY_SYSTEM = """You are a rigorous, neutral fact-checker. Verify the CLAIM using web search.
-Prefer primary sources (official statistics, government, academic, established fact-checkers and news outlets).
-Classify as:
+VERIFY_SYSTEM = """You are a rigorous, neutral fact-checker working live during a political debate.
+Verify whether the CLAIM is TRUE ABOUT THE REAL WORLD using web search. The transcript context is only
+there to disambiguate the claim; the fact that someone said it is NOT evidence. Never answer "valid"
+merely because the transcript contains the statement.
+Prefer primary sources (official statistics, government, courts, academic work, established fact-checkers
+and major news outlets). Classify as:
 - "fake": the claim is false or substantially misleading according to reliable evidence.
-- "valid": the claim is accurate or essentially accurate.
-- "inconclusive": evidence is insufficient, contradictory, outdated, or the claim is too vague to verify.
-Be fast and concise. The explanation must be 1-2 sentences in the same language as the claim.
-Respond ONLY with JSON:
+- "valid": the claim is accurate or essentially accurate according to reliable evidence.
+- "inconclusive": evidence is insufficient, contradictory, outdated, the claim is a promise/opinion,
+  or it is too vague to verify.
+Be fast. "explanation" is 1-2 plain sentences in the SAME LANGUAGE as the claim, without links or
+citations (sources go in the "sources" array). Respond ONLY with JSON:
 {"verdict": "fake|valid|inconclusive", "confidence": 0.0-1.0, "explanation": "...",
  "sources": [{"title": "...", "url": "https://..."}]}"""
+
+
+CLAIMS_SCHEMA = {
+    "type": "json_schema",
+    "name": "claims",
+    "strict": True,
+    "schema": {
+        "type": "object",
+        "properties": {"claims": {"type": "array", "items": {"type": "string"}}},
+        "required": ["claims"],
+        "additionalProperties": False,
+    },
+}
+
+
+_MD_LINK = re.compile(r"\s*\(?\[([^\]]*)\]\((https?://[^)\s]+)\)\)?")
+_BARE_URL = re.compile(r"\s*\(?https?://\S+\)?")
+
+
+def _clean_explanation(text: str) -> str:
+    text = _MD_LINK.sub("", text)
+    text = _BARE_URL.sub("", text)
+    return re.sub(r"\s{2,}", " ", text).strip()
+
+
+def _add_source(sources: list[Source], title: str, url: str, limit: int = 4) -> None:
+    if not url.startswith(("http://", "https://")) or len(sources) >= limit:
+        return
+    key = url.split("?utm_source=")[0].rstrip("/")
+    if any(src.url.split("?utm_source=")[0].rstrip("/") == key for src in sources):
+        return
+    sources.append(Source(title=title.strip(), url=key))
 
 
 def _parse_json(text: str) -> dict:
@@ -72,12 +114,12 @@ class OpenAIFactChecker:
             model=self.model,
             instructions=EXTRACT_SYSTEM,
             input=user,
-            text={"format": {"type": "json_object"}},
+            text={"format": CLAIMS_SCHEMA},
             temperature=0,
         )
         data = _parse_json(res.output_text)
         claims = [c.strip() for c in data.get("claims", []) if isinstance(c, str) and c.strip()]
-        return claims[:3]
+        return claims[:2]
 
     async def verify(self, claim: str, context: str) -> tuple[Verdict, float, str, list[Source]]:
         user = f"CLAIM: {claim}\n\nTRANSCRIPT CONTEXT: {context[-800:]}"
@@ -97,18 +139,18 @@ class OpenAIFactChecker:
             confidence = max(0.0, min(1.0, float(data.get("confidence", 0.5))))
         except (TypeError, ValueError):
             confidence = 0.5
-        sources = []
-        for s in data.get("sources", [])[:4]:
-            if isinstance(s, dict) and s.get("url"):
-                sources.append(Source(title=str(s.get("title", "")), url=str(s["url"])))
+        sources: list[Source] = []
+        for item in data.get("sources", []) or []:
+            if isinstance(item, dict) and item.get("url"):
+                _add_source(sources, str(item.get("title", "")), str(item["url"]))
         # Also harvest citations attached by the web search tool.
         for item in getattr(res, "output", []) or []:
             for content in getattr(item, "content", []) or []:
                 for ann in getattr(content, "annotations", []) or []:
                     url = getattr(ann, "url", None)
-                    if url and all(src.url != url for src in sources) and len(sources) < 4:
-                        sources.append(Source(title=getattr(ann, "title", "") or "", url=url))
-        return verdict, confidence, str(data.get("explanation", "")).strip(), sources
+                    if url:
+                        _add_source(sources, getattr(ann, "title", "") or "", url)
+        return verdict, confidence, _clean_explanation(str(data.get("explanation", ""))), sources
 
 
 class MockFactChecker:

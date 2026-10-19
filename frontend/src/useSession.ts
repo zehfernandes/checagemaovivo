@@ -55,7 +55,13 @@ export function useSession() {
     socket.onmessage = (e) => handle(JSON.parse(e.data))
     socket.onclose = () => {
       ws.current = null
-      setState((s) => (s === 'listening' || s === 'resolving' ? 'error' : s))
+      setState((s) => {
+        if (s === 'connecting' || s === 'resolving' || s === 'listening') {
+          setStatusText('Disconnected from backend')
+          return 'error'
+        }
+        return s
+      })
     }
     ws.current = socket
     return socket

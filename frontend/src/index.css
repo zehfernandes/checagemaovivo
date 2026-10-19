@@ -111,3 +111,7 @@ a { color: #93c5fd; }
 
 .transcript__line { margin: 0; font-size: 13px; line-height: 1.5; }
 .transcript__time { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 6px; }
+
+.claim--compact .claim__explanation {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { adminHeaders, adminPassword } from './admin'
 import { useSession } from './useSession'
 import type { Claim, NewsStats, Room as PublicRoom, Source, UsageSummary, Verdict } from './types'
@@ -11,10 +11,13 @@ interface Room extends PublicRoom {
   created: number; viewers: number; processed_to: number; state: string; message: string; usage: UsageSummary | null
 }
 interface Doc { id: number; url: string; source: string; title: string; published: number | null; kind: string; added: number; chunks: number; excerpt: string }
+interface Fix { from: string; to: string }
 
-const KIND_LABEL: Record<string, string> = { debate: 'Debate', entrevista: 'Entrevista', outro: 'Outro' }
+const TABS: [Tab, string][] = [['rooms', 'Salas'], ['claims', 'Checagens'], ['news', 'Base de notícias'], ['glossary', 'Glossário']]
+const KINDS: [string, string][] = [['debate', 'Debate'], ['entrevista', 'Entrevista'], ['outro', 'Outro']]
+const KIND_LABEL = Object.fromEntries(KINDS)
 const METHOD_PT: Record<string, string> = { cache: 'memória', db: 'base', web: 'web', deep: 'profunda', human: 'humano' }
-const FINALS: Final[] = ['fake', 'valid', 'inconclusive']
+const FINALS: [Final, string][] = [['fake', 'Falso'], ['valid', 'Verdadeiro'], ['inconclusive', 'Inconclusivo']]
 
 async function api<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = { ...adminHeaders(), ...(init.body ? { 'content-type': 'application/json' } : {}) }
@@ -24,6 +27,103 @@ async function api<T = unknown>(path: string, init: RequestInit = {}): Promise<T
   return d as T
 }
 
+// ---- primitives --------------------------------------------------------------------------------
+function useEscape(fn: (() => void) | undefined) {
+  useEffect(() => {
+    if (!fn) return
+    const on = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') fn() }
+    window.addEventListener('keydown', on)
+    return () => window.removeEventListener('keydown', on)
+  }, [fn])
+}
+
+function cmdEnter(e: KeyboardEvent<HTMLFormElement>) {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); e.currentTarget.requestSubmit() }
+}
+
+function PageHeader({ title, meta, children }: { title: ReactNode; meta?: ReactNode; children?: ReactNode }) {
+  return (
+    <header className="page__header">
+      <h1 className="page__title">{title}</h1>
+      {meta && <span className="page__meta">{meta}</span>}
+      <span className="spacer" />
+      {children}
+    </header>
+  )
+}
+
+function Panel({ title, meta, onClose, actions, footer, children }: {
+  title: ReactNode; meta?: ReactNode; onClose: () => void; actions?: ReactNode; footer?: ReactNode; children: ReactNode
+}) {
+  useEscape(onClose)
+  return (
+    <aside className="panel">
+      <header className="panel__header">
+        <div className="panel__heading">
+          <h2 className="panel__title">{title}</h2>
+          {meta && <span className="muted">{meta}</span>}
+        </div>
+        <span className="spacer" />
+        {actions}
+        <button type="button" className="icon-btn" onClick={onClose} title="Fechar (Esc)" aria-label="Fechar">×</button>
+      </header>
+      <div className="panel__body">{children}</div>
+      {footer && <footer className="panel__footer">{footer}</footer>}
+    </aside>
+  )
+}
+
+function Dialog({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+  useEscape(onClose)
+  return (
+    <div className="dialog__backdrop" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="dialog" role="dialog" aria-label={title}>
+        <header className="dialog__header">
+          <h2 className="panel__title">{title}</h2>
+          <span className="spacer" />
+          <button type="button" className="icon-btn" onClick={onClose} title="Fechar (Esc)" aria-label="Fechar">×</button>
+        </header>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function Field({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
+  return (
+    <label className="field">
+      <span className="field__label">{label}</span>
+      {children}
+      {hint && <span className="field__hint">{hint}</span>}
+    </label>
+  )
+}
+
+function Segmented<T extends string>({ value, options, onChange }: { value: T; options: [T, string][]; onChange: (v: T) => void }) {
+  return (
+    <div className="segmented" role="radiogroup">
+      {options.map(([v, label]) => (
+        <button key={v} type="button" role="radio" aria-checked={value === v} className={`segmented__opt segmented__opt--${v}${value === v ? ' active' : ''}`} onClick={() => onChange(v)}>{label}</button>
+      ))}
+    </div>
+  )
+}
+
+function Switch({ checked, onChange, label, hint, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; hint?: string; disabled?: boolean }) {
+  return (
+    <label className={`switch${disabled ? ' switch--disabled' : ''}`}>
+      <span className="switch__text"><span>{label}</span>{hint && <span className="field__hint">{hint}</span>}</span>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
+      <span className="switch__track" aria-hidden><span className="switch__thumb" /></span>
+    </label>
+  )
+}
+
+function Empty({ children }: { children: ReactNode }) {
+  return <div className="empty-state">{children}</div>
+}
+
+// ---- shell ------------------------------------------------------------------------------------
 export function Admin() {
   const [auth, setAuth] = useState<'checking' | 'in' | 'out'>('checking')
   useEffect(() => {
@@ -32,7 +132,7 @@ export function Admin() {
   }, [])
   if (auth === 'checking') return <div className="admin admin--center muted">Carregando…</div>
   if (auth === 'out') return <Login onOk={() => setAuth('in')} />
-  return <Dashboard onLogout={() => { localStorage.removeItem('admin'); setAuth('out') }} />
+  return <Shell onLogout={() => { localStorage.removeItem('admin'); setAuth('out') }} />
 }
 
 function Login({ onOk }: { onOk: () => void }) {
@@ -56,7 +156,7 @@ function Login({ onOk }: { onOk: () => void }) {
   )
 }
 
-function Dashboard({ onLogout }: { onLogout: () => void }) {
+function Shell({ onLogout }: { onLogout: () => void }) {
   const params = new URLSearchParams(location.search)
   const [tab, setTab] = useState<Tab>((params.get('tab') as Tab) || 'rooms')
   const [rooms, setRooms] = useState<Room[]>([])
@@ -81,149 +181,197 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     history.replaceState(null, '', `/admin?${p}`)
   }, [tab, roomId])
   const room = rooms.find((r) => r.id === roomId) ?? rooms.find((r) => r.processing || r.claims > 0) ?? rooms[0]
+  const live = rooms.filter((r) => r.processing).length
 
   return (
-    <div className="app admin">
-      <header className="topbar admin__topbar">
-        <h1><span className="logo">●</span> Administração</h1>
-        <nav className="tabs admin__tabs">
-          <button className={tab === 'rooms' ? 'active' : ''} onClick={() => setTab('rooms')}>Salas {rooms.length > 0 && <span className="muted">{rooms.length}</span>}</button>
-          <button className={tab === 'claims' ? 'active' : ''} onClick={() => setTab('claims')}>Checagens</button>
-          <button className={tab === 'news' ? 'active' : ''} onClick={() => setTab('news')}>Base de notícias</button>
-          <button className={tab === 'glossary' ? 'active' : ''} onClick={() => setTab('glossary')}>Glossário</button>
-        </nav>
-        <span className="admin__spacer" />
-        <a className="link" href="/#review">Revisão offline</a>
-        <a className="link" href="/" target="_blank" rel="noreferrer">Ver como espectador ↗</a>
-        <button type="button" className="link" onClick={onLogout}>sair</button>
-      </header>
-      {toast && <div className="banner banner--error admin__toast" onClick={() => setToast(null)}>{toast}</div>}
-      <main className="admin__main">
-        {tab === 'rooms' && <Rooms rooms={rooms} reload={loadRooms} notify={notify} onOpen={(id) => { setRoomId(id); setTab('claims') }} />}
-        {tab === 'claims' && <Claims rooms={rooms} room={room} onPick={setRoomId} reload={loadRooms} notify={notify} />}
-        {tab === 'news' && <News notify={notify} />}
-        {tab === 'glossary' && <Glossary notify={notify} />}
+    <div className="admin shell">
+      <nav className="sidebar">
+        <div className="sidebar__brand"><span className="logo">●</span> Checagem ao vivo</div>
+        <div className="sidebar__nav">
+          {TABS.map(([t, label]) => (
+            <button key={t} className={`sidebar__item${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
+              {label}
+              {t === 'rooms' && live > 0 && <span className="sidebar__count sidebar__count--live">{live} ao vivo</span>}
+              {t === 'rooms' && live === 0 && rooms.length > 0 && <span className="sidebar__count">{rooms.length}</span>}
+            </button>
+          ))}
+        </div>
+        <div className="sidebar__foot">
+          <a className="sidebar__item" href="/" target="_blank" rel="noreferrer">Ver como espectador ↗</a>
+          <a className="sidebar__item" href="/#review">Revisão offline</a>
+          <button type="button" className="sidebar__item" onClick={onLogout}>Sair</button>
+        </div>
+      </nav>
+      <main className="shell__main">
+        {tab === 'rooms' && <RoomsPage rooms={rooms} reload={loadRooms} notify={notify} openClaims={(id) => { setRoomId(id); setTab('claims') }} />}
+        {tab === 'claims' && <ClaimsPage rooms={rooms} room={room} onPick={setRoomId} reload={loadRooms} notify={notify} />}
+        {tab === 'news' && <NewsPage notify={notify} />}
+        {tab === 'glossary' && <GlossaryPage notify={notify} />}
       </main>
+      {toast && <div className="toast" onClick={() => setToast(null)}>{toast}</div>}
     </div>
   )
 }
 
-// ---- Salas ----------------------------------------------------------------------------------
-function Rooms({ rooms, reload, notify, onOpen }: { rooms: Room[]; reload: () => Promise<void>; notify: (m: string) => void; onOpen: (id: string) => void }) {
-  const [name, setName] = useState('')
-  const [url, setUrl] = useState('')
-  const [kind, setKind] = useState('debate')
+// ---- Salas ------------------------------------------------------------------------------------
+function roomState(r: Room): { word: string; cls: string } {
+  if (r.processing) return { word: r.is_live ? 'Ao vivo' : 'Checando', cls: 'live' }
+  if (r.state === 'error') return { word: 'Erro', cls: 'error' }
+  if (r.complete) return { word: 'Processado', cls: 'done' }
+  if (r.processed_to > 0) return { word: 'Pausado', cls: 'paused' }
+  return { word: 'Não iniciado', cls: 'idle' }
+}
+
+function RoomsPage({ rooms, reload, notify, openClaims }: { rooms: Room[]; reload: () => Promise<void>; notify: (m: string) => void; openClaims: (id: string) => void }) {
+  const [selected, setSelected] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
+  const room = rooms.find((r) => r.id === selected)
   async function run(key: string, fn: () => Promise<unknown>) {
     setBusy(key)
     try { await fn(); await reload() } catch (e) { notify((e as Error).message) } finally { setBusy(null) }
   }
-  async function create(e: FormEvent) {
-    e.preventDefault()
-    await run('create', async () => {
-      await api('/admin/rooms', { method: 'POST', body: JSON.stringify({ name, url, kind }) })
-      setName(''); setUrl('')
-    })
-  }
   return (
-    <div className="admin__section">
-      <form className="admin__form admin__form--inline" onSubmit={create}>
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome da sala (ex.: Entrevista com o candidato X)" required />
-        <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Link do YouTube (vídeo ou live)" required />
-        <select value={kind} onChange={(e) => setKind(e.target.value)}>
-          {Object.entries(KIND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
-        <button type="submit" className="btn" disabled={busy === 'create'}>Criar sala</button>
-      </form>
-      {rooms.length === 0 && <p className="muted empty">Nenhuma sala ainda. Crie a primeira acima.</p>}
-      <div className="admin__cards">
-        {rooms.map((r) => <RoomCard key={r.id} room={r} busy={busy} run={run} onOpen={() => onOpen(r.id)} />)}
+    <div className="page">
+      <div className="page__content">
+        <PageHeader title="Salas" meta={rooms.length > 0 && `${rooms.length} ${rooms.length === 1 ? 'sala' : 'salas'}`}>
+          <button type="button" className="btn" onClick={() => setCreating(true)}>Nova sala</button>
+        </PageHeader>
+        {rooms.length === 0 ? (
+          <Empty>
+            <p>Nenhuma sala ainda.</p>
+            <p className="muted">Uma sala liga um vídeo ou live do YouTube à checagem que todos os espectadores veem.</p>
+            <button type="button" className="btn" onClick={() => setCreating(true)}>Criar a primeira sala</button>
+          </Empty>
+        ) : (
+          <div className="rows">
+            {rooms.map((r) => {
+              const st = roomState(r)
+              return (
+                <button key={r.id} type="button" className={`row${selected === r.id ? ' active' : ''}${r.active ? '' : ' row--dim'}`} onClick={() => setSelected(r.id)}>
+                  <span className={`state state--${st.cls}`}><span className="state__dot" />{st.word}</span>
+                  <span className="row__main">
+                    <span className="row__title">{r.name}</span>
+                    <span className="row__sub">{r.title || r.url}</span>
+                  </span>
+                  <span className="chip">{KIND_LABEL[r.kind] ?? r.kind}</span>
+                  {!r.active && <span className="chip chip--muted">oculta</span>}
+                  <span className="row__meta">{r.claims} afirmações{r.viewers > 0 && ` · ${r.viewers} assistindo`}</span>
+                  <span className="row__chevron">›</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
       </div>
+      {room && <RoomPanel key={room.id} room={room} busy={busy} run={run} onClose={() => setSelected(null)} openClaims={() => openClaims(room.id)} />}
+      {creating && <NewRoomDialog onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); setSelected(id) }} run={run} />}
     </div>
   )
 }
 
-function RoomCard({ room: r, busy, run, onOpen }: { room: Room; busy: string | null; run: (k: string, fn: () => Promise<unknown>) => Promise<void>; onOpen: () => void }) {
-  const [editing, setEditing] = useState(false)
+function NewRoomDialog({ onClose, onCreated, run }: { onClose: () => void; onCreated: (id: string) => void; run: (k: string, fn: () => Promise<unknown>) => Promise<void> }) {
+  const [name, setName] = useState('')
+  const [url, setUrl] = useState('')
+  const [kind, setKind] = useState('debate')
+  const [busy, setBusy] = useState(false)
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    let id = ''
+    await run('create', async () => { id = (await api<Room>('/admin/rooms', { method: 'POST', body: JSON.stringify({ name, url, kind }) })).id })
+    setBusy(false)
+    if (id) onCreated(id)
+  }
+  return (
+    <Dialog title="Nova sala" onClose={onClose}>
+      <form className="form" onSubmit={submit} onKeyDown={cmdEnter}>
+        <Field label="Link do YouTube" hint="Vídeo gravado ou transmissão ao vivo.">
+          <input type="url" autoFocus value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=…" required />
+        </Field>
+        <Field label="Nome">
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Debate Band — 2º turno" required />
+        </Field>
+        <Field label="Tipo">
+          <Segmented value={kind} options={KINDS} onChange={setKind} />
+        </Field>
+        <footer className="form__actions">
+          <span className="kbd-hint">⌘↵ para criar</span>
+          <button type="button" className="btn btn--ghost" onClick={onClose}>Cancelar</button>
+          <button type="submit" className="btn" disabled={busy || !name || !url}>{busy ? 'Criando…' : 'Criar sala'}</button>
+        </footer>
+      </form>
+    </Dialog>
+  )
+}
+
+function RoomPanel({ room: r, busy, run, onClose, openClaims }: {
+  room: Room; busy: string | null; run: (k: string, fn: () => Promise<unknown>) => Promise<void>; onClose: () => void; openClaims: () => void
+}) {
   const [name, setName] = useState(r.name)
   const [url, setUrl] = useState(r.url)
   const [kind, setKind] = useState(r.kind)
   const [save, setSave] = useState(false)
+  const dirty = name !== r.name || url !== r.url || kind !== r.kind
+  const st = roomState(r)
+  const working = busy === r.id
+  const patch = (body: object) => run(r.id, () => api(`/admin/rooms/${r.id}`, { method: 'PATCH', body: JSON.stringify(body) }))
+
+  const primary = r.processing
+    ? <button type="button" className="btn btn--stop" disabled={working} onClick={() => run(r.id, () => api(`/admin/rooms/${r.id}/stop`, { method: 'POST', body: '{}' }))}>Parar</button>
+    : !r.complete && (
+      <button type="button" className="btn" disabled={working} onClick={() => run(r.id, () => api(`/admin/rooms/${r.id}/start`, { method: 'POST', body: JSON.stringify({ save }) }))}>
+        {working ? 'Abrindo…' : r.processed_to > 0 && !r.is_live ? 'Continuar checagem' : 'Iniciar checagem'}
+      </button>
+    )
+
   return (
-    <article className={`room${r.active ? '' : ' room--inactive'}`}>
-      <header className="room__header">
-        <span className={`room__kind`}>{KIND_LABEL[r.kind] ?? r.kind}</span>
-        {r.is_live && r.processing && <span className="live-tag">AO VIVO</span>}
-        {!r.active && <span className="muted">oculta para o público</span>}
-        <span className="room__status">
-          {r.processing && <span className="dot" />}
-          <RoomState room={r} />
-        </span>
-      </header>
-      {editing ? (
-        <form className="admin__form" onSubmit={async (e) => { e.preventDefault(); await run(r.id, () => api(`/admin/rooms/${r.id}`, { method: 'PATCH', body: JSON.stringify({ name, url, kind }) })); setEditing(false) }}>
-          <input value={name} onChange={(e) => setName(e.target.value)} required />
-          <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} required />
-          <select value={kind} onChange={(e) => setKind(e.target.value)}>
-            {Object.entries(KIND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-          <div className="admin__actions">
-            <button type="submit" className="btn" disabled={busy === r.id}>Salvar</button>
-            <button type="button" className="link" onClick={() => setEditing(false)}>cancelar</button>
-          </div>
-        </form>
-      ) : (
+    <Panel title={r.name} meta={KIND_LABEL[r.kind] ?? r.kind} onClose={onClose} actions={primary}
+      footer={
         <>
-          <h2 className="room__name">{r.name}</h2>
-          <p className="muted room__meta">
-            <a href={r.url} target="_blank" rel="noreferrer">{r.title || r.url}</a>
-            {' · '}{r.claims} afirmações
-            {!r.is_live && r.processed_to > 0 && <> · {r.complete ? 'processado por completo' : `processado até ${fmt(r.processed_to)}`}</>}
-            {r.viewers > 0 && <> · {r.viewers} {r.viewers === 1 ? 'espectador' : 'espectadores'}</>}
-            {r.usage && <> · ≈ US${r.usage.usd.toFixed(2)}</>}
-          </p>
+          <Switch label="Visível para o público" checked={r.active} onChange={(v) => patch({ active: v })} />
+          <button type="button" className="link link--danger" onClick={() => { if (confirm(`Excluir a sala "${r.name}"? As checagens ficam no cache.`)) run(r.id, () => api(`/admin/rooms/${r.id}`, { method: 'DELETE' })).then(onClose) }}>Excluir sala</button>
         </>
-      )}
-      <footer className="admin__actions">
-        {r.processing ? (
-          <button type="button" className="btn btn--stop" disabled={busy === r.id} onClick={() => run(r.id, () => api(`/admin/rooms/${r.id}/stop`, { method: 'POST', body: '{}' }))}>Parar checagem</button>
-        ) : (
-          <button type="button" className="btn" disabled={busy === r.id || r.complete} title={r.complete ? 'Gravação já processada por completo' : 'Começa a transcrever e checar este vídeo para todos os espectadores'}
-            onClick={() => run(r.id, () => api(`/admin/rooms/${r.id}/start`, { method: 'POST', body: JSON.stringify({ save }) }))}>
-            {busy === r.id ? 'Abrindo…' : r.processed_to > 0 && !r.is_live ? 'Continuar checagem' : 'Iniciar checagem'}
-          </button>
-        )}
+      }>
+      <section className="panel__section">
+        <div className={`state state--${st.cls} state--big`}><span className="state__dot" />{st.word}</div>
+        <p className="muted panel__status">
+          {r.processing && r.message ? r.message : r.state === 'error' && r.message ? r.message : r.complete ? 'Gravação processada por completo; os espectadores recebem tudo do cache.' : r.processed_to > 0 ? `Processado até ${fmt(r.processed_to)}.` : 'A checagem ainda não começou para esta sala.'}
+        </p>
+        <dl className="facts">
+          <div><dt>Afirmações</dt><dd>{r.claims}</dd></div>
+          <div><dt>Assistindo</dt><dd>{r.viewers}</dd></div>
+          {r.usage && <div><dt>Custo</dt><dd>≈ US${r.usage.usd.toFixed(2)}</dd></div>}
+        </dl>
         {!r.processing && !r.complete && (
-          <label className="admin__check" title="Menos chamadas de IA: sem checagem profunda automática, filtro mais rígido, no máximo 6 afirmações/min">
-            <input type="checkbox" checked={save} onChange={(e) => setSave(e.target.checked)} /> econômico
-          </label>
+          <Switch label="Modo econômico" hint="Menos chamadas de IA: sem checagem profunda automática, no máximo 6 afirmações/min." checked={save} onChange={setSave} />
         )}
-        <button type="button" className="link" onClick={onOpen}>checagens →</button>
-        <a className="link" href={`/?room=${r.id}`} target="_blank" rel="noreferrer">ver sala ↗</a>
-        <span className="admin__spacer" />
-        <button type="button" className="link" onClick={() => run(r.id, () => api(`/admin/rooms/${r.id}`, { method: 'PATCH', body: JSON.stringify({ active: !r.active }) }))}>
-          {r.active ? 'ocultar' : 'publicar'}
-        </button>
-        <button type="button" className="link" onClick={() => setEditing((v) => !v)}>editar</button>
-        <button type="button" className="link link--danger" onClick={() => { if (confirm(`Excluir a sala "${r.name}"? As checagens ficam no cache.`)) run(r.id, () => api(`/admin/rooms/${r.id}`, { method: 'DELETE' })) }}>excluir</button>
-      </footer>
-    </article>
+        <div className="panel__links">
+          <button type="button" className="link" onClick={openClaims}>Abrir checagens →</button>
+          <a className="link" href={`/?room=${r.id}`} target="_blank" rel="noreferrer">Ver como espectador ↗</a>
+        </div>
+      </section>
+      <form className="panel__section form" onSubmit={(e) => { e.preventDefault(); patch({ name, url, kind }) }} onKeyDown={cmdEnter}>
+        <Field label="Nome"><input value={name} onChange={(e) => setName(e.target.value)} required /></Field>
+        <Field label="Link do YouTube"><input type="url" value={url} onChange={(e) => setUrl(e.target.value)} required /></Field>
+        <Field label="Tipo"><Segmented value={kind} options={KINDS} onChange={setKind} /></Field>
+        {dirty && (
+          <footer className="form__actions">
+            <button type="button" className="btn btn--ghost" onClick={() => { setName(r.name); setUrl(r.url); setKind(r.kind) }}>Descartar</button>
+            <button type="submit" className="btn" disabled={working}>Salvar</button>
+          </footer>
+        )}
+      </form>
+    </Panel>
   )
 }
 
-function RoomState({ room: r }: { room: Room }) {
-  if (r.processing) return <span className="status--listening">{r.message || 'Checando'}</span>
-  if (r.state === 'error') return <span className="status--error">{r.message}</span>
-  if (r.complete) return <span>Processado</span>
-  if (r.processed_to > 0) return <span>Pausado</span>
-  return <span className="muted">Não iniciado</span>
-}
-
 // ---- Checagens --------------------------------------------------------------------------------
-function Claims({ rooms, room, onPick, reload, notify }: { rooms: Room[]; room: Room | undefined; onPick: (id: string) => void; reload: () => Promise<void>; notify: (m: string) => void }) {
+function ClaimsPage({ rooms, room, onPick, reload, notify }: { rooms: Room[]; room: Room | undefined; onPick: (id: string) => void; reload: () => Promise<void>; notify: (m: string) => void }) {
   const session = useSession()
   const [filter, setFilter] = useState<'all' | Verdict>('all')
   const [q, setQ] = useState('')
+  const [selected, setSelected] = useState<string | null>(null)
   const url = room?.url
   useEffect(() => {
     if (url) session.start(url, '', 0, false, false, false, true)
@@ -243,6 +391,7 @@ function Claims({ rooms, room, onPick, reload, notify }: { rooms: Room[]; room: 
     for (const cl of session.claims) c[cl.verdict]++
     return c
   }, [session.claims])
+  const claim = session.claims.find((c) => c.id === selected)
 
   async function save(c: Claim, verdict: Final, explanation: string, sources: Source[]) {
     if (!url) return
@@ -251,6 +400,7 @@ function Claims({ rooms, room, onPick, reload, notify }: { rooms: Room[]; room: 
   async function remove(c: Claim) {
     if (!room) return
     await api(`/admin/claims/${room.video_id}/${c.id}`, { method: 'DELETE' })
+    setSelected(null)
   }
   async function toggle() {
     if (!room) return
@@ -259,167 +409,115 @@ function Claims({ rooms, room, onPick, reload, notify }: { rooms: Room[]; room: 
       await reload()
     } catch (e) { notify((e as Error).message) }
   }
+  const st = room && roomState(room)
 
   return (
-    <div className="admin__section">
-      <div className="admin__bar">
-        <select value={room?.id ?? ''} onChange={(e) => onPick(e.target.value)}>
-          {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-        </select>
-        {room && (
-          <>
-            <span className="room__status">{room.processing && <span className="dot" />}<RoomState room={room} /></span>
-            <span className="muted">{session.statusText}</span>
-            <span className="admin__spacer" />
-            {!room.complete && (
-              <button type="button" className={room.processing ? 'btn btn--stop' : 'btn'} onClick={toggle}>
-                {room.processing ? 'Parar checagem' : 'Iniciar checagem'}
+    <div className="page">
+      <div className="page__content">
+        <PageHeader
+          title={rooms.length > 1 ? (
+            <select className="title-select" value={room?.id ?? ''} onChange={(e) => { onPick(e.target.value); setSelected(null) }}>
+              {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+          ) : room?.name ?? 'Checagens'}
+          meta={st && <span className={`state state--${st.cls}`}><span className="state__dot" />{st.word}</span>}>
+          {room && !room.complete && (
+            <button type="button" className={room.processing ? 'btn btn--stop' : 'btn'} onClick={toggle}>{room.processing ? 'Parar' : 'Iniciar checagem'}</button>
+          )}
+        </PageHeader>
+        <div className="toolbar">
+          <div className="pills">
+            {(['all', 'fake', 'valid', 'inconclusive', 'pending'] as const).map((f) => (
+              <button key={f} type="button" className={`pill${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>
+                {f === 'all' ? 'Todas' : f === 'pending' ? 'Verificando' : VERDICT_LABEL[f]} <span className="pill__n">{f === 'all' ? session.claims.length : counts[f]}</span>
               </button>
-            )}
-          </>
+            ))}
+          </div>
+          <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar…" />
+        </div>
+        {!room && <Empty><p>Crie uma sala primeiro.</p></Empty>}
+        {room && visible.length === 0 && (
+          <Empty><p className="muted">{session.claims.length === 0 ? 'Nenhuma afirmação ainda — as checagens aparecem aqui em tempo real.' : 'Nada com esse filtro.'}</p></Empty>
         )}
+        <div className="rows">
+          {visible.map((c) => (
+            <button key={c.id} type="button" className={`row row--claim claim--${c.verdict}${selected === c.id ? ' active' : ''}`} onClick={() => setSelected(c.id)}>
+              <span className="claim__badge">{c.verdict === 'pending' && <span className="spinner" aria-hidden />}{VERDICT_LABEL[c.verdict]}</span>
+              <span className="row__main"><span className="row__title row__title--normal">{c.text}</span></span>
+              {c.method === 'human' && <span className="chip">editada</span>}
+              <span className="row__meta">{c.verdict !== 'pending' && `${Math.round(c.confidence * 100)}% · `}{fmt(c.start)}</span>
+              <span className="row__chevron">›</span>
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="review__filters">
-        {(['all', 'pending', 'fake', 'valid', 'inconclusive'] as const).map((f) => (
-          <button key={f} className={filter === f ? 'active' : ''} onClick={() => setFilter(f)}>
-            {f === 'all' ? `todas (${session.claims.length})` : `${VERDICT_LABEL[f].toLowerCase()} (${counts[f]})`}
-          </button>
-        ))}
-        <input className="admin__search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar na afirmação ou explicação…" />
-      </div>
-      <div className="review__list">
-        {!room && <p className="muted">Crie uma sala primeiro.</p>}
-        {room && visible.length === 0 && <p className="muted">{session.claims.length === 0 ? 'Nenhuma afirmação ainda — as checagens aparecem aqui em tempo real.' : 'Nada com esse filtro.'}</p>}
-        {visible.map((c) => <AdminClaim key={c.id} claim={c} onSave={save} onDelete={remove} onRecheck={session.recheck} notify={notify} />)}
-      </div>
+      {claim && <ClaimPanel key={claim.id} claim={claim} onClose={() => setSelected(null)} onSave={save} onDelete={remove} onRecheck={session.recheck} notify={notify} />}
     </div>
   )
 }
 
-function AdminClaim({ claim: c, onSave, onDelete, onRecheck, notify }: {
-  claim: Claim; onSave: (c: Claim, v: Final, e: string, s: Source[]) => Promise<void>; onDelete: (c: Claim) => Promise<void>
+function ClaimPanel({ claim: c, onClose, onSave, onDelete, onRecheck, notify }: {
+  claim: Claim; onClose: () => void; onSave: (c: Claim, v: Final, e: string, s: Source[]) => Promise<void>; onDelete: (c: Claim) => Promise<void>
   onRecheck: (id: string) => void; notify: (m: string) => void
 }) {
-  const [editing, setEditing] = useState(false)
-  const [verdict, setVerdict] = useState<Final>(c.verdict === 'pending' ? 'inconclusive' : c.verdict)
+  const initialVerdict: Final = c.verdict === 'pending' ? 'inconclusive' : c.verdict
+  const [verdict, setVerdict] = useState<Final>(initialVerdict)
   const [explanation, setExplanation] = useState(c.explanation)
   const [sources, setSources] = useState<Source[]>(c.sources)
   const [saving, setSaving] = useState(false)
-  function startEdit() {
-    setVerdict(c.verdict === 'pending' ? 'inconclusive' : c.verdict)
-    setExplanation(c.explanation)
-    setSources(c.sources.length ? c.sources : [{ title: '', url: '' }])
-    setEditing(true)
-  }
+  const cleanSources = sources.filter((s) => s.url.trim()).map((s) => ({ title: s.title.trim(), url: s.url.trim() }))
+  const dirty = verdict !== initialVerdict || explanation !== c.explanation || JSON.stringify(cleanSources) !== JSON.stringify(c.sources)
   async function submit(e: FormEvent) {
     e.preventDefault()
+    if (!dirty) return
     setSaving(true)
-    try {
-      await onSave(c, verdict, explanation, sources.filter((s) => s.url.trim()).map((s) => ({ title: s.title.trim(), url: s.url.trim() })))
-      setEditing(false)
-    } catch (err) { notify((err as Error).message) } finally { setSaving(false) }
+    try { await onSave(c, verdict, explanation, cleanSources) } catch (err) { notify((err as Error).message) } finally { setSaving(false) }
   }
+  const formId = `claim-${c.id}`
   return (
-    <article className={`claim claim--compact claim--${c.verdict} admin__claim`}>
-      <header className="claim__header">
-        <span className="claim__badge">{c.verdict === 'pending' && <span className="spinner" aria-hidden />}{VERDICT_LABEL[c.verdict]}</span>
-        {c.verdict !== 'pending' && <span className="claim__confidence">{Math.round(c.confidence * 100)}%</span>}
-        {c.method && <span className="claim__method">{METHOD_PT[c.method] ?? c.method}</span>}
-        {c.deep_pending && <span className="claim__deep"><span className="spinner" aria-hidden /> checagem profunda…</span>}
-        <span className="claim__time">{fmt(c.start)}</span>
-      </header>
-      <p className="claim__text">“{c.text}”</p>
-      {!editing && c.explanation && <p className="claim__explanation">{c.explanation}</p>}
-      {!editing && c.sources.length > 0 && (
-        <ul className="claim__sources">{c.sources.map((s, i) => <li key={`${s.url}-${i}`}><a href={s.url} target="_blank" rel="noreferrer">{s.title || s.url}</a></li>)}</ul>
-      )}
-      {editing ? (
-        <form className="claim__edit admin__edit" onSubmit={submit}>
-          <label>Status
-            <select value={verdict} onChange={(e) => setVerdict(e.target.value as Final)}>
-              {FINALS.map((v) => <option key={v} value={v}>{VERDICT_LABEL[v]}</option>)}
-            </select>
-          </label>
-          <label>Descrição
-            <textarea value={explanation} onChange={(e) => setExplanation(e.target.value)} rows={3} placeholder="Explicação que o público vai ler" />
-          </label>
-          <div className="admin__sources">
-            <span>Links</span>
+    <Panel title="Checagem" meta={<>{fmt(c.start)}{c.method && ` · ${METHOD_PT[c.method] ?? c.method}`}{c.verdict !== 'pending' && ` · ${Math.round(c.confidence * 100)}%`}</>} onClose={onClose}
+      actions={<button type="submit" form={formId} className="btn" disabled={!dirty || saving}>{saving ? 'Salvando…' : 'Publicar'}</button>}
+      footer={
+        <>
+          {c.verdict !== 'pending' && !c.deep_pending
+            ? <button type="button" className="link" onClick={() => onRecheck(c.id)}>Rechecar com IA</button>
+            : <span className="muted">{c.deep_pending ? 'Checagem profunda em andamento…' : 'Verificando…'}</span>}
+          <button type="button" className="link link--danger" onClick={() => { if (confirm('Excluir esta afirmação para todos os espectadores?')) onDelete(c).catch((e) => notify(e.message)) }}>Excluir</button>
+        </>
+      }>
+      <form id={formId} className="form" onSubmit={submit} onKeyDown={cmdEnter}>
+        <blockquote className={`quote claim--${c.verdict}`}>{c.text}</blockquote>
+        <Field label="Veredito"><Segmented value={verdict} options={FINALS} onChange={setVerdict} /></Field>
+        <Field label="Explicação" hint="É o texto que o público lê embaixo da afirmação.">
+          <textarea value={explanation} onChange={(e) => setExplanation(e.target.value)} rows={Math.min(16, Math.max(5, Math.ceil(explanation.length / 44)))} />
+        </Field>
+        <div className="field">
+          <span className="field__label">Fontes</span>
+          <div className="list-edit">
             {sources.map((s, i) => (
-              <div key={i} className="admin__source">
+              <div key={i} className="list-edit__row list-edit__row--source">
                 <input value={s.title} onChange={(e) => setSources(sources.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} placeholder="Título" />
                 <input type="url" value={s.url} onChange={(e) => setSources(sources.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} placeholder="https://…" />
-                <button type="button" className="link link--danger" onClick={() => setSources(sources.filter((_, j) => j !== i))}>×</button>
+                <button type="button" className="icon-btn" aria-label="Remover fonte" onClick={() => setSources(sources.filter((_, j) => j !== i))}>×</button>
               </div>
             ))}
-            <button type="button" className="link" onClick={() => setSources([...sources, { title: '', url: '' }])}>+ link</button>
+            <button type="button" className="link" onClick={() => setSources([...sources, { title: '', url: '' }])}>+ Adicionar fonte</button>
           </div>
-          <div className="admin__actions">
-            <button type="submit" disabled={saving}>{saving ? 'salvando…' : 'Publicar para todos'}</button>
-            <button type="button" className="link" onClick={() => setEditing(false)}>cancelar</button>
-          </div>
-        </form>
-      ) : (
-        <footer className="admin__actions">
-          <button type="button" className="link" onClick={startEdit}>editar</button>
-          {c.verdict !== 'pending' && !c.deep_pending && <button type="button" className="link" onClick={() => onRecheck(c.id)}>rechecar com IA</button>}
-          <span className="admin__spacer" />
-          <button type="button" className="link link--danger" onClick={() => { if (confirm('Excluir esta afirmação para todos os espectadores?')) onDelete(c).catch((e) => notify(e.message)) }}>excluir</button>
-        </footer>
-      )}
-    </article>
-  )
-}
-
-// ---- Glossário da transcrição -----------------------------------------------------------------
-function Glossary({ notify }: { notify: (m: string) => void }) {
-  const [terms, setTerms] = useState('')
-  const [fixes, setFixes] = useState('')
-  const [updated, setUpdated] = useState<number | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [dirty, setDirty] = useState(false)
-  useEffect(() => {
-    api<{ terms: string; replacements: { from: string; to: string }[]; updated_at: number | null }>('/admin/glossary')
-      .then((d) => { setTerms(d.terms); setFixes(d.replacements.map((x) => `${x.from} → ${x.to}`).join('\n')); setUpdated(d.updated_at) })
-      .catch((e) => notify((e as Error).message))
-  }, [notify])
-  async function save(e: FormEvent) {
-    e.preventDefault()
-    setBusy(true)
-    try {
-      const replacements = fixes.split('\n').map((l) => l.split(/\s*(?:→|->|=>)\s*/)).filter((p) => p.length >= 2 && p[0].trim() && p[1].trim())
-        .map((p) => ({ from: p[0].trim(), to: p[1].trim() }))
-      const d = await api<{ updated_at: number | null; replacements: { from: string; to: string }[] }>('/admin/glossary', { method: 'PUT', body: JSON.stringify({ terms, replacements }) })
-      setUpdated(d.updated_at); setFixes(d.replacements.map((x) => `${x.from} → ${x.to}`).join('\n')); setDirty(false)
-    } catch (err) { notify((err as Error).message) } finally { setBusy(false) }
-  }
-  return (
-    <div className="admin__section">
-      <p className="muted">Vale para as próximas transcrições de qualquer sala (gravação ou ao vivo), sem reiniciar. O que já está no cache não muda.</p>
-      <form className="admin__form admin__form--doc" onSubmit={save}>
-        <label className="muted">Nomes e termos que a transcrição deve acertar (separados por vírgula; vão como contexto para o modelo de voz)</label>
-        <textarea value={terms} onChange={(e) => { setTerms(e.target.value); setDirty(true) }} rows={5} placeholder="Lula, Flávio Bolsonaro, Daniel Vorcaro, Banco Master, Galípolo…" />
-        <label className="muted">Correções aplicadas ao texto transcrito, uma por linha, no formato <code>errado → certo</code> (palavra inteira, sem diferenciar maiúsculas)</label>
-        <textarea value={fixes} onChange={(e) => { setFixes(e.target.value); setDirty(true) }} rows={6} placeholder={'Bocaro → Vorcaro\nVocaro → Vorcaro'} />
-        <div className="admin__actions">
-          <button type="submit" className="btn" disabled={busy || !dirty}>{busy ? 'Salvando…' : 'Salvar glossário'}</button>
-          <span className="muted">{updated ? `Salvo ${ago(updated)}` : 'Usando os padrões do servidor'}</span>
         </div>
+        {dirty && <p className="kbd-hint">⌘↵ publica para todos os espectadores</p>}
       </form>
-    </div>
+    </Panel>
   )
 }
 
 // ---- Base de notícias -------------------------------------------------------------------------
-function News({ notify }: { notify: (m: string) => void }) {
+function NewsPage({ notify }: { notify: (m: string) => void }) {
   const [stats, setStats] = useState<NewsStats | null>(null)
   const [docs, setDocs] = useState<Doc[]>([])
   const [total, setTotal] = useState(0)
   const [disabled, setDisabled] = useState(false)
   const [q, setQ] = useState('')
-  const [url, setUrl] = useState('')
-  const [title, setTitle] = useState('')
-  const [text, setText] = useState('')
+  const [adding, setAdding] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const load = useCallback(async (query: string) => {
     try {
@@ -433,15 +531,6 @@ function News({ notify }: { notify: (m: string) => void }) {
     return () => clearTimeout(t)
   }, [q, load])
 
-  async function add(e: FormEvent) {
-    e.preventDefault()
-    setBusy('add')
-    try {
-      await api('/admin/news/docs', { method: 'POST', body: JSON.stringify({ url, title, text }) })
-      setUrl(''); setTitle(''); setText('')
-      await load(q)
-    } catch (err) { notify((err as Error).message) } finally { setBusy(null) }
-  }
   async function del(d: Doc) {
     if (!confirm(`Remover "${d.title || d.url}" da base?`)) return
     try { await api(`/admin/news/docs/${d.id}`, { method: 'DELETE' }); await load(q) } catch (err) { notify((err as Error).message) }
@@ -452,46 +541,133 @@ function News({ notify }: { notify: (m: string) => void }) {
   }
 
   return (
-    <div className="admin__section">
-      {disabled && <div className="banner banner--error">Base de notícias desativada neste servidor (PROVIDER=mock ou sem chave da OpenAI).</div>}
-      <div className="admin__bar">
-        <span className="muted" title={stats ? Object.entries(stats.sources).map(([k, v]) => `${k}: ${v}`).join('\n') : ''}>
-          {stats ? `${stats.docs} artigos · ${stats.chunks} trechos` : '–'}
-          {stats?.last_refresh && <> · feeds atualizados {ago(stats.last_refresh)}</>}
-        </span>
-        <span className="admin__spacer" />
-        <button type="button" className="btn btn--ghost" onClick={refresh} disabled={busy === 'refresh' || disabled}>{busy === 'refresh' ? 'Atualizando feeds…' : 'Atualizar feeds'}</button>
-      </div>
-      <form className="admin__form admin__form--doc" onSubmit={add}>
-        <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Link do artigo / checagem (o texto é extraído da página)" />
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Título (opcional)" />
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={3} placeholder="Ou cole aqui o texto (obrigatório se não houver link, ou se a página bloquear a leitura)" />
-        <div className="admin__actions">
-          <button type="submit" className="btn" disabled={busy === 'add' || disabled || (!url && text.trim().length < 40)}>{busy === 'add' ? 'Indexando…' : 'Adicionar à base'}</button>
-          <span className="muted">Vira evidência imediata para as próximas checagens.</span>
+    <div className="page">
+      <div className="page__content">
+        <PageHeader title="Base de notícias" meta={stats && <span title={Object.entries(stats.sources).map(([k, v]) => `${k}: ${v}`).join('\n')}>{stats.docs} artigos{stats.last_refresh ? ` · feeds ${ago(stats.last_refresh)}` : ''}</span>}>
+          <button type="button" className="btn btn--ghost" onClick={refresh} disabled={busy === 'refresh' || disabled}>{busy === 'refresh' ? 'Atualizando…' : 'Atualizar feeds'}</button>
+          <button type="button" className="btn" onClick={() => setAdding(true)} disabled={disabled}>Adicionar artigo</button>
+        </PageHeader>
+        {disabled && <div className="banner banner--error">Base de notícias desativada neste servidor (PROVIDER=mock ou sem chave da OpenAI).</div>}
+        <div className="toolbar">
+          <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por título, fonte ou URL…" autoFocus />
+          <span className="muted">{total} {total === 1 ? 'resultado' : 'resultados'}{total > docs.length && ` · mostrando ${docs.length}`}</span>
         </div>
-      </form>
-      <div className="admin__bar">
-        <input className="admin__search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por título, fonte ou URL…" />
-        <span className="muted">{total} resultados{total > docs.length && ` · mostrando ${docs.length}`}</span>
+        <div className="rows">
+          {docs.map((d) => (
+            <div key={d.id} className="row row--static">
+              <span className="row__source">{d.source}</span>
+              <span className="row__main">
+                {d.url.startsWith('http')
+                  ? <a className="row__title row__title--normal" href={d.url} target="_blank" rel="noreferrer">{d.title || d.url}</a>
+                  : <span className="row__title row__title--normal">{d.title || 'Entrada manual'}</span>}
+                {d.excerpt && <span className="row__sub">{d.excerpt}</span>}
+              </span>
+              <span className="row__meta">{d.published ? new Date(d.published * 1000).toLocaleDateString('pt-BR') : d.kind}</span>
+              <button type="button" className="icon-btn row__action" title="Remover da base" aria-label="Remover da base" onClick={() => del(d)}>×</button>
+            </div>
+          ))}
+        </div>
       </div>
-      <div className="review__list">
-        {docs.map((d) => (
-          <article key={d.id} className="doc">
-            <header className="claim__header">
-              <span className="doc__source">{d.source}</span>
-              <span className="muted">{d.kind}</span>
-              <span className="muted">{d.chunks} {d.chunks === 1 ? 'trecho' : 'trechos'}</span>
-              <span className="claim__time">{d.published ? new Date(d.published * 1000).toLocaleDateString('pt-BR') : ''}</span>
-            </header>
-            <p className="claim__text">{d.url.startsWith('http') ? <a href={d.url} target="_blank" rel="noreferrer">{d.title || d.url}</a> : (d.title || 'Entrada manual')}</p>
-            {d.excerpt && <p className="claim__explanation">{d.excerpt}{d.excerpt.length >= 240 && '…'}</p>}
-            <footer className="admin__actions">
-              <span className="admin__spacer" />
-              <button type="button" className="link link--danger" onClick={() => del(d)}>remover</button>
-            </footer>
-          </article>
-        ))}
+      {adding && <AddDocDialog onClose={() => setAdding(false)} onAdded={() => { setAdding(false); load(q) }} notify={notify} />}
+    </div>
+  )
+}
+
+function AddDocDialog({ onClose, onAdded, notify }: { onClose: () => void; onAdded: () => void; notify: (m: string) => void }) {
+  const [mode, setMode] = useState<'url' | 'text'>('url')
+  const [url, setUrl] = useState('')
+  const [title, setTitle] = useState('')
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const ok = mode === 'url' ? !!url : text.trim().length >= 40
+  async function submit(e: FormEvent) {
+    e.preventDefault()
+    setBusy(true)
+    try {
+      await api('/admin/news/docs', { method: 'POST', body: JSON.stringify(mode === 'url' ? { url, title } : { url: '', title, text }) })
+      onAdded()
+    } catch (err) { notify((err as Error).message) } finally { setBusy(false) }
+  }
+  return (
+    <Dialog title="Adicionar artigo" onClose={onClose}>
+      <form className="form" onSubmit={submit} onKeyDown={cmdEnter}>
+        <Segmented value={mode} options={[['url', 'Por link'], ['text', 'Colar texto']]} onChange={setMode} />
+        {mode === 'url' ? (
+          <Field label="Link do artigo ou checagem" hint="O texto é extraído da página. Se o site bloquear a leitura, use “Colar texto”.">
+            <input type="url" autoFocus value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" required />
+          </Field>
+        ) : (
+          <>
+            <Field label="Título"><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Opcional" /></Field>
+            <Field label="Texto" hint="Mínimo de 40 caracteres.">
+              <textarea autoFocus value={text} onChange={(e) => setText(e.target.value)} rows={8} />
+            </Field>
+          </>
+        )}
+        <footer className="form__actions">
+          <span className="kbd-hint">Vira evidência para as próximas checagens.</span>
+          <button type="button" className="btn btn--ghost" onClick={onClose}>Cancelar</button>
+          <button type="submit" className="btn" disabled={busy || !ok}>{busy ? 'Indexando…' : 'Adicionar'}</button>
+        </footer>
+      </form>
+    </Dialog>
+  )
+}
+
+// ---- Glossário --------------------------------------------------------------------------------
+function GlossaryPage({ notify }: { notify: (m: string) => void }) {
+  const [saved, setSaved] = useState<{ terms: string; fixes: Fix[] } | null>(null)
+  const [terms, setTerms] = useState('')
+  const [fixes, setFixes] = useState<Fix[]>([])
+  const [updated, setUpdated] = useState<number | null>(null)
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    api<{ terms: string; replacements: Fix[]; updated_at: number | null }>('/admin/glossary')
+      .then((d) => { setTerms(d.terms); setFixes(d.replacements); setSaved({ terms: d.terms, fixes: d.replacements }); setUpdated(d.updated_at) })
+      .catch((e) => notify((e as Error).message))
+  }, [notify])
+  const clean = fixes.filter((f) => f.from.trim() && f.to.trim()).map((f) => ({ from: f.from.trim(), to: f.to.trim() }))
+  const dirty = !!saved && (terms !== saved.terms || JSON.stringify(clean) !== JSON.stringify(saved.fixes))
+  async function save(e: FormEvent) {
+    e.preventDefault()
+    if (!dirty) return
+    setBusy(true)
+    try {
+      const d = await api<{ terms: string; updated_at: number | null; replacements: Fix[] }>('/admin/glossary', { method: 'PUT', body: JSON.stringify({ terms, replacements: clean }) })
+      setUpdated(d.updated_at); setFixes(d.replacements); setSaved({ terms: d.terms, fixes: d.replacements })
+    } catch (err) { notify((err as Error).message) } finally { setBusy(false) }
+  }
+  const setFix = (i: number, patch: Partial<Fix>) => setFixes(fixes.map((f, j) => (j === i ? { ...f, ...patch } : f)))
+  return (
+    <div className="page">
+      <div className="page__content">
+        <form onSubmit={save} onKeyDown={cmdEnter}>
+          <PageHeader title="Glossário" meta={updated ? `salvo ${ago(updated)}` : saved ? 'padrões do servidor' : ''}>
+            {dirty && <button type="button" className="btn btn--ghost" onClick={() => { if (saved) { setTerms(saved.terms); setFixes(saved.fixes) } }}>Descartar</button>}
+            <button type="submit" className="btn" disabled={!dirty || busy}>{busy ? 'Salvando…' : 'Salvar'}</button>
+          </PageHeader>
+          <div className="form form--narrow">
+            <p className="muted">Vale para as próximas transcrições de qualquer sala, gravação ou ao vivo, sem reiniciar. O que já está no cache não muda.</p>
+            <Field label="Nomes e termos" hint="Separados por vírgula. O modelo de voz usa a lista para acertar a grafia.">
+              <textarea value={terms} onChange={(e) => setTerms(e.target.value)} rows={4} placeholder="Lula, Flávio Bolsonaro, Daniel Vorcaro, Banco Master, Galípolo…" />
+            </Field>
+            <div className="field">
+              <span className="field__label">Correções</span>
+              <span className="field__hint">Troca feita no texto transcrito, palavra inteira, sem diferenciar maiúsculas.</span>
+              <div className="list-edit">
+                {fixes.map((f, i) => (
+                  <div key={i} className="list-edit__row list-edit__row--fix">
+                    <input value={f.from} onChange={(e) => setFix(i, { from: e.target.value })} placeholder="Bocaro" />
+                    <span className="muted">→</span>
+                    <input value={f.to} onChange={(e) => setFix(i, { to: e.target.value })} placeholder="Vorcaro" />
+                    <button type="button" className="icon-btn" aria-label="Remover correção" onClick={() => setFixes(fixes.filter((_, j) => j !== i))}>×</button>
+                  </div>
+                ))}
+                <button type="button" className="link" onClick={() => setFixes([...fixes, { from: '', to: '' }])}>+ Adicionar correção</button>
+              </div>
+            </div>
+          </div>
+        </form>
       </div>
     </div>
   )

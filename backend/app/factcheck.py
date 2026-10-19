@@ -21,6 +21,7 @@ import numpy as np
 from openai import AsyncOpenAI
 
 from .config import settings
+from .decider import JevDecider
 from .models import Source, Verdict
 from .news import Evidence, NewsStore
 
@@ -183,6 +184,7 @@ class OpenAIFactChecker:
         self.client = client
         self.model = model
         self.deep_model = deep_model or model
+        self.jev: JevDecider | None = None
         self.store = store
         self.min_similarity = min_similarity
         self._bg: set[asyncio.Task] = set()
@@ -206,7 +208,25 @@ class OpenAIFactChecker:
         )
         data = _parse_json(res.output_text)
         claims = [c.strip() for c in data.get("claims", []) if isinstance(c, str) and c.strip()]
-        return await self._drop_duplicates(claims[:2])
+        claims = await self._gate(claims[:2], f"{context} {latest}")
+        return await self._drop_duplicates(claims)
+
+    async def _gate(self, claims: list[str], context: str) -> list[str]:
+        """Jev claim gate: drop candidates that are not checkable facts (promises, opinions...)."""
+        if not claims or self.jev is None:
+            return claims
+        try:
+            probs = await self.jev.checkable(claims, context)
+        except Exception:  # noqa: BLE001
+            log.exception("jev gate failed")
+            return claims
+        kept = []
+        for c, p in zip(claims, probs):
+            if p < settings.claim_gate_min:
+                log.info("gate[jev]: dropped (%.2f) %s", p, c[:80])
+            else:
+                kept.append(c)
+        return kept
 
     async def _drop_duplicates(self, claims: list[str]) -> list[str]:
         """Semantic dedup: skip claims whose embedding is near a recently emitted one
@@ -276,6 +296,12 @@ class OpenAIFactChecker:
             when = time.strftime("%Y-%m-%d", time.gmtime(e.published)) if e.published else "date unknown"
             flag = " [unverified summary from an earlier web search — weak evidence]" if e.kind == "web-summary" else ""
             blocks.append(f"[{i}] {e.source} — {e.title} ({when}){flag}\n{e.text[:1200]}")
+        if self.jev is not None:
+            jev_result, skip_llm = await self._decide_with_jev(claim, evidence, blocks)
+            if jev_result is not None:
+                return jev_result
+            if skip_llm:
+                return None  # Jev is confident the DB evidence cannot settle it -> straight to web
         user = (f"TODAY: {_today()}\nCLAIM: {claim}\n\nTRANSCRIPT CONTEXT: {context[-600:]}\n\n"
                 f"EVIDENCE:\n\n" + "\n\n".join(blocks))
         res = await self.client.responses.create(
@@ -290,6 +316,31 @@ class OpenAIFactChecker:
         for e in picked:
             _add_source(sources, e.title or e.source, e.url)
         return VerifyResult(verdict, confidence, _clean_explanation(str(data.get("explanation", ""))), sources, "db")
+
+    async def _decide_with_jev(self, claim: str, evidence: list[Evidence], blocks: list[str]) -> tuple[VerifyResult | None, bool]:
+        """Jev decides from the evidence in ~0.3 s. Returns (result, skip_llm): result is None when
+        Jev is not confident; skip_llm=True when it is confident the evidence is inconclusive, so the
+        slower LLM pass over the same evidence is pointless and we go straight to web search."""
+        try:
+            d = await self.jev.decide(claim, blocks, _today())
+        except Exception:  # noqa: BLE001
+            log.exception("jev decide failed; falling back to OpenAI")
+            return None, False
+        log.info("decide[jev] %dms %s p=%.2f suff=%.2f conf=%.2f %s", d.latency_ms, d.verdict,
+                 d.probabilities.get(d.verdict, 0), d.sufficient, d.confidence, claim[:60])
+        if d.verdict == "inconclusive":
+            return None, d.probabilities.get("inconclusive", 0) >= 0.6
+        if d.sufficient < 0.45 or d.probabilities.get(d.verdict, 0) < 0.7:
+            return None, False
+        verdict = Verdict(d.verdict)
+        picked = evidence[:3]
+        sources: list[Source] = []
+        for e in picked:
+            _add_source(sources, e.title or e.source, e.url)
+        titles = "; ".join(f"{e.source}: {e.title}" for e in picked if e.title)
+        word = "confirmada" if verdict == Verdict.VALID else "contradita"
+        explanation = f"Afirmação {word} pelas evidências da base de notícias ({titles})."
+        return VerifyResult(verdict, round(d.probabilities.get(d.verdict, 0), 2), explanation, sources, "db"), False
 
     async def _verify_with_web(self, claim: str, context: str, *, model: str | None = None,
                                system: str = VERIFY_SYSTEM, context_size: str = "low",
@@ -349,5 +400,8 @@ class MockFactChecker:
 
 def make_factchecker(client: AsyncOpenAI | None, store: NewsStore | None = None) -> FactChecker:
     if settings.provider == "openai" and client:
-        return OpenAIFactChecker(client, settings.factcheck_model, store, settings.news_min_similarity, deep_model=settings.deep_model)
+        checker = OpenAIFactChecker(client, settings.factcheck_model, store, settings.news_min_similarity, deep_model=settings.deep_model)
+        if settings.decider == "jev" and settings.ai_gateway_api_key:
+            checker.jev = JevDecider(settings.ai_gateway_api_key, settings.jev_model)
+        return checker
     return MockFactChecker()

@@ -55,6 +55,10 @@ verdicts); leave the URL empty in mock mode to skip YouTube entirely.
 | `FACTCHECK_MODEL` | `gpt-4.1-mini` | model for claim extraction and verification |
 | `DEEP_MODEL` | `gpt-4.1` | stronger model for the deep check (third level / Re-check button) |
 | `DEEP_CHECK` | `true` | automatically run the deep check on claims the fast pass left inconclusive |
+| `DECIDER` | `openai` | `jev`: TypeSafe Jev decision model via Vercel AI Gateway decides from DB evidence in ~0.3 s and gates non-checkable claims; falls back to OpenAI on low confidence/error |
+| `AI_GATEWAY_API_KEY` | – | Vercel AI Gateway key (required for `DECIDER=jev`; the team needs paid credits) |
+| `JEV_MODEL` | `typesafe-ai/jev` | decision model id on the gateway |
+| `CLAIM_GATE_MIN` | `0.35` | with Jev: drop candidate claims whose "checkable" probability is below this |
 | `TRANSCRIBE_GLOSSARY` | debate names | names/terms passed to the speech model so they are spelled correctly (Vorcaro, Galípolo…) |
 | `CHUNK_SECONDS` | `8` | audio chunk size; smaller = lower latency, more API calls |
 | `LANGUAGE` | `pt` | transcription language hint (ISO-639-1), empty for auto |

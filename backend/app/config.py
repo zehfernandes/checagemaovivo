@@ -22,6 +22,11 @@ class Settings(BaseSettings):
     # Deeper second pass for claims the fast pass left inconclusive (stronger model, more searches).
     deep_model: str = "gpt-4.1"
     deep_check: bool = True
+    # "openai" (gpt-4.1-mini decides from DB evidence) or "jev" (TypeSafe Jev via Vercel AI Gateway, ~0.3 s).
+    decider: str = "openai"
+    ai_gateway_api_key: str = ""
+    jev_model: str = "typesafe-ai/jev"
+    claim_gate_min: float = 0.35  # with decider=jev: drop candidate claims below this "checkable" probability
     chunk_seconds: int = 8
     language: str = ""
     cors_origins: str = "http://localhost:5173"

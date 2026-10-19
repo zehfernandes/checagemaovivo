@@ -130,6 +130,10 @@ class NewsStore:
         return {"docs": docs, "chunks": chunks, "sources": by_source,
                 "last_refresh": float(last[0]) if last else None}
 
+    async def embed(self, texts: list[str]) -> list[np.ndarray]:
+        """Public: unit-normalized embeddings for arbitrary texts."""
+        return await self._embed(texts)
+
     async def _embed(self, texts: list[str]) -> list[np.ndarray]:
         out: list[np.ndarray] = []
         for i in range(0, len(texts), EMBED_BATCH):

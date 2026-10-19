@@ -12,10 +12,12 @@ import logging
 import random
 import re
 import time
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Protocol
 from urllib.parse import urlparse
 
+import numpy as np
 from openai import AsyncOpenAI
 
 from .config import settings
@@ -39,6 +41,9 @@ class FactChecker(Protocol):
     async def verify(self, claim: str, context: str) -> VerifyResult: ...
 
 
+DUPLICATE_SIMILARITY = 0.90
+RECENT_VEC_WINDOW = 40
+
 EXTRACT_SYSTEM = """You are a fact-checking assistant watching a live political debate / broadcast.
 You receive a rolling transcript. From the LATEST segment only, extract factual claims about the real
 world that can be verified against public evidence: statistics, numbers, dates, past events, laws,
@@ -49,8 +54,13 @@ values, insults, questions, greetings, procedural talk, hypotheticals, or anythi
 If several sentences make the same point, merge them into ONE claim. Return at most 2 claims; usually 0 or 1.
 
 Write each claim as a short declarative sentence stating the fact itself (never "the speaker says that…"),
-in the SAME LANGUAGE as the transcript (e.g. Portuguese stays Portuguese). Resolve pronouns using context
-(e.g. replace "ele" by the named person when the context makes it clear).
+in the SAME LANGUAGE as the transcript (e.g. Portuguese stays Portuguese).
+Every claim must be SELF-CONTAINED: resolve pronouns and vague references ("ele", "esse governo",
+"o governo mencionado", "naquela época", "esse número") to the concrete person, government, period or
+figure using the context. If the reference cannot be resolved from the context, do NOT extract that claim.
+A claim that merely restates, narrows or extends one in RECENT CLAIMS (same fact, different wording,
+"part of", "more than") is a duplicate — skip it. Only extract a second claim when it is about a
+genuinely different fact.
 Respond with JSON: {"claims": ["...", "..."]}"""
 
 VERIFY_SYSTEM = """You are a rigorous, neutral fact-checker working live during a political debate.
@@ -154,6 +164,7 @@ class OpenAIFactChecker:
         self.store = store
         self.min_similarity = min_similarity
         self._bg: set[asyncio.Task] = set()
+        self._recent_vecs: deque[np.ndarray] = deque(maxlen=RECENT_VEC_WINDOW)
 
     async def extract_claims(self, context: str, latest: str, recent_claims: list[str]) -> list[str]:
         if not latest.strip():
@@ -173,7 +184,27 @@ class OpenAIFactChecker:
         )
         data = _parse_json(res.output_text)
         claims = [c.strip() for c in data.get("claims", []) if isinstance(c, str) and c.strip()]
-        return claims[:2]
+        return await self._drop_duplicates(claims[:2])
+
+    async def _drop_duplicates(self, claims: list[str]) -> list[str]:
+        """Semantic dedup: skip claims whose embedding is near a recently emitted one
+        (the extractor sometimes re-emits the same fact across consecutive chunks)."""
+        if not claims or self.store is None:
+            return claims
+        try:
+            vecs = await self.store.embed(claims)
+        except Exception:  # noqa: BLE001
+            log.exception("dedup embedding failed")
+            return claims
+        kept: list[str] = []
+        for text, v in zip(claims, vecs):
+            sim = max((float(v @ r) for r in self._recent_vecs), default=0.0)
+            if sim >= DUPLICATE_SIMILARITY:
+                log.info("dedup: dropped near-duplicate (%.2f) %s", sim, text[:80])
+                continue
+            kept.append(text)
+            self._recent_vecs.append(v)
+        return kept
 
     async def verify(self, claim: str, context: str) -> VerifyResult:
         """First level: local news DB. Second level (fallback): live web search + write-back."""

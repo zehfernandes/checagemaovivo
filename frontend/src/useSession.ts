@@ -17,6 +17,8 @@ export function useSession() {
   const [claims, setClaims] = useState<Claim[]>([])
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState<Progress | null>(null)
+  // browser clock minus server clock (s); lets the UI schedule claims by the server's captured_at
+  const [clockOffset, setClockOffset] = useState(0)
 
   const handle = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
@@ -49,6 +51,7 @@ export function useSession() {
         break
       case 'progress':
         setProgress({ processed_to: msg.processed_to, complete: msg.complete, viewers: msg.viewers, fresh: !!msg.fresh })
+        if (msg.server_time) setClockOffset(Date.now() / 1000 - msg.server_time)
         break
     }
   }, [])
@@ -101,5 +104,5 @@ export function useSession() {
 
   useEffect(() => () => ws.current?.close(), [])
 
-  return { state, statusText, info, transcript, claims, error, progress, start, stop, recheck }
+  return { state, statusText, info, transcript, claims, error, progress, clockOffset, start, stop, recheck }
 }

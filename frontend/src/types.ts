@@ -21,6 +21,7 @@ export interface Claim {
   verified_at?: number | null
   receivedAt: number
   settledAt?: number
+  revealAt?: number // client ms: when a delayed live viewer should see it
 }
 
 export interface TranscriptSegment {
@@ -47,7 +48,7 @@ export type ServerMessage =
   | { type: 'transcript'; segment: TranscriptSegment }
   | { type: 'claim'; claim: Omit<Claim, 'receivedAt' | 'settledAt'> }
   | { type: 'error'; message: string }
-  | { type: 'progress'; processed_to: number; complete: boolean; viewers: number; fresh?: boolean }
+  | { type: 'progress'; processed_to: number; complete: boolean; viewers: number; fresh?: boolean; server_time?: number }
   | { type: 'pong' }
 
 export const VERDICT_LABEL: Record<Verdict, string> = {

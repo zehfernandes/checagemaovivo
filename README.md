@@ -168,3 +168,13 @@ Server → client:
   — sent once with `pending` and again when the verdict is ready
 - `{"type":"error","message":"..."}`
 - `{"type":"progress","processed_to","complete","viewers","fresh"}`
+
+## Broadcast delay (live streams)
+
+The server always processes the real live edge, but a verdict takes ~3–11 s, so without a delay a
+claim can show up before the viewer hears the sentence. The **Delay** selector (default 20 s) seeks
+the embedded player that many seconds back into YouTube's DVR window and the UI reveals each claim
+(and transcript line) at `captured_at + delay`, i.e. when the viewer actually hears it — by then most
+verdicts are already settled, so cards and danmu pills appear with their verdict instead of
+"Checking…". Use the **−2s / +2s** sync buttons if claims come early/late for your player. Needs the
+stream's DVR enabled (YouTube default); if the player cannot seek back the header warns about it.

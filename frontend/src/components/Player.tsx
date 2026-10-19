@@ -23,15 +23,46 @@ function loadApi(): Promise<void> {
 interface Props {
   videoId: string
   onTime: (seconds: number) => void
+  /** seconds behind the live edge to play (0 = live edge); needs the stream's DVR window */
+  liveDelay?: number
+  onDelay?: (behindLive: number) => void
 }
 
-export function Player({ videoId, onTime }: Props) {
+export function Player({ videoId, onTime, liveDelay = 0, onDelay }: Props) {
   const host = useRef<HTMLDivElement>(null)
   const player = useRef<YT.Player | null>(null)
   const onTimeRef = useRef(onTime)
   useEffect(() => {
     onTimeRef.current = onTime
   }, [onTime])
+
+  const onDelayRef = useRef(onDelay)
+  useEffect(() => {
+    onDelayRef.current = onDelay
+  }, [onDelay])
+
+  // Broadcast delay: once the live stream is playing, seek back into the DVR window so the
+  // viewer hears each sentence when its verdict is already there; report how far behind we ended up.
+  useEffect(() => {
+    if (!liveDelay) return
+    let check: number | undefined
+    const poll = window.setInterval(() => {
+      const p = player.current
+      if (!p || typeof p.getDuration !== 'function' || p.getPlayerState() !== 1) return
+      const edge = p.getDuration()
+      if (edge < liveDelay + 5) return
+      clearInterval(poll)
+      p.seekTo(edge - liveDelay, true)
+      check = window.setTimeout(() => {
+        const q = player.current
+        if (q) onDelayRef.current?.(q.getDuration() - q.getCurrentTime())
+      }, 4000)
+    }, 1000)
+    return () => {
+      clearInterval(poll)
+      if (check) clearTimeout(check)
+    }
+  }, [liveDelay, videoId])
 
   useEffect(() => {
     let cancelled = false

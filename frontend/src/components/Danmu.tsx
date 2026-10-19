@@ -60,7 +60,7 @@ export function Danmu({ claims, isLive, currentTime, enabled }: Props) {
       if (prev === c.verdict) continue
       seen.current.set(c.id, c.verdict)
       // backlog (history from the shared channel / far behind the player): remember, don't fly
-      if (isLive ? now - c.receivedAt > 15_000 : c.start < currentTime - 20) continue
+      if (isLive ? now - (c.revealAt ?? c.receivedAt) > 15_000 : c.start < currentTime - 20) continue
       if (prev !== undefined) updates.set(c.id, c.verdict)
       if (prev === undefined || prev === 'pending') {
         if (prev === 'pending') continue

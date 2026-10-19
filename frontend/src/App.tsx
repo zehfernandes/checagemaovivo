@@ -26,6 +26,13 @@ export default function App() {
   const [tab, setTab] = useState<'claims' | 'transcript'>('claims')
   const [danmu, setDanmu] = useState(() => localStorage.getItem('danmu') !== 'off')
   const [fresh, setFresh] = useState(false)
+  // Broadcast delay for live streams: the server works at the live edge, the viewer's player
+  // runs N s behind it and each claim is shown when the viewer actually hears that sentence.
+  const [delay, setDelay] = useState(() => Number(localStorage.getItem('delay') ?? 20))
+  const [nudge, setNudge] = useState(0)
+  const [behind, setBehind] = useState<number | null>(null)
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => localStorage.setItem('delay', String(delay)), [delay])
   useEffect(() => localStorage.setItem('danmu', danmu ? 'on' : 'off'), [danmu])
   const session = useSession()
 
@@ -33,6 +40,15 @@ export default function App() {
   const videoId = session.info?.video_id || (typedId && typedId.length === 11 ? typedId : null)
   const running = session.state === 'connecting' || session.state === 'resolving' || session.state === 'listening'
   const isLive = session.info?.is_live ?? true
+  const delayed = running && isLive && delay > 0
+  useEffect(() => {
+    if (!delayed) return
+    const t = setInterval(() => setNow(Date.now()), 500)
+    return () => clearInterval(t)
+  }, [delayed])
+  // the sentence behind a claim ends at captured_at (server clock); the delayed viewer hears it `delay` s later
+  const revealAt = (capturedAt?: number | null) =>
+    capturedAt ? (capturedAt + delay + nudge - 3 + session.clockOffset) * 1000 : 0
 
   const [news, setNews] = useState<NewsStats | null>(null)
   const [refreshing, setRefreshing] = useState(false)
@@ -58,14 +74,20 @@ export default function App() {
 
   // Processing is shared per video and cached server-side; for a recording we only reveal
   // what has been said up to the player position (no spoilers, instant seeks).
-  const visibleClaims = useMemo(
-    () => (isLive ? session.claims : session.claims.filter((c) => c.start <= currentTime + 1)),
-    [session.claims, currentTime, isLive],
-  )
-  const visibleTranscript = useMemo(
-    () => (isLive ? session.transcript : session.transcript.filter((s) => s.start <= currentTime + 1)),
-    [session.transcript, currentTime, isLive],
-  )
+  const visibleClaims = useMemo(() => {
+    if (!isLive) return session.claims.filter((c) => c.start <= currentTime + 1)
+    if (!delayed) return session.claims
+    return session.claims
+      .map((c) => ({ ...c, revealAt: revealAt(c.captured_at) }))
+      .filter((c) => c.revealAt <= now)
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- revealAt is derived from delay/nudge/clockOffset listed below
+  }, [session.claims, currentTime, isLive, delayed, now, delay, nudge, session.clockOffset])
+  const visibleTranscript = useMemo(() => {
+    if (!isLive) return session.transcript.filter((s) => s.start <= currentTime + 1)
+    if (!delayed) return session.transcript
+    return session.transcript.filter((s) => revealAt(s.captured_at) <= now)
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.transcript, currentTime, isLive, delayed, now, delay, nudge, session.clockOffset])
 
   // End-to-end processing latency, measured on the server: audio arrived from YouTube -> claim shown -> verdict.
   const latency = useMemo(() => {
@@ -88,7 +110,10 @@ export default function App() {
   function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (running) session.stop()
-    else session.start(url.trim(), language, currentTime, false, fresh)
+    else {
+      setBehind(null)
+      session.start(url.trim(), language, currentTime, false, fresh)
+    }
   }
 
   return (
@@ -118,6 +143,19 @@ export default function App() {
           <label className="check" title="Fresh run: process this video again from scratch in a private pipeline — no cached results, not shared with other viewers. Use it to measure real end-to-end latency.">
             <input type="checkbox" checked={fresh} onChange={(e) => setFresh(e.target.checked)} disabled={running} /> Fresh (no cache)
           </label>
+          <select
+            value={delay}
+            onChange={(e) => setDelay(Number(e.target.value))}
+            disabled={running}
+            title="Live only: play the stream this many seconds behind the live edge (YouTube DVR) while the server checks the real-time feed, so each verdict is on screen when you hear the sentence"
+          >
+            <option value={0}>No delay</option>
+            {[10, 20, 30, 45, 60].map((d) => (
+              <option key={d} value={d}>
+                Delay {d}s
+              </option>
+            ))}
+          </select>
         </form>
         <div className={`status status--${session.state}`}>
           {session.state === 'listening' && <span className="dot" />}
@@ -127,6 +165,18 @@ export default function App() {
             <span className="muted" title="Processing is shared by all viewers of this video and cached">
               {' '}· {session.progress.fresh ? 'fresh run · not cached' : `${session.progress.viewers} viewer${session.progress.viewers === 1 ? '' : 's'}`}
               {!isLive && ` · ${session.progress.complete ? 'fully processed' : `processed to ${fmtTime(session.progress.processed_to)}`}`}
+            </span>
+          )}
+          {delayed && (
+            <span className="muted delay-status" title="Your player runs behind the live edge; claims are shown when you hear the sentence. Use −/+ if they come early/late.">
+              {' '}· delayed {delay}s
+              {behind != null && Math.abs(behind - delay) > 5 && (
+                <span className="warn"> (player is {behind.toFixed(0)}s behind — no DVR on this stream?)</span>
+              )}
+              {' '}
+              <button type="button" className="btn btn--ghost btn--tiny" onClick={() => setNudge((n) => n - 2)}>−2s</button>
+              <span className="sync">sync {nudge >= 0 ? '+' : ''}{nudge}s</span>
+              <button type="button" className="btn btn--ghost btn--tiny" onClick={() => setNudge((n) => n + 2)}>+2s</button>
             </span>
           )}
           {running && latency && (isLive || session.progress?.fresh) && (
@@ -160,11 +210,11 @@ export default function App() {
       <main className="layout">
         <section className="stage">
           {videoId ? (
-            <Player videoId={videoId} onTime={setCurrentTime} />
+            <Player videoId={videoId} onTime={setCurrentTime} liveDelay={delayed ? delay : 0} onDelay={setBehind} />
           ) : (
             <div className="player player--empty">Paste a YouTube URL to begin</div>
           )}
-          <Danmu claims={session.claims} isLive={isLive} currentTime={currentTime} enabled={danmu} />
+          <Danmu claims={visibleClaims} isLive={isLive} currentTime={currentTime} enabled={danmu} />
           <div className="scoreboard">
             <Score label="Fake" n={counts.fake} kind="fake" />
             <Score label="Valid" n={counts.valid} kind="valid" />

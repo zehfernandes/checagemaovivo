@@ -144,7 +144,7 @@ class Channel:
 
     def _progress(self) -> dict:
         return {"type": "progress", "processed_to": self.processed_to, "complete": self.complete,
-                "viewers": len(self.subscribers), "fresh": self.private}
+                "viewers": len(self.subscribers), "fresh": self.private, "server_time": time.time()}
 
     def _put(self, kind: str, key: str, start: float, ev: dict) -> None:
         if not self.private:

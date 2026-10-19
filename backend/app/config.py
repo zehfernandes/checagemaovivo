@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     # verdict memory: a claim >= this similar to one settled in the last N days reuses that verdict (no AI calls)
     verdict_cache_similarity: float = 0.9
     verdict_cache_days: float = 7
+    verdict_cache_min_confidence: float = 0.8  # don't replay shaky verdicts across videos
     news_max_age_days: int = 14
     news_refresh_minutes: int = 30  # 0 disables the background refresh
     news_feeds: str = ""  # optional override: "Name=https://feed,Name2=https://feed2"

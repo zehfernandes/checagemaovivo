@@ -46,6 +46,7 @@ class FactChecker(Protocol):
 
 
 DUPLICATE_SIMILARITY = 0.90
+SAME_BATCH_SIMILARITY = 0.75  # two claims extracted from the same chunk about the same fact ("a dívida é 11 tri" / "11 tri é recorde")
 RECENT_VEC_WINDOW = 40
 
 _GENERIC_SUBJECT = re.compile(
@@ -99,6 +100,11 @@ and major news outlets). Classify as:
 - "valid": the claim is accurate or essentially accurate according to reliable evidence.
 - "inconclusive": evidence is insufficient, contradictory, outdated, the claim is a promise/opinion,
   or it is too vague to verify.
+A figure that matches a different but legitimate official series or definition (e.g. Dívida Pública
+Federal vs. Dívida Bruta do Governo Geral, PIB nominal vs. real, desemprego PNAD vs. Caged) is NOT
+"fake": say which metric it fits and answer "valid" (if it fits one) or "inconclusive", never "fake"
+just because another series gives a different number. Reserve confidence above 0.9 for facts settled
+by primary sources; a single news article is not enough for 0.9+.
 Relative time expressions ("faltam sete dias", "ontem", "este ano") must be interpreted against TODAY,
 given in the input. Be fast. "explanation" is 1-2 plain sentences in Brazilian Portuguese (pt-BR), whatever the language of the claim, without links or
 citations (sources go in the "sources" array). Respond ONLY with JSON:
@@ -117,6 +123,11 @@ that a fast first pass left inconclusive. Work carefully:
 3. Weigh the results. Answer "fake" or "valid" only with at least two independent reliable sources that
    address the specific fact; otherwise "inconclusive" and say in the explanation exactly what evidence
    would settle it (e.g. which official series or document).
+4. A figure that matches a different but legitimate official series or definition (e.g. Dívida Pública
+   Federal vs. Dívida Bruta do Governo Geral, PIB nominal vs. real, desemprego PNAD vs. Caged) is NOT
+   "fake": say which metric it fits and answer "valid" (if it fits one) or "inconclusive", never "fake"
+   just because another series gives a different number. Reserve confidence above 0.9 for facts settled
+   by primary sources; a single news article is not enough for 0.9+.
 Interpret relative time expressions against TODAY. "explanation" is 2-3 plain sentences in the SAME
 LANGUAGE as the claim, no links or citations (sources go in the array). Respond ONLY with JSON:
 {"verdict": "fake|valid|inconclusive", "confidence": 0.0-1.0, "explanation": "...",
@@ -199,7 +210,7 @@ def _parse_verdict(data: dict) -> tuple[Verdict, float]:
         confidence = max(0.0, min(1.0, float(data.get("confidence", 0.5))))
     except (TypeError, ValueError):
         confidence = 0.5
-    return verdict, confidence
+    return verdict, min(confidence, 0.95)
 
 
 def _parse_json(text: str) -> dict:
@@ -288,12 +299,18 @@ class OpenAIFactChecker:
             log.exception("dedup embedding failed")
             return claims
         kept: list[str] = []
+        batch: list[np.ndarray] = []
         for text, v in zip(claims, vecs):
             sim = max((float(v @ r) for r in self._recent_vecs), default=0.0)
             if sim >= DUPLICATE_SIMILARITY:
                 log.info("dedup: dropped near-duplicate (%.2f) %s", sim, text[:80])
                 continue
+            sim = max((float(v @ r) for r in batch), default=0.0)
+            if sim >= SAME_BATCH_SIMILARITY:
+                log.info("dedup: dropped same-sentence sibling (%.2f) %s", sim, text[:80])
+                continue
             kept.append(text)
+            batch.append(v)
             self._recent_vecs.append(v)
             if len(self._vec_cache) > 500:
                 self._vec_cache.clear()
@@ -325,7 +342,7 @@ class OpenAIFactChecker:
         if vec is not None:
             # level 0: a near-identical claim was already settled (this or another video) -> reuse, no AI calls
             hit = self.store.recall_verdict(vec, settings.verdict_cache_similarity, settings.verdict_cache_days)
-            if hit is not None:
+            if hit is not None and float(hit[0]["confidence"]) >= settings.verdict_cache_min_confidence:
                 row, sim = hit
                 log.info("verify[cache] %.2fs sim=%.2f %s -> %s (was %s: %s)", time.monotonic() - t0, sim,
                          claim[:60], row["verdict"], row["method"], row["claim"][:60])

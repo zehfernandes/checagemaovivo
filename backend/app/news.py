@@ -20,6 +20,8 @@ import numpy as np
 import trafilatura
 from openai import AsyncOpenAI
 
+from . import usage
+
 log = logging.getLogger(__name__)
 logging.getLogger("trafilatura").setLevel(logging.CRITICAL)
 
@@ -188,6 +190,7 @@ class NewsStore:
         out: list[np.ndarray] = []
         for i in range(0, len(texts), EMBED_BATCH):
             res = await self.client.embeddings.create(model=self.model, input=texts[i:i + EMBED_BATCH])
+            usage.track(self.model, res)
             for item in res.data:
                 v = np.asarray(item.embedding, dtype=np.float32)
                 out.append(v / (np.linalg.norm(v) or 1.0))

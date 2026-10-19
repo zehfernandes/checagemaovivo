@@ -20,6 +20,7 @@ from urllib.parse import urlparse
 import numpy as np
 from openai import AsyncOpenAI
 
+from . import usage
 from .config import settings
 from .decider import JevDecider
 from .models import Source, Verdict
@@ -38,7 +39,7 @@ class VerifyResult:
 
 
 class FactChecker(Protocol):
-    async def extract_claims(self, context: str, latest: str, recent_claims: list[str]) -> list[str]: ...
+    async def extract_claims(self, context: str, latest: str, recent_claims: list[str], strict: bool = False) -> list[str]: ...
     async def verify(self, claim: str, context: str) -> VerifyResult: ...
     async def deep_verify(self, claim: str, context: str) -> VerifyResult: ...
 
@@ -194,7 +195,7 @@ class OpenAIFactChecker:
         self._recent_vecs: deque[np.ndarray] = deque(maxlen=RECENT_VEC_WINDOW)
         self._vec_cache: dict[str, np.ndarray] = {}  # claim text -> embedding, computed once in dedup and reused by verify
 
-    async def extract_claims(self, context: str, latest: str, recent_claims: list[str]) -> list[str]:
+    async def extract_claims(self, context: str, latest: str, recent_claims: list[str], strict: bool = False) -> list[str]:
         if not latest.strip():
             return []
         user = (
@@ -210,12 +211,14 @@ class OpenAIFactChecker:
             text={"format": CLAIMS_SCHEMA},
             temperature=0,
         )
+        usage.track(self.model, res)
         data = _parse_json(res.output_text)
         claims = [c.strip() for c in data.get("claims", []) if isinstance(c, str) and c.strip()]
-        claims = await self._gate(claims[:2], f"{context} {latest}")
+        claims = await self._gate(claims[:2], f"{context} {latest}",
+                                  settings.claim_gate_min_save if strict else settings.claim_gate_min)
         return await self._drop_duplicates(claims)
 
-    async def _gate(self, claims: list[str], context: str) -> list[str]:
+    async def _gate(self, claims: list[str], context: str, min_p: float) -> list[str]:
         """Jev claim gate: drop candidates that are not checkable facts (promises, opinions...)."""
         if not claims or self.jev is None:
             return claims
@@ -226,7 +229,7 @@ class OpenAIFactChecker:
             return claims
         kept = []
         for c, p in zip(claims, probs):
-            if p < settings.claim_gate_min:
+            if p < min_p:
                 log.info("gate[jev]: dropped (%.2f) %s", p, c[:80])
             else:
                 kept.append(c)
@@ -397,6 +400,8 @@ class OpenAIFactChecker:
             tools=[{"type": "web_search_preview", "search_context_size": context_size}],
             temperature=0,
         )
+        usage.track(self.model, res)
+        usage.track(model or self.model, res)
         data = _parse_json(res.output_text)
         verdict, confidence = _parse_verdict(data)
         sources: list[Source] = []
@@ -414,7 +419,7 @@ class OpenAIFactChecker:
 
 
 class MockFactChecker:
-    async def extract_claims(self, context: str, latest: str, recent_claims: list[str]) -> list[str]:
+    async def extract_claims(self, context: str, latest: str, recent_claims: list[str], strict: bool = False) -> list[str]:
         await asyncio.sleep(0.5)
         if "Boa noite" in latest or not latest.strip():
             return []

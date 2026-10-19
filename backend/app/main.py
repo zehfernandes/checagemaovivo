@@ -45,7 +45,7 @@ store: NewsStore | None = (
 )
 review = ReviewStore()
 channels = ChannelManager(
-    lambda emit: Pipeline(make_transcriber(client), make_factchecker(client, store), emit),
+    lambda emit, save=False: Pipeline(make_transcriber(client), make_factchecker(client, store), emit, save=save),
     settings.news_db_file.parent / Path(settings.cache_db_path).name,
 )
 _bg_tasks: set[asyncio.Task] = set()
@@ -202,7 +202,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
                 await leave()
                 await ws.send_json({"type": "status", "state": "resolving", "message": "Resolving stream…"})
                 try:
-                    channel = await channels.private(req.url) if req.fresh else await channels.get(req.url)
+                    channel = await channels.private(req.url, req.save) if req.fresh else await channels.get(req.url, req.save)
                 except Exception as e:  # noqa: BLE001
                     log.exception("resolve failed")
                     await ws.send_json({"type": "status", "state": "error", "message": f"Could not resolve video: {e}"})

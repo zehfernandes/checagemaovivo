@@ -48,7 +48,7 @@ export type ServerMessage =
   | { type: 'transcript'; segment: TranscriptSegment }
   | { type: 'claim'; claim: Omit<Claim, 'receivedAt' | 'settledAt'> }
   | { type: 'error'; message: string }
-  | { type: 'progress'; processed_to: number; complete: boolean; viewers: number; fresh?: boolean; server_time?: number }
+  | { type: 'progress'; processed_to: number; complete: boolean; viewers: number; fresh?: boolean; server_time?: number; save?: boolean; usage?: UsageSummary | null }
   | { type: 'pong' }
 
 export const VERDICT_LABEL: Record<Verdict, string> = {
@@ -58,11 +58,22 @@ export const VERDICT_LABEL: Record<Verdict, string> = {
   inconclusive: 'Inconclusive',
 }
 
+export interface UsageSummary {
+  tokens_in: number
+  tokens_out: number
+  searches: number
+  audio_seconds: number
+  calls: number
+  usd: number
+}
+
 export interface Progress {
   processed_to: number
   complete: boolean
   viewers: number
   fresh: boolean
+  save: boolean
+  usage: UsageSummary | null
 }
 
 export interface NewsStats {

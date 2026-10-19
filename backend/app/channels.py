@@ -82,8 +82,10 @@ def _mmss(s: float) -> str:
 
 
 class Channel:
-    def __init__(self, manager: "ChannelManager", video_id: str, url: str, info: StreamInfo, private: bool = False):
+    def __init__(self, manager: "ChannelManager", video_id: str, url: str, info: StreamInfo, private: bool = False,
+                 save: bool = False):
         self.manager = manager
+        self.save = save  # decided by whoever starts the channel; shown to every viewer
         self.private = private  # fresh run: not shared, never reads or writes the cache
         self.video_id = video_id
         self.url = url
@@ -144,7 +146,8 @@ class Channel:
 
     def _progress(self) -> dict:
         return {"type": "progress", "processed_to": self.processed_to, "complete": self.complete,
-                "viewers": len(self.subscribers), "fresh": self.private, "server_time": time.time()}
+                "viewers": len(self.subscribers), "fresh": self.private, "server_time": time.time(),
+                "save": self.save, "usage": self.pipeline.usage.summary() if self.pipeline else None}
 
     def _put(self, kind: str, key: str, start: float, ev: dict) -> None:
         if not self.private:
@@ -214,7 +217,7 @@ class Channel:
             return
         language = language or self._language
         self._language = language
-        self.pipeline = self.manager.make_pipeline(self.emit)
+        self.pipeline = self.manager.make_pipeline(self.emit, self.save)
         start = 0.0 if self.info.is_live else (self._start_override if self._start_override is not None else self.processed_to)
         self.status = {"state": "resolving", "message": "Resolving stream…"}
         self.broadcast({"type": "status", **self.status})
@@ -246,7 +249,7 @@ class Channel:
 
     async def recheck(self, claim_id: str) -> None:
         if self.pipeline is None:
-            self.pipeline = self.manager.make_pipeline(self.emit)
+            self.pipeline = self.manager.make_pipeline(self.emit, self.save)
         entry = self.claims.get(claim_id)
         if entry and claim_id not in self.pipeline.claims:
             # claim came from cache: rebuild enough state for the deep pass
@@ -266,7 +269,7 @@ class ChannelManager:
         self.private_channels: set[Channel] = set()
         self._locks: dict[str, asyncio.Lock] = {}
 
-    async def get(self, url: str) -> Channel:
+    async def get(self, url: str, save: bool = False) -> Channel:
         vid = audio.extract_video_id(url) or url
         lock = self._locks.setdefault(vid, asyncio.Lock())
         async with lock:
@@ -278,18 +281,18 @@ class ChannelManager:
                 info = StreamInfo(video_id=vid, title=row["title"], is_live=False, duration=row["duration"])
             else:
                 info, _media = await audio.resolve_stream(url)
-            ch = Channel(self, info.video_id or vid, url, info)
+            ch = Channel(self, info.video_id or vid, url, info, save=save)
             self.channels[ch.video_id] = ch
             if ch.video_id != vid:
                 self.channels[vid] = ch
             return ch
 
-    async def private(self, url: str) -> Channel:
+    async def private(self, url: str, save: bool = False) -> Channel:
         """A one-off channel for a single viewer: fresh pipeline, no cache read/write, not shared.
         Used to measure true end-to-end latency instead of being served from cache."""
         info, _media = await audio.resolve_stream(url)
         vid = info.video_id or audio.extract_video_id(url) or url
-        ch = Channel(self, vid, url, info, private=True)
+        ch = Channel(self, vid, url, info, private=True, save=save)
         self.private_channels.add(ch)
         return ch
 
@@ -297,5 +300,6 @@ class ChannelManager:
         return {**self.cache.stats(), "active": [
             {"video_id": c.video_id, "title": c.info.title, "viewers": len(c.subscribers),
              "processing": bool(c.run_task and not c.run_task.done()), "complete": c.complete,
-             "processed_to": c.processed_to, "fresh": c.private}
+             "processed_to": c.processed_to, "fresh": c.private, "save": c.save,
+             "usage": c.pipeline.usage.summary() if c.pipeline else None}
             for c in list({id(c): c for c in self.channels.values()}.values()) + list(self.private_channels)]}

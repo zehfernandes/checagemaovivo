@@ -27,6 +27,8 @@ export default function App() {
   const [tab, setTab] = useState<'claims' | 'transcript'>('claims')
   const [danmu, setDanmu] = useState(() => localStorage.getItem('danmu') !== 'off')
   const [fresh, setFresh] = useState(false)
+  const [save, setSave] = useState(() => localStorage.getItem('save') === 'on')
+  useEffect(() => localStorage.setItem('save', save ? 'on' : 'off'), [save])
   // Broadcast delay for live streams: the server works at the live edge, the viewer's player
   // runs N s behind it and each claim is shown when the viewer actually hears that sentence.
   const [delay, setDelay] = useState(() => Number(localStorage.getItem('delay') ?? 20))
@@ -116,7 +118,7 @@ export default function App() {
     if (running) session.stop()
     else {
       setBehind(null)
-      session.start(url.trim(), language, currentTime, false, fresh)
+      session.start(url.trim(), language, currentTime, false, fresh, save)
     }
   }
 
@@ -147,6 +149,9 @@ export default function App() {
           <label className="check" title="Fresh run: process this video again from scratch in a private pipeline — no cached results, not shared with other viewers. Use it to measure real end-to-end latency.">
             <input type="checkbox" checked={fresh} onChange={(e) => setFresh(e.target.checked)} disabled={running} /> Fresh (no cache)
           </label>
+          <label className="check" title="Save mode: same experience with fewer AI calls — no automatic deep check (Re-check still works), stricter claim gate, max 6 claims/min, shorter context, short chunks skipped. Applies to the whole shared run of this video.">
+            <input type="checkbox" checked={save} onChange={(e) => setSave(e.target.checked)} disabled={running} /> Save mode
+          </label>
           <select
             value={delay}
             onChange={(e) => setDelay(Number(e.target.value))}
@@ -169,6 +174,15 @@ export default function App() {
             <span className="muted" title="Processing is shared by all viewers of this video and cached">
               {' '}· {session.progress.fresh ? 'fresh run · not cached' : `${session.progress.viewers} viewer${session.progress.viewers === 1 ? '' : 's'}`}
               {!isLive && ` · ${session.progress.complete ? 'fully processed' : `processed to ${fmtTime(session.progress.processed_to)}`}`}
+              {session.progress.save && <span className="save-tag"> · save mode</span>}
+              {session.progress.usage && (
+                <span
+                  className="cost"
+                  title={`This run so far: ${session.progress.usage.calls} model calls, ${(session.progress.usage.tokens_in / 1000).toFixed(1)}k in / ${(session.progress.usage.tokens_out / 1000).toFixed(1)}k out tokens, ${session.progress.usage.searches} web searches, ${Math.round(session.progress.usage.audio_seconds / 60)} min audio — rough estimate at list prices`}
+                >
+                  {' '}· ≈ US${session.progress.usage.usd.toFixed(2)}
+                </span>
+              )}
             </span>
           )}
           {delayed && (

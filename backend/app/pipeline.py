@@ -10,7 +10,7 @@ import uuid
 from collections import deque
 from collections.abc import Awaitable, Callable
 
-from . import audio
+from . import audio, usage
 from .config import settings
 from .factcheck import FactChecker, VerifyResult
 from .models import Claim, StreamInfo, TranscriptSegment, Verdict
@@ -22,18 +22,23 @@ Emit = Callable[[dict], Awaitable[None]]
 
 MAX_CONCURRENT_VERIFICATIONS = 6
 CONTEXT_SEGMENTS = 3
+SAVE_CONTEXT_SEGMENTS = 2
+SAVE_MIN_WORDS = 12  # save mode: don't run extraction on chunks shorter than this
 MAX_CONCURRENT_TRANSCRIPTIONS = 6
 RECENT_CLAIMS = 12
 
 
 class Pipeline:
-    def __init__(self, transcriber: Transcriber, checker: FactChecker, emit: Emit):
+    def __init__(self, transcriber: Transcriber, checker: FactChecker, emit: Emit, save: bool = False):
+        self.save = save  # fewer AI calls, same experience
+        self.usage = usage.Usage()
+        self._claim_times: deque[float] = deque(maxlen=64)
         self.transcriber = transcriber
         self.checker = checker
         self.emit = emit
         self.tasks: set[asyncio.Task] = set()
         self.verify_tasks: set[asyncio.Task] = set()
-        self.context: deque[str] = deque(maxlen=CONTEXT_SEGMENTS)
+        self.context: deque[str] = deque(maxlen=SAVE_CONTEXT_SEGMENTS if save else CONTEXT_SEGMENTS)
         self.recent_claims: deque[str] = deque(maxlen=RECENT_CLAIMS)
         self.verify_sem = asyncio.Semaphore(MAX_CONCURRENT_VERIFICATIONS)
         self.transcribe_sem = asyncio.Semaphore(MAX_CONCURRENT_TRANSCRIPTIONS)
@@ -48,6 +53,7 @@ class Pipeline:
         t.add_done_callback(bucket.discard)
 
     async def run(self, url: str, language: str | None, start_seconds: float, realtime: bool = True) -> None:
+        usage.current.set(self.usage)  # child tasks inherit the context -> all calls of this run are metered
         await self.emit({"type": "status", "state": "resolving", "message": "Resolving stream…"})
         if settings.provider == "mock" and not url.strip():
             info = StreamInfo(video_id="", title="Mock stream", is_live=True)
@@ -95,14 +101,22 @@ class Pipeline:
 
         context = " ".join(self.context)
         self.context.append(text)
+        if self.save and len(text.split()) < SAVE_MIN_WORDS:
+            return
         try:
-            claims = await self.checker.extract_claims(context, text, list(self.recent_claims))
+            claims = await self.checker.extract_claims(context, text, list(self.recent_claims), strict=self.save)
         except Exception as e:  # noqa: BLE001
             log.exception("claim extraction failed")
             await self.emit({"type": "error", "message": f"Claim extraction failed: {e}"})
             return
         log.info("claims[%s] %.0fs: %s", self.run_id, chunk.start, claims)
         for claim_text in claims:
+            if self.save:
+                now = time.time()
+                if sum(1 for t in self._claim_times if now - t < 60) >= settings.save_max_claims_per_min:
+                    log.info("save mode: claim cap reached, skipping %s", claim_text[:60])
+                    continue
+                self._claim_times.append(now)
             self.recent_claims.append(claim_text)
             claim = Claim(
                 id=uuid.uuid4().hex[:10],
@@ -127,7 +141,7 @@ class Pipeline:
                 r = VerifyResult(Verdict.INCONCLUSIVE, 0.0, f"Verification failed: {e}")
         self._apply(claim, r)
         claim.verified_at = claim.verified_at or time.time()  # first settled verdict; deep/re-check keep it
-        if r.verdict == Verdict.INCONCLUSIVE and settings.deep_check:
+        if r.verdict == Verdict.INCONCLUSIVE and settings.deep_check and not self.save:  # save mode: deep only via Re-check
             claim.deep_pending = True
             self._spawn(self._deep(claim, context), verification=True)
         await self.emit({"type": "claim", "claim": claim.model_dump()})

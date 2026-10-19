@@ -6,6 +6,7 @@ from typing import Protocol
 from openai import AsyncOpenAI
 
 from .audio import AudioChunk
+from . import usage
 from .config import settings
 
 
@@ -29,6 +30,7 @@ class OpenAITranscriber:
         if settings.transcribe_glossary.strip():
             kwargs["prompt"] = settings.transcribe_glossary.strip()
         res = await self.client.audio.transcriptions.create(**kwargs)
+        usage.track_audio(chunk.end - chunk.start)
         return (res if isinstance(res, str) else getattr(res, "text", "")).strip()
 
 

@@ -179,3 +179,15 @@ server's HLS reader by ~12 s), i.e. when the viewer actually hears it — by the
 verdicts are already settled, so cards and danmu pills appear with their verdict instead of
 "Checking…". Use the **−2s / +2s** sync buttons if claims come early/late for your player. Needs the
 stream's DVR enabled (YouTube default); if the player cannot seek back the header warns about it.
+
+## Save mode + cost meter
+
+**Save mode** (checkbox next to Fresh) keeps the full experience but cuts the expensive calls: no
+automatic deep check (the Re-check button still runs one), stricter Jev claim gate
+(`CLAIM_GATE_MIN_SAVE`, 0.5), at most `SAVE_MAX_CLAIMS_PER_MIN` (6) claims, two segments of
+extraction context instead of three, and chunks under 12 words are not sent to the extractor.
+It is decided by whoever starts a video's shared run and shown to all its viewers ("save mode").
+
+Every run meters its own OpenAI usage (tokens per model, `web_search` calls, audio minutes) and the
+header shows a rough **≈ US$** estimate at list prices (hover for the breakdown); `/channels`
+exposes the same numbers per active video.

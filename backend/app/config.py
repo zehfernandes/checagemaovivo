@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     ai_gateway_api_key: str = ""
     jev_model: str = "typesafe-ai/jev"
     claim_gate_min: float = 0.35  # with decider=jev: drop candidate claims below this "checkable" probability
+    claim_gate_min_save: float = 0.5  # save mode: stricter gate -> fewer verifications
+    save_max_claims_per_min: int = 6
     chunk_seconds: int = 8
     language: str = ""
     cors_origins: str = "http://localhost:5173"

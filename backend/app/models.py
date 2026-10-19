@@ -56,3 +56,4 @@ class StartRequest(BaseModel):
     language: str | None = None
     start_seconds: float = 0
     fresh: bool = False  # private pipeline: ignore the shared channel and cache (latency testing)
+    save: bool = False  # save mode: same experience, fewer AI calls (no auto deep check, stricter gate, claim cap)

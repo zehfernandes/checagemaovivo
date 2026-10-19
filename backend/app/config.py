@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     openai_base_url: str = ""
     transcribe_model: str = "gpt-4o-mini-transcribe"
     # Names/terms the speech model should spell correctly (passed as the transcription prompt).
+    ytdlp_args: str = ""  # extra yt-dlp args, e.g. "--cookies-from-browser chrome:/path/to/profile" when YouTube asks to "confirm you're not a bot"
     transcribe_glossary: str = (
         "Debate presidencial 2026 na Band. Lula, Flávio Bolsonaro, Jair Bolsonaro, Haddad, Galípolo, "
         "Daniel Vorcaro, Banco Master, André Mendonça, STF, TCU, Polícia Federal, Banco Central, "

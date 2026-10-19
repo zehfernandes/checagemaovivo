@@ -180,6 +180,9 @@ verdicts are already settled, so cards and danmu pills appear with their verdict
 "Checking…". Use the **−2s / +2s** sync buttons if claims come early/late for your player. Needs the
 stream's DVR enabled (YouTube default); if the player cannot seek back the header warns about it.
 
+If yt-dlp fails with *Sign in to confirm you're not a bot* (YouTube rate-limits datacenter IPs), set
+`YTDLP_ARGS=--cookies-from-browser chrome:/path/to/profile` (or `--cookies cookies.txt`) in `.env`.
+
 ## Save mode + cost meter
 
 **Save mode** (checkbox next to Fresh) keeps the full experience but cuts the expensive calls: no

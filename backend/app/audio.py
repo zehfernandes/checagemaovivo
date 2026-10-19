@@ -5,12 +5,14 @@ import io
 import json
 import logging
 import os
+import shlex
 import shutil
 import time
 import wave
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
+from .config import settings
 from .models import StreamInfo
 
 log = logging.getLogger(__name__)
@@ -54,7 +56,8 @@ def _ytdlp_cmd() -> list[str]:
 
 async def resolve_stream(url: str) -> tuple[StreamInfo, str]:
     """Return stream metadata and a direct audio URL ffmpeg can read."""
-    cmd = [*_ytdlp_cmd(), "-f", "bestaudio[protocol^=m3u8]/bestaudio/best", "-j", "--no-playlist", "--no-warnings", url]
+    cmd = [*_ytdlp_cmd(), *shlex.split(settings.ytdlp_args), "-f", "bestaudio[protocol^=m3u8]/bestaudio/best",
+           "-j", "--no-playlist", "--no-warnings", url]
     node = _node_path()
     if node:
         cmd[1:1] = ["--js-runtimes", f"node:{node}"]

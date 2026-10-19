@@ -44,7 +44,8 @@ export default function App() {
   const running = session.state === 'connecting' || session.state === 'resolving' || session.state === 'listening'
   const isLive = session.info?.is_live ?? true
   // only once the server has confirmed a live stream (never seek a recording toward its end)
-  const delayed = running && session.info?.is_live === true && delay > 0
+  // kept after Stop so buffered claims don't all flush at once (the player stays behind the edge too)
+  const delayed = session.info?.is_live === true && delay > 0
   useEffect(() => {
     if (!delayed) return
     const t = setInterval(() => setNow(Date.now()), 500)
@@ -185,7 +186,7 @@ export default function App() {
               )}
             </span>
           )}
-          {delayed && (
+          {running && delayed && (
             <span className="muted delay-status" title="Your player runs behind the live edge; claims are shown when you hear the sentence. Use −/+ if they come early/late.">
               {' '}· delayed {delay}s
               {behind != null && Math.abs(behind - delay) > 5 && (

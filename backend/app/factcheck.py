@@ -39,7 +39,8 @@ class VerifyResult:
 
 
 class FactChecker(Protocol):
-    async def extract_claims(self, context: str, latest: str, recent_claims: list[str], strict: bool = False) -> list[str]: ...
+    async def extract_claims(self, context: str, latest: str, recent_claims: list[str], strict: bool = False,
+                             entities: list[str] | None = None) -> list[str]: ...
     async def verify(self, claim: str, context: str) -> VerifyResult: ...
     async def deep_verify(self, claim: str, context: str) -> VerifyResult: ...
 
@@ -65,6 +66,11 @@ Every claim must name its SUBJECT explicitly (WHO did/received/said WHAT): never
 admitido" without saying by whom, and never meta-phrasing like "foi mencionado que", "a alegação de que",
 "segundo o candidato". State the bare fact with its actors: "<pessoa> recebeu R$ <valor> de <quem>", "<pessoa> negou e depois admitiu <o quê>".
 Keep the fact as said (who paid, where the money was said to go) — do not swap the source or the destination of a value.
+Spoken Portuguese is colloquial and elliptical: the subject is often said sentences earlier and then dropped,
+or replaced by "ele", "o cara", "esse governo", "a turma dele". Resolve it with the CONTEXT and the ENTITIES list
+(the most recent matching person/institution), and normalise slang into plain facts ("pegou" -> recebeu,
+"deu um calote" -> não pagou, "tá preso" -> está preso, "botou" -> nomeou/colocou). If the subject is still
+ambiguous between two people, skip the claim rather than guess.
 In a debate, "você"/"o senhor" is the opponent being addressed: resolve it to that person from the context, and
 "X milhões do <nome> que você pegou" means the ADDRESSEE received X from <nome> (the named person is the source, not the receiver).
 If the transcript garbled a name, use the context/known names to write it correctly (e.g. "vocário" -> "Vorcaro").
@@ -202,12 +208,15 @@ class OpenAIFactChecker:
         self._recent_vecs: deque[np.ndarray] = deque(maxlen=RECENT_VEC_WINDOW)
         self._vec_cache: dict[str, np.ndarray] = {}  # claim text -> embedding, computed once in dedup and reused by verify
 
-    async def extract_claims(self, context: str, latest: str, recent_claims: list[str], strict: bool = False) -> list[str]:
+    async def extract_claims(self, context: str, latest: str, recent_claims: list[str], strict: bool = False,
+                             entities: list[str] | None = None) -> list[str]:
         if not latest.strip():
             return []
         user = (
             f"TODAY: {_today()}\n"
             f"CONTEXT (previous segments):\n{context or '(none)'}\n\n"
+            f"PEOPLE / ENTITIES MENTIONED IN THE LAST MINUTE (use them to resolve ele/ela/o cara/você/esse governo):\n"
+            f"{', '.join(entities) if entities else '(none)'}\n\n"
             f"LATEST SEGMENT:\n{latest}\n\n"
             f"RECENT CLAIMS (already extracted):\n" + ("\n".join(f"- {c}" for c in recent_claims) or "(none)")
         )
@@ -426,7 +435,8 @@ class OpenAIFactChecker:
 
 
 class MockFactChecker:
-    async def extract_claims(self, context: str, latest: str, recent_claims: list[str], strict: bool = False) -> list[str]:
+    async def extract_claims(self, context: str, latest: str, recent_claims: list[str], strict: bool = False,
+                             entities: list[str] | None = None) -> list[str]:
         await asyncio.sleep(0.5)
         if "Boa noite" in latest or not latest.strip():
             return []

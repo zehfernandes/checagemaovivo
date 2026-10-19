@@ -5,6 +5,7 @@ web search never delays the next transcription.
 """
 import asyncio
 import logging
+import re
 import time
 import uuid
 from collections import deque
@@ -26,6 +27,32 @@ SAVE_CONTEXT_SEGMENTS = 2
 SAVE_MIN_WORDS = 12  # save mode: don't run extraction on chunks shorter than this
 MAX_CONCURRENT_TRANSCRIPTIONS = 6
 RECENT_CLAIMS = 12
+ENTITY_SEGMENTS = 8  # ~64 s of transcript used to resolve 'ele', 'o cara', 'você'
+
+
+_NAME = re.compile(r"\b(?:[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\wáéíóúâêôãõç]+)(?:\s+(?:d[aeo]s?\s+)?[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\wáéíóúâêôãõç]+)*")
+_STOP = {"Agora", "Então", "Mas", "Porque", "Não", "Sim", "Olha", "Ou", "Eu", "Você", "Nós", "Ele", "Ela", "Isso", "Esse", "Essa",
+         "Este", "Esta", "Aqui", "Quando", "Como", "Que", "Quem", "Para", "Por", "Com", "Sem", "Hoje", "Ontem", "Brasil", "Presidente"}
+
+
+def _entities(text: str) -> list[str]:
+    """Proper names mentioned recently (transcript + glossary hits), most recent last, deduplicated."""
+    glossary = [g.strip() for g in settings.transcribe_glossary.replace(".", ",").split(",") if g.strip()]
+    found: list[str] = []
+    low = text.lower()
+    for g in glossary:
+        if len(g) > 2 and g.lower() in low:
+            found.append(g)
+    for m in _NAME.finditer(text):
+        name = m.group(0).strip()
+        if name in _STOP or name.split()[0] in _STOP or len(name) < 4:
+            continue
+        found.append(name)
+    seen: dict[str, None] = {}
+    for n in found:
+        seen.pop(n, None)
+        seen[n] = None
+    return list(seen)[-12:]
 
 
 class Pipeline:
@@ -40,6 +67,7 @@ class Pipeline:
         self.verify_tasks: set[asyncio.Task] = set()
         self.context: deque[str] = deque(maxlen=SAVE_CONTEXT_SEGMENTS if save else CONTEXT_SEGMENTS)
         self.recent_claims: deque[str] = deque(maxlen=RECENT_CLAIMS)
+        self.recent_text: deque[str] = deque(maxlen=ENTITY_SEGMENTS)
         self.verify_sem = asyncio.Semaphore(MAX_CONCURRENT_VERIFICATIONS)
         self.transcribe_sem = asyncio.Semaphore(MAX_CONCURRENT_TRANSCRIPTIONS)
         self._stopped = False
@@ -100,11 +128,14 @@ class Pipeline:
         await self.emit({"type": "transcript", "segment": seg.model_dump()})
 
         context = " ".join(self.context)
+        entities = _entities(" ".join(self.recent_text))
         self.context.append(text)
+        self.recent_text.append(text)
         if self.save and len(text.split()) < SAVE_MIN_WORDS:
             return
         try:
-            claims = await self.checker.extract_claims(context, text, list(self.recent_claims), strict=self.save)
+            claims = await self.checker.extract_claims(context, text, list(self.recent_claims), strict=self.save,
+                                                       entities=entities)
         except Exception as e:  # noqa: BLE001
             log.exception("claim extraction failed")
             await self.emit({"type": "error", "message": f"Falha ao extrair afirmações: {e}"})

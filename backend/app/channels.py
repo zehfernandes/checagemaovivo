@@ -67,9 +67,16 @@ class Cache:
                           (video_id, kind, key, start, json.dumps(payload, ensure_ascii=False)))
         self.conn.commit()
 
+    def delete_event(self, video_id: str, kind: str, key: str) -> None:
+        self.conn.execute("DELETE FROM events WHERE video_id = ? AND kind = ? AND key = ?", (video_id, kind, key))
+        self.conn.commit()
+
     def events(self, video_id: str) -> list[tuple[str, dict]]:
         rows = self.conn.execute("SELECT kind, json FROM events WHERE video_id = ? ORDER BY start, kind DESC", (video_id,))
         return [(r["kind"], json.loads(r["json"])) for r in rows]
+
+    def claim_count(self, video_id: str) -> int:
+        return self.conn.execute("SELECT COUNT(*) FROM events WHERE video_id = ? AND kind = 'claim'", (video_id,)).fetchone()[0]
 
     def stats(self) -> dict:
         n = self.conn.execute("SELECT COUNT(*) FROM videos").fetchone()[0]
@@ -279,6 +286,16 @@ class Channel:
             c["sources"] = sources
         await self.emit({**entry, "claim": c})
         return c
+
+    async def remove_claim(self, claim_id: str) -> bool:
+        """Admin deletes a claim (bad extraction): gone from the cache and from every viewer's list."""
+        if claim_id not in self.claims:
+            return False
+        del self.claims[claim_id]
+        if not self.private:
+            self.manager.cache.delete_event(self.video_id, "claim", claim_id)
+        self.broadcast({"type": "claim_removed", "id": claim_id})
+        return True
 
     async def recheck(self, claim_id: str) -> None:
         if self.pipeline is None:

@@ -174,6 +174,38 @@ class NewsStore:
     def has_url(self, url: str) -> bool:
         return self.db.execute("SELECT 1 FROM docs WHERE url = ?", (url,)).fetchone() is not None
 
+    # ---------- admin: browse / curate the DB ----------
+    def list_docs(self, query: str = "", limit: int = 100, offset: int = 0) -> dict:
+        where, args = "", []
+        if query.strip():
+            where = "WHERE d.title LIKE ? OR d.url LIKE ? OR d.source LIKE ?"
+            args = [f"%{query.strip()}%"] * 3
+        total = self.db.execute(f"SELECT COUNT(*) FROM docs d {where}", args).fetchone()[0]
+        rows = self.db.execute(
+            f"""SELECT d.id, d.url, d.source, d.title, d.published, d.kind, d.added,
+                       (SELECT COUNT(*) FROM chunks c WHERE c.doc_id = d.id) AS chunks,
+                       (SELECT substr(c.text, 1, 240) FROM chunks c WHERE c.doc_id = d.id ORDER BY c.idx LIMIT 1) AS excerpt
+                FROM docs d {where} ORDER BY d.added DESC, d.id DESC LIMIT ? OFFSET ?""",
+            [*args, limit, offset]).fetchall()
+        cols = ["id", "url", "source", "title", "published", "kind", "added", "chunks", "excerpt"]
+        return {"total": total, "docs": [dict(zip(cols, r)) for r in rows]}
+
+    def delete_doc(self, doc_id: int) -> bool:
+        with self.db:
+            self.db.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_id,))
+            cur = self.db.execute("DELETE FROM docs WHERE id = ?", (doc_id,))
+        if cur.rowcount:
+            self._load()
+        return cur.rowcount > 0
+
+    async def add_text(self, title: str, text: str, source: str = "admin", url: str = "") -> int:
+        """Manual entry written by an editor (no page to fetch). Returns chunks inserted."""
+        url = url.strip() or f"manual://{int(time.time() * 1000)}"
+        if self.has_url(url):
+            return 0
+        return await self._insert_docs([{"url": url, "source": source, "title": title.strip(), "published": time.time(),
+                                         "kind": "manual", "text": text}])
+
     def stats(self) -> dict:
         docs = self.db.execute("SELECT COUNT(*) FROM docs").fetchone()[0]
         chunks = self.db.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]

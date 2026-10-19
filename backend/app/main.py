@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Header, WebSocket, WebSocketDisconnect
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AsyncOpenAI
@@ -20,6 +20,8 @@ from . import audio
 from .channels import ChannelManager
 from .pipeline import Pipeline
 from .review import LABELS, ReviewStore, run_eval
+from .rooms import RoomStore
+from .admin import make_router as make_admin_router
 from .transcribe import make_transcriber
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -52,6 +54,7 @@ channels = ChannelManager(
     lambda emit, save=False: Pipeline(make_transcriber(client), make_factchecker(client, store), emit, save=save),
     settings.news_db_file.parent / Path(settings.cache_db_path).name,
 )
+rooms = RoomStore(settings.news_db_file.parent / Path(settings.cache_db_path).name)
 _bg_tasks: set[asyncio.Task] = set()
 
 
@@ -66,6 +69,8 @@ async def _refresh_loop() -> None:
 
 @app.on_event("startup")
 async def _startup() -> None:
+    if rooms.count() == 0 and settings.default_room_url:
+        rooms.create(settings.default_room_name, settings.default_room_url)
     if store and settings.news_refresh_minutes > 0:
         t = asyncio.create_task(_refresh_loop())
         _bg_tasks.add(t)
@@ -79,6 +84,9 @@ def is_admin(password: str | None) -> bool:
 def require_admin(x_admin_password: str = Header(default="")) -> None:
     if not is_admin(x_admin_password):
         raise HTTPException(403, "Senha de administrador inválida")
+
+
+app.include_router(make_admin_router(channels, store, rooms, require_admin))
 
 
 class LoginRequest(BaseModel):
@@ -253,7 +261,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
                     req.save = False
                     if not channels.cached(req.url):
                         await ws.send_json({"type": "status", "state": "error",
-                                            "message": "Este vídeo ainda não foi processado. Só um administrador pode iniciar a checagem."})
+                                            "message": "A checagem desta transmissão ainda não começou. Volte em instantes."})
                         continue
                 await leave()
                 await ws.send_json({"type": "status", "state": "resolving", "message": "Abrindo o vídeo…"})
@@ -267,7 +275,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
                 for ev in channel.snapshot():
                     await ws.send_json(ev)
                 sender = asyncio.create_task(pump(queue))
-                if not admin:
+                if not admin or req.watch:
                     continue
                 await channel.ensure_running(req.language or settings.language or None,
                                              start_seconds=req.start_seconds if (req.fresh or len(channel.subscribers) <= 1) else None)
@@ -288,4 +296,8 @@ async def ws_endpoint(ws: WebSocket) -> None:
 # Production: serve the built frontend from the same origin (Dockerfile copies it here), so /ws, /news… are same-host.
 _dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if _dist.is_dir():
+    @app.get("/admin", include_in_schema=False)
+    async def admin_page():
+        return FileResponse(_dist / "index.html")
+
     app.mount("/", StaticFiles(directory=_dist, html=True), name="frontend")

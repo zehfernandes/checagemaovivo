@@ -105,6 +105,7 @@ class OverrideRequest(BaseModel):
     verdict: Literal["fake", "valid", "inconclusive"]
     explanation: str = ""
     sources: list[dict] | None = None
+    text: str | None = None  # admin rewrote the claim itself (bad extraction)
 
 
 @app.post("/admin/claim", dependencies=[Depends(require_admin)])
@@ -112,7 +113,7 @@ async def admin_claim(req: OverrideRequest):
     """Human fact-check: overrides a claim's verdict for everyone watching and in the cache + verdict memory."""
     vid = audio.extract_video_id(req.url) or req.url
     channel = channels.channels.get(vid) or await channels.get(req.url)
-    c = await channel.override(req.claim_id, req.verdict, req.explanation, req.sources)
+    c = await channel.override(req.claim_id, req.verdict, req.explanation, req.sources, req.text)
     if c is None:
         raise HTTPException(404, "Afirmação não encontrada")
     if store:

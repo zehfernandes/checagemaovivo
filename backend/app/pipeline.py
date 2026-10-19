@@ -207,6 +207,10 @@ class Pipeline:
     def _apply(claim: Claim, r: VerifyResult) -> None:
         claim.verdict, claim.confidence, claim.explanation, claim.sources, claim.method = (
             r.verdict, r.confidence, r.explanation, r.sources, r.method)  # type: ignore[assignment]
+        if r.corrected_claim and r.corrected_claim != claim.text:
+            log.info("claim corrected by verifier: %r -> %r", claim.text, r.corrected_claim)
+            claim.original_text = claim.original_text or claim.text
+            claim.text = r.corrected_claim
 
     async def stop(self, keep_verifications: bool = False) -> None:
         """Stop ingestion. With keep_verifications, in-flight verdicts still get

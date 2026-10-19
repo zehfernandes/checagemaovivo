@@ -28,6 +28,7 @@ class Claim(BaseModel):
     speaker: str | None = None
     method: Literal["cache", "db", "web", "deep", "human"] | None = None
     deep_pending: bool = False
+    original_text: str | None = None  # what the extractor wrote before the verifier corrected the wording
     # latency instrumentation (server wall clock, seconds since epoch)
     captured_at: float | None = None  # audio of this claim finished arriving from YouTube
     extracted_at: float | None = None  # claim emitted as pending

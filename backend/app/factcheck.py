@@ -36,6 +36,7 @@ class VerifyResult:
     explanation: str
     sources: list[Source] = field(default_factory=list)
     method: str = "web"
+    corrected_claim: str = ""  # set when the claim misrepresented the transcript; the verdict is about this text
 
 
 class FactChecker(Protocol):
@@ -55,6 +56,10 @@ _GENERIC_SUBJECT = re.compile(
     re.I,
 )
 _NAMED = re.compile(r"[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]{2,}")  # the role must be followed by a proper name
+# pronouns / placeholders the model failed to resolve, and "X afirma que…" meta-claims (we check facts, not quotes)
+_UNRESOLVED = re.compile(r"\b(speaker|addressee|orador|oradora|interlocutor|interlocutora|falante|oponente|adversári[oa]|você|vocês|o senhor|a senhora|eu|nós|meu|minha|meus|minhas|nosso|nossa|seu pai|seu partido|seu governo)\b", re.I)
+_META = re.compile(r"^(\S+\s+){0,4}(afirma|afirmou|disse|diz|alega|alegou|declarou|declara|mencionou|menciona|sugeriu|sugere|acusou|acusa|perguntou|pergunta|questionou)\s+(que|se|a|o|sobre)\b"
+                   r"|\b(de acordo com|segundo) (a|o) (declaração|fala|candidato|orador|falante)\b", re.I)
 
 EXTRACT_SYSTEM = """You are a fact-checking assistant watching a live political debate / broadcast.
 You receive a rolling transcript. From the LATEST segment only, extract factual claims about the real
@@ -65,6 +70,12 @@ Do NOT extract: promises or intentions about the future ("vou fazer", "vamos aca
 values, insults, questions, greetings, procedural talk, hypotheticals, or anything already in RECENT CLAIMS.
 If several sentences make the same point, merge them into ONE claim. Return at most 2 claims; usually 0 or 1.
 
+FIRST decide WHO IS SPEAKING in the latest segment and WHOM they address ("speaker"/"addressee": a name from the
+context/entities, or "" if unknown). Clues: moderator cues ("candidato Flávio, sua pergunta"), who was attacked in the
+previous turn and now replies, "meu governo"/"meu pai"/"minha gestão" (speaker's side) vs. "você"/"seu governo"/"seu
+partido"/"o senhor" (addressee). Then resolve every pronoun with that: "eu/nós/meu governo" = speaker (or the
+speaker's government), "você/seu/o senhor" = addressee. Never attach "você pegou X" to a third person who was merely
+named nearby. If speaker and addressee cannot be told apart, do NOT extract claims that depend on them.
 Write each claim as a short declarative sentence stating the fact itself (never "the speaker says that…"),
 in the SAME LANGUAGE as the transcript (e.g. Portuguese stays Portuguese).
 Every claim must be SELF-CONTAINED: resolve pronouns and vague references ("ele", "esse governo",
@@ -88,10 +99,20 @@ If the transcript garbled a name, use the context/known names to write it correc
 A claim that merely restates, narrows or extends one in RECENT CLAIMS (same fact, different wording,
 "part of", "more than") is a duplicate — skip it. Only extract a second claim when it is about a
 genuinely different fact.
-Respond with JSON: {"claims": ["...", "..."]}"""
+Respond with JSON: {"speaker": "...", "addressee": "...", "claims": ["...", "..."]}"""
 
 VERIFY_SYSTEM = """You are a rigorous, neutral fact-checker working live during a political debate.
-Verify whether the CLAIM is TRUE ABOUT THE REAL WORLD using web search. The transcript context is only
+Verify whether the CLAIM is TRUE ABOUT THE REAL WORLD using web search.
+FIDELITY FIRST: the CLAIM was extracted automatically from the TRANSCRIPT CONTEXT and may misrepresent it.
+In a debate "eu/nós/meu governo" is the speaker and "você/o senhor/seu governo/seu partido" is the opponent being
+addressed; moderator cues ("candidato Flávio") and the flow of attacks tell who speaks to whom. Before verifying,
+compare the CLAIM with what was actually asserted. If the claim names the wrong actor, swaps who paid/received,
+or turns a question, promise, condition or challenge into a fact, write the faithful self-contained claim in
+pt-BR in "corrected_claim" (real actors, same figure, e.g. "Flávio Bolsonaro recebeu R$ 134 milhões de Daniel
+Vorcaro") and verify THAT. "corrected_claim" is what the SPEAKER ASSERTED, even if it is false — never rewrite the
+claim into what you believe is true (that belongs in the verdict and explanation). If nothing verifiable was asserted, set "corrected_claim" to "" and answer
+"inconclusive" explaining that the transcript did not assert it. If the claim is faithful, leave "corrected_claim" empty.
+ The transcript context is only
 there to disambiguate the claim; the fact that someone said it is NOT evidence. Never answer "valid"
 merely because the transcript contains the statement.
 Prefer primary sources (official statistics, government, courts, academic work, established fact-checkers
@@ -113,7 +134,7 @@ the meaning. Do not grade the speaker's intent, only the fact.
 Relative time expressions ("faltam sete dias", "ontem", "este ano") must be interpreted against TODAY,
 given in the input. Be fast. "explanation" is 1-2 plain sentences in Brazilian Portuguese (pt-BR), whatever the language of the claim, without links or
 citations (sources go in the "sources" array). Respond ONLY with JSON:
-{"verdict": "fake|valid|inconclusive", "confidence": 0.0-1.0, "explanation": "...",
+{"verdict": "fake|valid|inconclusive", "confidence": 0.0-1.0, "explanation": "...", "corrected_claim": "",
  "sources": [{"title": "...", "url": "https://..."}]}"""
 
 
@@ -121,6 +142,10 @@ DEEP_SYSTEM = """You are a senior fact-checker doing a SECOND, DEEPER pass on a 
 that a fast first pass left inconclusive. Work carefully:
 1. Restate the claim precisely: who, what figure/event, which period. Use the transcript context only to
    disambiguate; the fact that someone said it is NOT evidence.
+   The claim was extracted automatically and may misrepresent the transcript (wrong actor, swapped payer/receiver,
+   a question or promise turned into a fact): in a debate "eu/meu governo" is the speaker and "você/seu partido" the
+   opponent. If so, put the faithful self-contained claim in pt-BR in "corrected_claim" and verify that instead
+   ("" if nothing verifiable was asserted → "inconclusive"); leave it empty when the claim is faithful.
 2. Run at least 3 different web searches: (a) in Portuguese with the key entities and figure; (b) targeting
    fact-checkers and official sources (lupa.uol.com.br, aosfatos.org, g1.globo.com/fato-ou-fake,
    projetocomprova.com.br, gov.br, ibge.gov.br, tse.jus.br, camara.leg.br, senado.leg.br, stf.jus.br,
@@ -138,7 +163,7 @@ that a fast first pass left inconclusive. Work carefully:
    event, direction) or a framing that inverts the meaning.
 Interpret relative time expressions against TODAY. "explanation" is 2-3 plain sentences in the SAME
 LANGUAGE as the claim, no links or citations (sources go in the array). Respond ONLY with JSON:
-{"verdict": "fake|valid|inconclusive", "confidence": 0.0-1.0, "explanation": "...",
+{"verdict": "fake|valid|inconclusive", "confidence": 0.0-1.0, "explanation": "...", "corrected_claim": "",
  "sources": [{"title": "...", "url": "https://..."}]}"""
 
 
@@ -171,8 +196,12 @@ CLAIMS_SCHEMA = {
     "strict": True,
     "schema": {
         "type": "object",
-        "properties": {"claims": {"type": "array", "items": {"type": "string"}}},
-        "required": ["claims"],
+        "properties": {
+            "speaker": {"type": "string"},
+            "addressee": {"type": "string"},
+            "claims": {"type": "array", "items": {"type": "string"}},
+        },
+        "required": ["speaker", "addressee", "claims"],
         "additionalProperties": False,
     },
 }
@@ -266,16 +295,20 @@ class OpenAIFactChecker:
             instructions=EXTRACT_SYSTEM,
             input=user,
             text={"format": CLAIMS_SCHEMA},
-            **_gen_params(self.model),
+            **_gen_params(self.model, settings.extract_effort),
         )
         usage.track(self.model, res)
         data = _parse_json(res.output_text)
+        if data.get("speaker") or data.get("addressee"):
+            log.info("extract: speaker=%r addressee=%r", data.get("speaker"), data.get("addressee"))
         claims = [c.strip() for c in data.get("claims", []) if isinstance(c, str) and c.strip()]
         kept = []
         for c in claims:
             m = _GENERIC_SUBJECT.match(c)
             if m and not _NAMED.match(c[m.end():].lstrip()):  # "O presidente Lula…" ok, "O candidato recebeu…" not
                 log.info("extract: dropped generic subject: %s", c[:80])
+            elif _UNRESOLVED.search(c) or _META.match(c):
+                log.info("extract: dropped unresolved/meta claim: %s", c[:80])
             else:
                 kept.append(c)
         claims = kept
@@ -486,7 +519,8 @@ class OpenAIFactChecker:
                     url = getattr(ann, "url", None)
                     if url:
                         _add_source(sources, getattr(ann, "title", "") or "", url)
-        return VerifyResult(verdict, confidence, _clean_explanation(str(data.get("explanation", ""))), sources, method)
+        return VerifyResult(verdict, confidence, _clean_explanation(str(data.get("explanation", ""))), sources, method,
+                            corrected_claim=str(data.get("corrected_claim") or "").strip())
 
 
 class MockFactChecker:

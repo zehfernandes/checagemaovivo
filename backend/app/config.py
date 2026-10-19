@@ -20,7 +20,8 @@ class Settings(BaseSettings):
         "Rui Costa, Jaques Wagner, Lulinha, Tarcísio, Michelle Bolsonaro, CACs, Pix, Bolsa Família, "
         "Dark Horse, fundo partidário, PL, PT, Alckmin, Vorcaro negou, R$ 134 milhões."
     )
-    factcheck_model: str = "gpt-4.1-mini"
+    factcheck_model: str = "gpt-5-mini"  # extraction; measured 91% faithful vs 85% for gpt-4.1-mini at +0.4 s p50
+    extract_effort: str = "minimal"  # no tools in extraction, so the fastest reasoning level is allowed
     # Verdict model for the web-search pass; gpt-5 models take a reasoning effort instead of temperature.
     verdict_model: str = "gpt-5-mini"
     verdict_effort: str = "low"

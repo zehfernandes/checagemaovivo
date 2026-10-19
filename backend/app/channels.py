@@ -275,7 +275,8 @@ class Channel:
         if self.private:
             self.manager.private_channels.discard(self)
 
-    async def override(self, claim_id: str, verdict: str, explanation: str, sources: list[dict] | None = None) -> dict | None:
+    async def override(self, claim_id: str, verdict: str, explanation: str, sources: list[dict] | None = None,
+                       text: str | None = None) -> dict | None:
         """Human correction by an admin: replaces the verdict for every viewer (live fan-out) and in the cache."""
         entry = self.claims.get(claim_id)
         if not entry:
@@ -284,6 +285,8 @@ class Channel:
              "confidence": 1.0, "deep_pending": False}
         if sources is not None:
             c["sources"] = sources
+        if text and text.strip():
+            c["text"] = text.strip()
         await self.emit({**entry, "claim": c})
         return c
 

@@ -393,9 +393,9 @@ function ClaimsPage({ rooms, room, onPick, reload, notify }: { rooms: Room[]; ro
   }, [session.claims])
   const claim = session.claims.find((c) => c.id === selected)
 
-  async function save(c: Claim, verdict: Final, explanation: string, sources: Source[]) {
+  async function save(c: Claim, verdict: Final, explanation: string, sources: Source[], text: string) {
     if (!url) return
-    await api('/admin/claim', { method: 'POST', body: JSON.stringify({ url, claim_id: c.id, verdict, explanation, sources }) })
+    await api('/admin/claim', { method: 'POST', body: JSON.stringify({ url, claim_id: c.id, verdict, explanation, sources, text }) })
   }
   async function remove(c: Claim) {
     if (!room) return
@@ -457,21 +457,22 @@ function ClaimsPage({ rooms, room, onPick, reload, notify }: { rooms: Room[]; ro
 }
 
 function ClaimPanel({ claim: c, onClose, onSave, onDelete, onRecheck, notify }: {
-  claim: Claim; onClose: () => void; onSave: (c: Claim, v: Final, e: string, s: Source[]) => Promise<void>; onDelete: (c: Claim) => Promise<void>
+  claim: Claim; onClose: () => void; onSave: (c: Claim, v: Final, e: string, s: Source[], t: string) => Promise<void>; onDelete: (c: Claim) => Promise<void>
   onRecheck: (id: string) => void; notify: (m: string) => void
 }) {
   const initialVerdict: Final = c.verdict === 'pending' ? 'inconclusive' : c.verdict
   const [verdict, setVerdict] = useState<Final>(initialVerdict)
+  const [text, setText] = useState(c.text)
   const [explanation, setExplanation] = useState(c.explanation)
   const [sources, setSources] = useState<Source[]>(c.sources)
   const [saving, setSaving] = useState(false)
   const cleanSources = sources.filter((s) => s.url.trim()).map((s) => ({ title: s.title.trim(), url: s.url.trim() }))
-  const dirty = verdict !== initialVerdict || explanation !== c.explanation || JSON.stringify(cleanSources) !== JSON.stringify(c.sources)
+  const dirty = verdict !== initialVerdict || explanation !== c.explanation || text.trim() !== c.text || JSON.stringify(cleanSources) !== JSON.stringify(c.sources)
   async function submit(e: FormEvent) {
     e.preventDefault()
     if (!dirty) return
     setSaving(true)
-    try { await onSave(c, verdict, explanation, cleanSources) } catch (err) { notify((err as Error).message) } finally { setSaving(false) }
+    try { await onSave(c, verdict, explanation, cleanSources, text.trim() || c.text) } catch (err) { notify((err as Error).message) } finally { setSaving(false) }
   }
   const formId = `claim-${c.id}`
   return (
@@ -486,7 +487,9 @@ function ClaimPanel({ claim: c, onClose, onSave, onDelete, onRecheck, notify }: 
         </>
       }>
       <form id={formId} className="form" onSubmit={submit} onKeyDown={cmdEnter}>
-        <blockquote className={`quote claim--${c.verdict}`}>{c.text}</blockquote>
+        <Field label="Afirmação" hint="O que foi dito, com quem fez/recebeu o quê. Corrija se a extração trocou o sujeito.">
+          <textarea className={`quote claim--${c.verdict}`} value={text} onChange={(e) => setText(e.target.value)} rows={Math.min(6, Math.max(2, Math.ceil(text.length / 44)))} />
+        </Field>
         <Field label="Veredito"><Segmented value={verdict} options={FINALS} onChange={setVerdict} /></Field>
         <Field label="Explicação" hint="É o texto que o público lê embaixo da afirmação.">
           <textarea value={explanation} onChange={(e) => setExplanation(e.target.value)} rows={Math.min(16, Math.max(5, Math.ceil(explanation.length / 44)))} />

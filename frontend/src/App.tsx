@@ -12,6 +12,9 @@ const DEFAULT_URL = 'https://www.youtube.com/watch?v=Amwukq3hviM'
 const PLAYER_EDGE_LAG_S = 8
 const LIVE_DELAY_S = 20 // lives: player sits this far behind the edge so verdicts are ready when the viewer hears the sentence
 const RECENT_S = 180
+// Recordings: a claim is stamped where its sentence ends inside an 8 s chunk (interpolated, ±3-4 s),
+// so reveal it a few seconds later rather than while the sentence is still being spoken.
+const REVEAL_LAG_S = 4
 
 
 function extractVideoId(url: string): string | null {
@@ -90,7 +93,7 @@ export default function App() {
   // Processing is shared per video and cached server-side; for a recording we only reveal
   // what has been said up to the player position; for a delayed live, what the viewer heard.
   const visibleClaims = useMemo(() => {
-    if (!isLive) return session.claims.filter((c) => c.start >= baseline - 1 && c.start <= currentTime)
+    if (!isLive) return session.claims.filter((c) => c.start >= baseline - 1 && c.start + REVEAL_LAG_S <= currentTime)
     if (!delayed) return session.claims
     return session.claims
       .map((c) => ({ ...c, revealAt: revealAt(c.captured_at) }))
@@ -114,9 +117,10 @@ export default function App() {
   const startedFor = useRef('')
   function begin() {
     const u = url.trim()
-    const from = u === startedFor.current ? currentTime : 0 // a new video starts from the top; retries resume
+    const isNew = u !== startedFor.current
+    const from = isNew ? 0 : currentTime // a new video starts from the top; retries resume
     startedFor.current = u
-    setBaseline(Math.max(0, from))
+    if (isNew) setBaseline(0) // a reconnect must not hide what was already listed
     session.start(u, language, from, false, false, false, true)
   }
   function onSubmit(e: FormEvent) {

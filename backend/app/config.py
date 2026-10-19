@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     verdict_effort: str = "low"
     # Deeper second pass for claims the fast pass left inconclusive (stronger model, more searches).
     deep_model: str = "gpt-5-mini"
-    deep_effort: str = "medium"
+    deep_effort: str = "low"
     deep_check: bool = True
     # "openai" (gpt-4.1-mini decides from DB evidence) or "jev" (TypeSafe Jev via Vercel AI Gateway, ~0.3 s).
     decider: str = "openai"

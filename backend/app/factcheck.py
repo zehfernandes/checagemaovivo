@@ -235,7 +235,7 @@ def _parse_json(text: str) -> dict:
 class OpenAIFactChecker:
     def __init__(self, client: AsyncOpenAI, model: str, store: NewsStore | None = None,
                  min_similarity: float = 0.55, deep_model: str | None = None, verdict_model: str | None = None,
-                 verdict_effort: str = "low", deep_effort: str = "medium"):
+                 verdict_effort: str = "low", deep_effort: str = "low"):
         self.client = client
         self.model = model
         self.verdict_model = verdict_model or model

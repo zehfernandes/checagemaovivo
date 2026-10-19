@@ -46,7 +46,7 @@ button { font: inherit; }
 .link:disabled { opacity: .5; cursor: default; }
 
 .menu { position: relative; }
-.menu__button { list-style: none; cursor: pointer; color: var(--muted); font-size: 13px; padding: 6px 4px; user-select: none; }
+.menu__button { list-style: none; cursor: pointer; color: var(--muted); font-size: 13px; padding: 6px 4px; user-select: none; background: none; border: 0; }
 .menu__button::-webkit-details-marker { display: none; }
 .menu[open] .menu__button, .menu__button:hover { color: var(--text); }
 .menu__panel {

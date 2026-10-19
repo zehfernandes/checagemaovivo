@@ -63,7 +63,8 @@ Every claim must be SELF-CONTAINED: resolve pronouns and vague references ("ele"
 figure using the context. If the reference cannot be resolved from the context, do NOT extract that claim.
 Every claim must name its SUBJECT explicitly (WHO did/received/said WHAT): never "o valor foi negado e depois
 admitido" without saying by whom, and never meta-phrasing like "foi mencionado que", "a alegação de que",
-"segundo o candidato". State the bare fact: "Flávio Bolsonaro recebeu R$ 134 milhões do fundo partidário do PL".
+"segundo o candidato". State the bare fact with its actors: "<pessoa> recebeu R$ <valor> de <quem>", "<pessoa> negou e depois admitiu <o quê>".
+Keep the fact as said (who paid, where the money was said to go) — do not swap the source or the destination of a value.
 If the transcript garbled a name, use the context/known names to write it correctly (e.g. "vocário" -> "Vorcaro").
 A claim that merely restates, narrows or extends one in RECENT CLAIMS (same fact, different wording,
 "part of", "more than") is a duplicate — skip it. Only extract a second claim when it is about a

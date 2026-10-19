@@ -109,9 +109,10 @@ export default function App() {
 
   // last 5 minutes of the video (stream time), newest first
   const recentClaims = useMemo(() => {
-    const latest = visibleClaims.reduce((m, c) => Math.max(m, c.start), 0)
-    return visibleClaims.filter((c) => c.start >= latest - 300)
-  }, [visibleClaims])
+    // recordings: relative to the player position; live: relative to the newest claim
+    const ref = isLive ? visibleClaims.reduce((m, c) => Math.max(m, c.start), 0) : currentTime
+    return visibleClaims.filter((c) => c.start >= ref - 300)
+  }, [visibleClaims, isLive, currentTime])
 
   const counts = useMemo(() => {
     const c: Record<Verdict, number> = { pending: 0, fake: 0, valid: 0, inconclusive: 0 }

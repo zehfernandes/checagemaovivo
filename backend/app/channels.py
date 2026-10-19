@@ -207,7 +207,15 @@ class Channel:
 
     # ---- processing ------------------------------------------------------------------------
     async def ensure_running(self, language: str | None, _retry: bool = False, start_seconds: float | None = None) -> None:
-        if self.complete or (self.run_task and not self.run_task.done()):
+        running = bool(self.run_task and not self.run_task.done())
+        if (running and start_seconds is not None and not self.info.is_live and not self.complete
+                and len(self.subscribers) <= 1 and start_seconds > self.processed_to + 30):
+            # the only viewer pressed Start far ahead of what is processed: jump there instead of
+            # making them wait for the paced run to catch up (shared channel, so only when alone)
+            log.info("channel %s: jumping from %.0fs to %.0fs for its only viewer", self.video_id, self.processed_to, start_seconds)
+            await self.stop_pipeline()
+            running = False
+        if self.complete or running:
             return
         if start_seconds is not None:
             self._start_override = start_seconds

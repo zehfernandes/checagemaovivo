@@ -212,7 +212,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
                     await ws.send_json(ev)
                 sender = asyncio.create_task(pump(queue))
                 await channel.ensure_running(req.language or settings.language or None,
-                                             start_seconds=req.start_seconds if req.fresh else None)
+                                             start_seconds=req.start_seconds if (req.fresh or len(channel.subscribers) <= 1) else None)
             elif kind == "stop":
                 await leave()
                 await ws.send_json({"type": "status", "state": "idle", "message": "Parado"})

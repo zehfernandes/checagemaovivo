@@ -192,3 +192,30 @@ a { color: #93c5fd; }
 .claim__deep { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--inconclusive); }
 .claim__method--deep { background: #3b2a6b; color: #ddd6fe; }
 .btn--small { font-size: 11px; padding: 3px 8px; margin-top: 6px; }
+
+/* review page */
+.review .topbar select { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 13px; max-width: 420px; }
+.review .topbar a.btn { text-decoration: none; }
+.review__metrics { display: flex; flex-wrap: wrap; gap: 18px; padding: 8px 16px; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--border); }
+.review__metrics strong { color: var(--text); }
+.review__eval { margin: 0; padding: 12px 16px; font-size: 12px; max-height: 240px; overflow: auto; background: var(--panel-2); border-bottom: 1px solid var(--border); }
+.review__main { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.review__filters { display: flex; gap: 6px; padding: 8px 16px; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+.review__filters button { background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; font-size: 12px; cursor: pointer; }
+.review__filters button.active { color: var(--text); border-color: var(--accent); }
+.review__list { overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 10px; flex: 1; max-width: 980px; }
+.review__segment-text { margin: 0 0 6px; font-size: 12px; color: var(--muted); font-style: italic; }
+.review__actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.review__label { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+.review__label--correct.active { background: var(--valid); color: #052e16; }
+.review__label--wrong.active { background: var(--fake); }
+.review__label--not_claim.active { background: var(--pending); }
+.review__label--unsure.active { background: var(--inconclusive); color: #431407; }
+.review__item--correct { outline: 1px solid rgba(34,197,94,.4); }
+.review__item--wrong { outline: 1px solid rgba(239,68,68,.4); }
+.review__item--not_claim { opacity: .6; }
+.review__fix { display: grid; grid-template-columns: 160px 1fr 1fr auto; gap: 6px; margin-top: 8px; }
+.review__fix select, .review__fix input { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 12px; }
+.review__segment .btn--small { margin-left: 8px; margin-top: 0; }
+.review__missed { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+.review__missed p { margin: 4px 0; }

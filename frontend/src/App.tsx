@@ -116,6 +116,7 @@ export default function App() {
         >
           <span className="toggle__knob" /> Danmu {danmu ? 'On' : 'Off'}
         </button>
+        <a className="btn btn--ghost" href="#review" title="Offline review: label claims, build the golden set">Review</a>
         <div className="news-pill" title={news ? Object.entries(news.sources).map(([k, v]) => `${k}: ${v}`).join('\n') : ''}>
           <span className="news-pill__label">News DB</span>
           <strong>{news ? news.docs : '–'}</strong> articles

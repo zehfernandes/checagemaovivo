@@ -10,6 +10,7 @@ export default defineConfig({
       '/ws': { target: backend, ws: true },
       '/health': backend,
       '/news': backend,
+      '/review': backend,
     },
   },
 })

@@ -1,16 +1,19 @@
 import asyncio
+import json
 import logging
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AsyncOpenAI
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from .config import settings
 from .factcheck import make_factchecker
 from .models import StartRequest
 from .news import NewsStore
 from .pipeline import Pipeline
+from .review import LABELS, ReviewStore, run_eval
 from .transcribe import make_transcriber
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -38,6 +41,7 @@ store: NewsStore | None = (
     if client and settings.provider == "openai"
     else None
 )
+review = ReviewStore()
 _bg_tasks: set[asyncio.Task] = set()
 
 
@@ -78,6 +82,76 @@ async def health():
         "chunk_seconds": settings.chunk_seconds,
         "news": store.stats() if store else None,
     }
+
+
+
+# ---- offline review loop (human labels -> golden set -> eval) ----------------------------------
+@app.get("/review/runs")
+async def review_runs():
+    return review.runs()
+
+
+@app.get("/review/items")
+async def review_items(run: str):
+    return {"items": review.items(run), "missed": review.missed(run), "metrics": review.metrics(run)}
+
+
+@app.get("/review/segments")
+async def review_segments(run: str, start: float = 0, end: float = 1e12):
+    return review.segments(run, start, end)
+
+
+class LabelRequest(BaseModel):
+    item_id: str
+    label: str
+    correct_verdict: str | None = None
+    note: str = ""
+    source_url: str = ""
+
+
+@app.post("/review/label")
+async def review_label(req: LabelRequest):
+    if req.label not in LABELS:
+        raise HTTPException(400, f"label must be one of {LABELS}")
+    item = review.label(req.item_id, req.label, req.correct_verdict, req.note, req.source_url)
+    # Learning loop: a human-provided source for a wrong verdict goes straight into the news DB.
+    if store and req.label == "wrong" and req.source_url.startswith("http") and item:
+        summary = f"{item['claim']}\n\nRevisão humana: veredito correto = {req.correct_verdict}. {req.note}"
+        t = asyncio.create_task(store.add_url(req.source_url, "", source="human-review", fallback_text=summary))
+        _bg_tasks.add(t)
+        t.add_done_callback(_bg_tasks.discard)
+    return {"ok": True}
+
+
+class MissedRequest(BaseModel):
+    run: str
+    start: float
+    segment: str
+    claim: str
+    note: str = ""
+
+
+@app.post("/review/missed")
+async def review_missed(req: MissedRequest):
+    return {"id": review.add_missed(req.run, req.start, req.segment, req.claim, req.note)}
+
+
+@app.delete("/review/missed/{mid}")
+async def review_missed_delete(mid: str):
+    review.delete_missed(mid)
+    return {"ok": True}
+
+
+@app.get("/review/export")
+async def review_export(run: str):
+    body = "\n".join(json.dumps(r, ensure_ascii=False) for r in review.golden(run))
+    return PlainTextResponse(body, media_type="application/x-ndjson")
+
+
+@app.get("/review/eval")
+async def review_eval(run: str, rerun: bool = False):
+    checker = make_factchecker(client, store) if rerun else None
+    return await run_eval(review, checker, run, rerun)
 
 
 @app.websocket("/ws")

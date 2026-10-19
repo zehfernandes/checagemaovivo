@@ -76,6 +76,10 @@ class Cache:
         return {"videos": n, "claims": c}
 
 
+def _mmss(s: float) -> str:
+    return f"{int(s // 60)}:{int(s % 60):02d}"
+
+
 class Channel:
     def __init__(self, manager: "ChannelManager", video_id: str, url: str, info: StreamInfo):
         self.manager = manager
@@ -91,6 +95,8 @@ class Channel:
         self.pipeline: Pipeline | None = None
         self.run_task: asyncio.Task | None = None
         self._idle_task: asyncio.Task | None = None
+        self._retries = 0
+        self._language: str | None = None
         for kind, ev in manager.cache.events(video_id):
             if kind == "transcript":
                 self.transcripts[ev["segment"]["id"]] = ev
@@ -146,9 +152,21 @@ class Channel:
             self.manager.cache.put(self.video_id, "claim", c["id"], c["start"], ev)
         elif kind == "status":
             if ev.get("state") == "ended" and not self.info.is_live:
-                self.complete = True
-                self.status = {"state": "listening", "message": "Fully processed · served from cache"}
-                self.manager.cache.save_video(self.video_id, self.url, self.info, "complete", self.processed_to)
+                # Only trust "ended" when we actually reached the end of the recording; an audio
+                # source failure (e.g. expired media URL -> HTTP 403) also ends the chunk stream.
+                reached_end = self.info.duration is not None and self.processed_to >= self.info.duration - 2 * settings.chunk_seconds
+                if reached_end:
+                    self.complete = True
+                    self.status = {"state": "listening", "message": "Fully processed · served from cache"}
+                    self.manager.cache.save_video(self.video_id, self.url, self.info, "complete", self.processed_to)
+                else:
+                    self.manager.cache.save_video(self.video_id, self.url, self.info, "stopped", self.processed_to)
+                    if self.subscribers and self._retries < 3:
+                        self._retries += 1
+                        self.status = {"state": "resolving", "message": f"Audio stream dropped at {_mmss(self.processed_to)} — reconnecting ({self._retries}/3)…"}
+                        asyncio.get_running_loop().call_later(3, lambda: asyncio.create_task(self.ensure_running(None, _retry=True)))
+                    else:
+                        self.status = {"state": "error", "message": f"Audio stream stopped at {_mmss(self.processed_to)} — press Start to resume"}
                 ev = {"type": "status", **self.status}
             elif ev.get("state") in ("listening", "resolving", "error", "ended"):
                 self.status = {"state": ev["state"], "message": ev.get("message", "")}
@@ -168,9 +186,15 @@ class Channel:
                 self.subscribers.discard(q)
 
     # ---- processing ------------------------------------------------------------------------
-    async def ensure_running(self, language: str | None) -> None:
+    async def ensure_running(self, language: str | None, _retry: bool = False) -> None:
         if self.complete or (self.run_task and not self.run_task.done()):
             return
+        if not _retry:
+            self._retries = 0
+        if _retry and not self.subscribers:
+            return
+        language = language or self._language
+        self._language = language
         self.pipeline = self.manager.make_pipeline(self.emit)
         start = 0.0 if self.info.is_live else self.processed_to
         self.status = {"state": "resolving", "message": "Resolving stream…"}

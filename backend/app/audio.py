@@ -52,7 +52,7 @@ def _ytdlp_cmd() -> list[str]:
 
 async def resolve_stream(url: str) -> tuple[StreamInfo, str]:
     """Return stream metadata and a direct audio URL ffmpeg can read."""
-    cmd = [*_ytdlp_cmd(), "-f", "bestaudio/best", "-j", "--no-playlist", "--no-warnings", url]
+    cmd = [*_ytdlp_cmd(), "-f", "bestaudio[protocol^=m3u8]/bestaudio/best", "-j", "--no-playlist", "--no-warnings", url]
     node = _node_path()
     if node:
         cmd[1:1] = ["--js-runtimes", f"node:{node}"]

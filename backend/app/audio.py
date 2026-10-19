@@ -58,21 +58,31 @@ async def resolve_stream(url: str, attempts: int = 3) -> tuple[StreamInfo, str]:
     """Return stream metadata and a direct audio URL ffmpeg can read.
     YouTube intermittently answers "No video formats found!" / transient 403s; retry briefly."""
     last: Exception | None = None
-    for i in range(attempts):
+    fmt = 0
+    for i in range(attempts + len(FORMATS) - 1):
         try:
-            return await _resolve_once(url)
+            return await _resolve_once(url, FORMATS[fmt])
         except RuntimeError as e:
             last = e
             msg = str(e)
             if "not a bot" in msg or "Private video" in msg or "unavailable" in msg.lower():
                 raise
-            log.warning("resolve_stream attempt %d/%d failed: %s", i + 1, attempts, msg[-160:])
+            log.warning("resolve_stream attempt %d (format %r) failed: %s", i + 1, FORMATS[fmt], msg[-160:])
+            if "Requested format is not available" in msg and fmt < len(FORMATS) - 1:
+                fmt += 1  # YouTube sometimes offers only some formats: relax the selector, no backoff
+                continue
+            if i >= attempts - 1 + fmt:
+                break
             await asyncio.sleep(1.5 * (i + 1))
     raise last  # type: ignore[misc]
 
 
-async def _resolve_once(url: str) -> tuple[StreamInfo, str]:
-    cmd = [*_ytdlp_cmd(), *shlex.split(settings.ytdlp_args), "-f", "bestaudio[protocol^=m3u8]/bestaudio/best",
+# audio-only HLS first (live edge friendly), then any audio, then anything ffmpeg can read
+FORMATS = ["bestaudio[protocol^=m3u8]/bestaudio/best", "bestaudio*/best*", None]
+
+
+async def _resolve_once(url: str, fmt: str | None = FORMATS[0]) -> tuple[StreamInfo, str]:
+    cmd = [*_ytdlp_cmd(), *shlex.split(settings.ytdlp_args), *(["-f", fmt] if fmt else []),
            "-j", "--no-playlist", "--no-warnings", url]
     node = _node_path()
     if node:

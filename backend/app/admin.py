@@ -3,9 +3,14 @@ cache (edit/delete claims with live fan-out) and the news DB (browse/add/delete 
 from __future__ import annotations
 
 import logging
+import shutil
+import sqlite3
+import tempfile
 import time
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from . import audio
@@ -64,6 +69,26 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
         return out
 
     # ---- rooms ---------------------------------------------------------------------------
+    # Snapshot of a data file so a fresh clone can start with production's cache/news/glossary
+    # (`backend/data/` is gitignored). SQLite files are copied with the online backup API.
+    data_dir = Path(settings.cache_db_path).resolve().parent
+
+    @r.get("/admin/export/{name}", dependencies=guard)
+    async def export_data(name: str, bg: BackgroundTasks):
+        if name not in {"cache.db", "news.db", "review.db", "glossary.json"}:
+            raise HTTPException(404, "Arquivo desconhecido")
+        src = data_dir / name
+        if not src.exists():
+            raise HTTPException(404, f"{name} ainda não existe no servidor")
+        tmp = Path(tempfile.mkdtemp()) / name
+        if name.endswith(".db"):
+            with sqlite3.connect(src) as a, sqlite3.connect(tmp) as b:
+                a.backup(b)
+        else:
+            shutil.copyfile(src, tmp)
+        bg.add_task(shutil.rmtree, tmp.parent, True)
+        return FileResponse(tmp, filename=name, media_type="application/octet-stream")
+
     @r.get("/rooms")
     async def public_rooms():
         return [room_view(x) for x in rooms.list(active_only=True)]

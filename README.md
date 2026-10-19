@@ -55,6 +55,9 @@ every `NEWS_REFRESH_MINUTES`. `backend/data/` is gitignored — every clone star
 6. To test the production site no setup is needed: https://www.checagemaovivo.org (viewer) and
    https://www.checagemaovivo.org/admin (newsroom, needs the deployed `ADMIN_PASSWORD`).
 7. If yt-dlp says *Sign in to confirm you're not a bot*, see `YTDLP_ARGS` below.
+8. To start with production's data (cached Band debate checks, news DB, glossary) instead of empty
+   DBs: `cd backend && python -m scripts.pull_data https://www.checagemaovivo.org <ADMIN_PASSWORD>`
+   (backend stopped; uses `GET /admin/export/{cache.db|news.db|review.db|glossary.json}`).
 
 ## Admin (`/admin`)
 

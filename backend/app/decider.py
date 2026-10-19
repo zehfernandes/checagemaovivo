@@ -30,6 +30,7 @@ class Decision:
     confidence: float
     sufficient: float
     latency_ms: int
+    relevant: float = 1.0  # evidence is about the same specific subject as the claim
 
 
 class JevDecider:
@@ -61,11 +62,14 @@ class JevDecider:
                         "criteria": VERDICT_CRITERIA},
             "sufficient": {"type": "boolean",
                            "instructions": "The EVIDENCE is specific and reliable enough to decide the CLAIM as fake or valid without further research."},
+            "relevant": {"type": "boolean",
+                         "instructions": "The EVIDENCE is about the SAME specific subject as the CLAIM (same people, place, event or figure) — not merely a similar topic."},
         })
         a = data["answers"]
         conf = (data.get("providerMetadata", {}).get("typesafe", {}).get("confidence", {}) or {}).get("verdict", 0.0)
         return Decision(a["verdict"]["choice"], a["verdict"].get("probabilities", {}), float(conf),
-                        float(a["sufficient"]["probability"]), int((time.monotonic() - t0) * 1000))
+                        float(a["sufficient"]["probability"]), int((time.monotonic() - t0) * 1000),
+                        float(a.get("relevant", {}).get("probability", 1.0)))
 
     async def checkable(self, claims: list[str], context: str) -> list[float]:
         """Probability that each claim is a verifiable factual statement (fan-out: one request)."""
@@ -75,7 +79,8 @@ class JevDecider:
         questions = {f"c{i}": {"type": "boolean",
                                "instructions": f"Claim [{i}] is a concrete, verifiable factual statement about the real world "
                                                f"(a number, date, past event, law, or what someone did) — NOT a promise, intention, "
-                                               f"opinion, insult, question, hypothetical or vague generality."}
+                                               f"opinion, insult, question, hypothetical or vague generality. It must be of public interest "
+                                               f"(public figures, institutions, statistics, laws, public events) — not a private person's personal story."}
                      for i in range(len(claims))}
         data = await self._ask(state, questions)
         return [float(data["answers"][f"c{i}"]["probability"]) for i in range(len(claims))]

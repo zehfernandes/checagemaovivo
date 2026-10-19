@@ -76,6 +76,13 @@ Verification is two-level:
    it in SQLite. At verify time the claim is embedded and matched by cosine similarity (in memory,
    ~ms); if the best matches are above `NEWS_MIN_SIMILARITY` the model decides from that evidence
    only (no tools, ~1–2 s). Cards answered this way show a **DB** badge.
+   Guard against false "Fake"s: with `DECIDER=jev` the decider also answers whether the evidence is
+   about the *same subject* as the claim (`relevant`); a **fake** verdict needs `relevant ≥ 0.8` and
+   `sufficient ≥ 0.6` (valid: `relevant ≥ 0.6`), otherwise the claim skips the DB and goes straight to
+   web search — articles that merely share the topic (e.g. generic elevator rules vs. one man's
+   home-made elevator) are not a contradiction. The claim gate also requires public interest
+   (public figures, institutions, statistics, laws, public events), so a reportage subject's personal
+   story is not fact-checked.
 2. **Web search** – when the DB has nothing relevant, or the model says the evidence is not
    sufficient, the claim goes to OpenAI web search (~4–6 s, **Web** badge). Pages cited by the
    search are written back into the DB so the next similar claim is a DB hit.

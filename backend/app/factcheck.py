@@ -107,6 +107,9 @@ Classify as:
 - "fake": an excerpt DIRECTLY contradicts the specific fact claimed (the number, date, person, event).
   Absence of a fact from the evidence is NOT contradiction — never answer "fake" because the
   excerpts do not mention the figure or event.
+  The excerpt must be about the SAME subject (same person, place, company, event): an excerpt about
+  a different case that merely shares the topic (e.g. elevator rules in general vs. this man's elevator)
+  is NOT a contradiction — answer "inconclusive".
 - "valid": an excerpt directly confirms the specific fact claimed.
 - "inconclusive": the evidence does not settle it (off-topic, partial, outdated, only loosely related,
   or the claim is a promise/opinion/too vague).
@@ -326,11 +329,17 @@ class OpenAIFactChecker:
         except Exception:  # noqa: BLE001
             log.exception("jev decide failed; falling back to OpenAI")
             return None, False
-        log.info("decide[jev] %dms %s p=%.2f suff=%.2f conf=%.2f %s", d.latency_ms, d.verdict,
-                 d.probabilities.get(d.verdict, 0), d.sufficient, d.confidence, claim[:60])
+        log.info("decide[jev] %dms %s p=%.2f suff=%.2f rel=%.2f conf=%.2f %s", d.latency_ms, d.verdict,
+                 d.probabilities.get(d.verdict, 0), d.sufficient, d.relevant, d.confidence, claim[:60])
         if d.verdict == "inconclusive":
             return None, d.probabilities.get("inconclusive", 0) >= 0.6
+        if d.relevant < (0.8 if d.verdict == "fake" else 0.6):
+            # evidence is about a similar topic, not this very subject: skip the LLM (it would only
+            # hallucinate a contradiction from off-subject articles) and go straight to web search
+            return None, True
         if d.sufficient < 0.45 or d.probabilities.get(d.verdict, 0) < 0.7:
+            return None, False
+        if d.verdict == "fake" and d.sufficient < 0.6:
             return None, False
         verdict = Verdict(d.verdict)
         picked = evidence[:3]

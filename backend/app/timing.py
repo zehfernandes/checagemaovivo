@@ -14,6 +14,7 @@ import sys
 import unicodedata
 
 _WORD = re.compile(r"\w+", re.UNICODE)
+CUSHION_S = 1.5  # reveal slightly after the sentence closes rather than a hair before
 _STOP = {"que", "com", "para", "uma", "dos", "das", "não", "nao", "mais", "esse", "essa", "este", "esta",
          "isso", "ele", "ela", "eles", "elas", "você", "voce", "nós", "nos", "por", "como", "mas", "foi",
          "ser", "tem", "está", "esta", "são", "sao", "aos", "pelo", "pela", "até", "ate", "seu", "sua"}
@@ -46,7 +47,7 @@ def locate(claim: str, text: str, start: float, end: float) -> float:
     # last matched word ≈ end of the sentence; ignore a stray late match of a common word
     anchor = hits[-1] if len(hits) < 3 else hits[-2]
     frac = min(1.0, anchor / max(1, len(norm_text)))
-    return round(start + frac * (end - start), 1)
+    return round(min(end, start + frac * (end - start) + CUSHION_S), 1)
 
 
 def retime_cache(path: str, dry: bool = False) -> int:

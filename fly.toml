@@ -8,6 +8,7 @@ primary_region = "gru"
 [env]
   PROVIDER = "openai"
   LANGUAGE = "pt"
+  DECIDER = "jev"               # Jev gates + decides from the news DB in ~0.3 s; needs the AI_GATEWAY_API_KEY secret (falls back to OpenAI without it)
   VIDEO_CLIPS = "Amwukq3hviM=7740-14640"
   CORS_ORIGINS = "https://debate-fact-check.fly.dev"
 

@@ -226,3 +226,10 @@ button { font: inherit; }
 .menu__row--login { display: flex; gap: 8px; }
 .menu__row--login input { flex: 1; font: inherit; font-size: 12px; background: #14161a; color: inherit; border: 1px solid #2a2d33; border-radius: 6px; padding: 4px 8px; }
 .menu__row--error input { border-color: #e5484d; }
+
+.menu__gloss { display: flex; flex-direction: column; gap: 10px; padding: 8px 0 4px; border-top: 1px solid var(--border); margin-top: 4px; }
+.menu__gloss label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
+.menu__gloss code { font-size: 11px; }
+.menu__gloss textarea { width: 100%; box-sizing: border-box; font: inherit; font-size: 12px; line-height: 1.4; background: #14161a; color: var(--text); border: 1px solid #2a2d33; border-radius: 6px; padding: 6px 8px; resize: vertical; }
+.menu__gloss-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; }
+.menu__panel:has(.menu__gloss) { min-width: 440px; }

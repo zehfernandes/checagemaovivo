@@ -10,6 +10,7 @@ from openai import AsyncOpenAI
 from .audio import AudioChunk
 from . import usage
 from .config import settings
+from .glossary import glossary
 
 log = logging.getLogger(__name__)
 
@@ -31,15 +32,15 @@ class OpenAITranscriber:
         kwargs = {"model": self.model, "file": f, "response_format": "text"}
         if language:
             kwargs["language"] = language
-        if settings.transcribe_glossary.strip():
-            kwargs["prompt"] = settings.transcribe_glossary.strip()
+        if glossary.prompt():
+            kwargs["prompt"] = glossary.prompt()
         res = await self.client.audio.transcriptions.create(**kwargs)
         usage.track_audio(chunk.end - chunk.start)
         text = (res if isinstance(res, str) else getattr(res, "text", "")).strip()
         if _echoes_prompt(text, kwargs.get("prompt", "")):
             log.info("transcript dropped: echoes the glossary prompt (music/noise chunk): %s", text[:80])
             return ""
-        return text
+        return glossary.apply(text)
 
 
 def _echoes_prompt(text: str, prompt: str, threshold: float = 0.6) -> bool:

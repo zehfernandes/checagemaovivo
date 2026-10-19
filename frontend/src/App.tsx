@@ -34,6 +34,25 @@ export default function App() {
   const [sideOpen, setSideOpen] = useState(() => localStorage.getItem('side') !== 'closed')
   const [details, setDetails] = useState(false)
   const [admin, setAdmin] = useState(false)
+  const [gloss, setGloss] = useState<{ terms: string; fixes: string } | null>(null)
+  const [glossSaving, setGlossSaving] = useState(false)
+  async function openGloss() {
+    const r = await fetch('/admin/glossary', { headers: adminHeaders() })
+    const d = await r.json()
+    setGloss({ terms: d.terms, fixes: (d.replacements as { from: string; to: string }[]).map((x) => `${x.from} → ${x.to}`).join('\n') })
+  }
+  async function saveGloss() {
+    if (!gloss) return
+    setGlossSaving(true)
+    try {
+      const replacements = gloss.fixes.split('\n').map((l) => l.split(/\s*(?:→|->|=>|=)\s*/)).filter((p) => p.length >= 2 && p[0].trim() && p[1].trim())
+        .map((p) => ({ from: p[0].trim(), to: p[1].trim() }))
+      await fetch('/admin/glossary', { method: 'PUT', headers: { 'content-type': 'application/json', ...adminHeaders() }, body: JSON.stringify({ terms: gloss.terms, replacements }) })
+      setGloss(null)
+    } finally {
+      setGlossSaving(false)
+    }
+  }
   const [pwd, setPwd] = useState('')
   const [pwdError, setPwdError] = useState(false)
   useEffect(() => {
@@ -259,6 +278,28 @@ export default function App() {
                 </button>}
               </span>
             </div>
+            {admin && (
+              <div className="menu__row menu__row--info">
+                <span>Glossário da transcrição</span>
+                <button type="button" className="link" onClick={() => (gloss ? setGloss(null) : openGloss())}>{gloss ? 'fechar' : 'editar'}</button>
+              </div>
+            )}
+            {admin && gloss && (
+              <div className="menu__gloss">
+                <label>
+                  Nomes e termos que a transcrição deve acertar (separados por vírgula)
+                  <textarea value={gloss.terms} onChange={(e) => setGloss({ ...gloss, terms: e.target.value })} rows={4} />
+                </label>
+                <label>
+                  Correções aplicadas ao texto transcrito, uma por linha: <code>errado → certo</code>
+                  <textarea value={gloss.fixes} onChange={(e) => setGloss({ ...gloss, fixes: e.target.value })} rows={4} placeholder="Bocaro → Vorcaro" />
+                </label>
+                <div className="menu__gloss-actions">
+                  <span className="muted">Vale para as próximas transcrições de qualquer vídeo ou live.</span>
+                  <button type="button" className="btn" onClick={saveGloss} disabled={glossSaving}>{glossSaving ? 'Salvando…' : 'Salvar'}</button>
+                </div>
+              </div>
+            )}
             {admin && <a className="menu__row menu__row--link" href="#review">Revisão offline →</a>}
             {admin ? (
               <div className="menu__row menu__row--info">

@@ -182,6 +182,14 @@ def _today() -> str:
     return time.strftime("%Y-%m-%d (%A)", time.gmtime())
 
 
+def _gen_params(model: str) -> dict:
+    """Reasoning models (gpt-5*, o*) reject `temperature`; keep their thinking short instead."""
+    m = model.lower()
+    if m.startswith(("gpt-5", "o1", "o3", "o4")):
+        return {"reasoning": {"effort": "low"}}
+    return {"temperature": 0}
+
+
 def _parse_verdict(data: dict) -> tuple[Verdict, float]:
     verdict_raw = str(data.get("verdict", "inconclusive")).lower()
     verdict = Verdict(verdict_raw) if verdict_raw in {v.value for v in Verdict} else Verdict.INCONCLUSIVE
@@ -235,7 +243,7 @@ class OpenAIFactChecker:
             instructions=EXTRACT_SYSTEM,
             input=user,
             text={"format": CLAIMS_SCHEMA},
-            temperature=0,
+            **_gen_params(self.model),
         )
         usage.track(self.model, res)
         data = _parse_json(res.output_text)
@@ -380,7 +388,7 @@ class OpenAIFactChecker:
         user = (f"TODAY: {_today()}\nCLAIM: {claim}\n\nTRANSCRIPT CONTEXT: {context[-600:]}\n\n"
                 f"EVIDENCE:\n\n" + "\n\n".join(blocks))
         res = await self.client.responses.create(
-            model=self.model, instructions=VERIFY_DB_SYSTEM, input=user, temperature=0)
+            model=self.model, instructions=VERIFY_DB_SYSTEM, input=user, **_gen_params(self.model))
         data = _parse_json(res.output_text)
         verdict, confidence = _parse_verdict(data)
         if verdict == Verdict.INCONCLUSIVE or not data.get("sufficient", True):
@@ -432,9 +440,8 @@ class OpenAIFactChecker:
             instructions=system,
             input=user,
             tools=[{"type": "web_search_preview", "search_context_size": context_size}],
-            temperature=0,
+            **_gen_params(model or self.model),
         )
-        usage.track(self.model, res)
         usage.track(model or self.model, res)
         data = _parse_json(res.output_text)
         verdict, confidence = _parse_verdict(data)

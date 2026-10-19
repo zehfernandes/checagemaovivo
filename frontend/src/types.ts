@@ -16,6 +16,9 @@ export interface Claim {
   end: number
   method?: 'db' | 'web' | 'deep' | null
   deep_pending?: boolean
+  captured_at?: number | null
+  extracted_at?: number | null
+  verified_at?: number | null
   receivedAt: number
   settledAt?: number
 }
@@ -25,6 +28,8 @@ export interface TranscriptSegment {
   text: string
   start: number
   end: number
+  captured_at?: number | null
+  transcribed_at?: number | null
 }
 
 export interface StreamInfo {
@@ -42,7 +47,7 @@ export type ServerMessage =
   | { type: 'transcript'; segment: TranscriptSegment }
   | { type: 'claim'; claim: Omit<Claim, 'receivedAt' | 'settledAt'> }
   | { type: 'error'; message: string }
-  | { type: 'progress'; processed_to: number; complete: boolean; viewers: number }
+  | { type: 'progress'; processed_to: number; complete: boolean; viewers: number; fresh?: boolean }
   | { type: 'pong' }
 
 export const VERDICT_LABEL: Record<Verdict, string> = {
@@ -56,6 +61,7 @@ export interface Progress {
   processed_to: number
   complete: boolean
   viewers: number
+  fresh: boolean
 }
 
 export interface NewsStats {

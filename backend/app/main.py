@@ -202,7 +202,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
                 await leave()
                 await ws.send_json({"type": "status", "state": "resolving", "message": "Resolving stream…"})
                 try:
-                    channel = await channels.get(req.url)
+                    channel = await channels.private(req.url) if req.fresh else await channels.get(req.url)
                 except Exception as e:  # noqa: BLE001
                     log.exception("resolve failed")
                     await ws.send_json({"type": "status", "state": "error", "message": f"Could not resolve video: {e}"})
@@ -211,7 +211,8 @@ async def ws_endpoint(ws: WebSocket) -> None:
                 for ev in channel.snapshot():
                     await ws.send_json(ev)
                 sender = asyncio.create_task(pump(queue))
-                await channel.ensure_running(req.language or settings.language or None)
+                await channel.ensure_running(req.language or settings.language or None,
+                                             start_seconds=req.start_seconds if req.fresh else None)
             elif kind == "stop":
                 await leave()
                 await ws.send_json({"type": "status", "state": "idle", "message": "Stopped"})

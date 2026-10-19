@@ -110,6 +110,18 @@ last viewer leaves; paced VOD processing stops after 60 s and resumes on the nex
 `GET /channels` shows active channels, viewer counts and progress. The UI reveals only what has been said
 up to the player position for recordings, so seeking is instant and spoiler-free.
 
+### Fresh run (no cache) + latency readout
+
+Tick **Fresh (no cache)** next to Start (or send `"fresh": true`) to bypass the shared channel: a private
+pipeline processes the video again from scratch, reads nothing from and writes nothing to the cache, and
+dies a few seconds after you stop. Use it to measure true end-to-end latency instead of being served from
+cache. Every transcript/claim event carries server wall-clock timestamps (`captured_at` = audio arrived from
+YouTube, `transcribed_at`, `extracted_at` = claim shown as pending, `verified_at` = verdict); the header shows
+the average "⏱ claim +Xs · verdict +Ys" for live/fresh runs and each card shows its own numbers. Measured on
+a live Record News stream (8 s chunks): transcript +0.7 s, claim +2.3–2.6 s, web verdict +5.4–6.6 s, deep
+check +9.7 s after the audio arrived. Note YouTube's own live delay (HLS edge vs. what the player shows) is
+on top of that and is not measured here.
+
 ## Offline review loop (learn from human checks)
 
 Process a whole recording offline, label every claim, and measure the live pipeline against the labels:
@@ -132,13 +144,14 @@ next similar claim is answered from it. Data lives in `backend/data/review.db` (
 
 ## WebSocket protocol (`/ws`)
 
-Client → server: `{"type":"start","url":"...","language":"pt","start_seconds":0}` · `{"type":"stop"}`
+Client → server: `{"type":"start","url":"...","language":"pt","start_seconds":0,"fresh":false}` · `{"type":"stop"}` · `{"type":"recheck","claim_id":"..."}`
 
 Server → client:
 
 - `{"type":"status","state":"resolving|listening|ended|error|idle","message":"..."}`
 - `{"type":"info","info":{"video_id","title","is_live","duration"}}`
-- `{"type":"transcript","segment":{"id","text","start","end"}}`
-- `{"type":"claim","claim":{"id","text","verdict":"pending|fake|valid|inconclusive","confidence","explanation","sources":[{"title","url"}],"start","end"}}`
+- `{"type":"transcript","segment":{"id","text","start","end","captured_at","transcribed_at"}}`
+- `{"type":"claim","claim":{"id","text","verdict":"pending|fake|valid|inconclusive","confidence","explanation","sources":[{"title","url"}],"start","end","method","deep_pending","captured_at","extracted_at","verified_at"}}`
   — sent once with `pending` and again when the verdict is ready
 - `{"type":"error","message":"..."}`
+- `{"type":"progress","processed_to","complete","viewers","fresh"}`

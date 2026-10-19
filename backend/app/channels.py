@@ -25,6 +25,7 @@ log = logging.getLogger(__name__)
 
 LIVE_IDLE_SECONDS = 300  # stop a live pipeline this long after the last viewer leaves
 VOD_IDLE_SECONDS = 60  # paced VOD processing stops this long after the last viewer leaves (resumes later)
+PRIVATE_IDLE_SECONDS = 5  # a fresh (uncached) run dies shortly after its only viewer leaves
 MAX_QUEUE = 2000
 
 SCHEMA = """
@@ -81,8 +82,9 @@ def _mmss(s: float) -> str:
 
 
 class Channel:
-    def __init__(self, manager: "ChannelManager", video_id: str, url: str, info: StreamInfo):
+    def __init__(self, manager: "ChannelManager", video_id: str, url: str, info: StreamInfo, private: bool = False):
         self.manager = manager
+        self.private = private  # fresh run: not shared, never reads or writes the cache
         self.video_id = video_id
         self.url = url
         self.info = info
@@ -97,13 +99,14 @@ class Channel:
         self._idle_task: asyncio.Task | None = None
         self._retries = 0
         self._language: str | None = None
-        for kind, ev in manager.cache.events(video_id):
+        self._start_override: float | None = None
+        for kind, ev in ([] if private else manager.cache.events(video_id)):
             if kind == "transcript":
                 self.transcripts[ev["segment"]["id"]] = ev
                 self.processed_to = max(self.processed_to, ev["segment"]["end"])
             elif kind == "claim":
                 self.claims[ev["claim"]["id"]] = ev
-        row = manager.cache.video(video_id)
+        row = None if private else manager.cache.video(video_id)
         if row:
             self.processed_to = max(self.processed_to, row["processed_to"] or 0)
             self.complete = row["status"] == "complete" and not info.is_live
@@ -120,8 +123,9 @@ class Channel:
     def unsubscribe(self, q: asyncio.Queue) -> None:
         self.subscribers.discard(q)
         paced_vod = not self.info.is_live and not settings.vod_full_speed
-        if not self.subscribers and (self.info.is_live or paced_vod) and self.run_task and not self.run_task.done():
-            self._idle_task = asyncio.create_task(self._idle_shutdown(LIVE_IDLE_SECONDS if self.info.is_live else VOD_IDLE_SECONDS))
+        if not self.subscribers and (self.private or self.info.is_live or paced_vod) and self.run_task and not self.run_task.done():
+            idle = PRIVATE_IDLE_SECONDS if self.private else LIVE_IDLE_SECONDS if self.info.is_live else VOD_IDLE_SECONDS
+            self._idle_task = asyncio.create_task(self._idle_shutdown(idle))
 
     async def _idle_shutdown(self, seconds: int) -> None:
         await asyncio.sleep(seconds)
@@ -135,9 +139,20 @@ class Channel:
         events += sorted(self.transcripts.values(), key=lambda e: e["segment"]["start"])
         events += sorted(self.claims.values(), key=lambda e: e["claim"]["start"])
         events.append({"type": "status", **self.status})
-        events.append({"type": "progress", "processed_to": self.processed_to, "complete": self.complete,
-                       "viewers": len(self.subscribers)})
+        events.append(self._progress())
         return events
+
+    def _progress(self) -> dict:
+        return {"type": "progress", "processed_to": self.processed_to, "complete": self.complete,
+                "viewers": len(self.subscribers), "fresh": self.private}
+
+    def _put(self, kind: str, key: str, start: float, ev: dict) -> None:
+        if not self.private:
+            self.manager.cache.put(self.video_id, kind, key, start, ev)
+
+    def _save(self, status: str) -> None:
+        if not self.private:
+            self.manager.cache.save_video(self.video_id, self.url, self.info, status, self.processed_to)
 
     async def emit(self, ev: dict) -> None:
         kind = ev.get("type")
@@ -145,26 +160,29 @@ class Channel:
             seg = ev["segment"]
             self.transcripts[seg["id"]] = ev
             self.processed_to = max(self.processed_to, seg["end"])
-            self.manager.cache.put(self.video_id, "transcript", seg["id"], seg["start"], ev)
+            self._put("transcript", seg["id"], seg["start"], ev)
         elif kind == "claim":
             c = ev["claim"]
             self.claims[c["id"]] = ev
-            self.manager.cache.put(self.video_id, "claim", c["id"], c["start"], ev)
+            self._put("claim", c["id"], c["start"], ev)
         elif kind == "status":
-            if ev.get("state") == "ended" and not self.info.is_live:
-                # Only trust "ended" when we actually reached the end of the recording; an audio
-                # source failure (e.g. expired media URL -> HTTP 403) also ends the chunk stream.
-                reached_end = self.info.duration is not None and self.processed_to >= self.info.duration - 2 * settings.chunk_seconds
+            if ev.get("state") == "ended":
+                # Only trust "ended" when we actually reached the end of a recording; an audio source
+                # failure (expired media URL -> HTTP 403, live HLS hiccup) also ends the chunk stream.
+                reached_end = (not self.info.is_live and self.info.duration is not None
+                               and self.processed_to >= self.info.duration - 2 * settings.chunk_seconds)
                 if reached_end:
                     self.complete = True
                     self.status = {"state": "listening", "message": "Fully processed · served from cache"}
-                    self.manager.cache.save_video(self.video_id, self.url, self.info, "complete", self.processed_to)
+                    self._save("complete")
                 else:
-                    self.manager.cache.save_video(self.video_id, self.url, self.info, "stopped", self.processed_to)
+                    self._save("stopped")
                     if self.subscribers and self._retries < 3:
                         self._retries += 1
                         self.status = {"state": "resolving", "message": f"Audio stream dropped at {_mmss(self.processed_to)} — reconnecting ({self._retries}/3)…"}
                         asyncio.get_running_loop().call_later(3, lambda: asyncio.create_task(self.ensure_running(None, _retry=True)))
+                    elif self.info.is_live:
+                        self.status = {"state": "ended", "message": "Live audio ended — press Start to reconnect"}
                     else:
                         self.status = {"state": "error", "message": f"Audio stream stopped at {_mmss(self.processed_to)} — press Start to resume"}
                 ev = {"type": "status", **self.status}
@@ -174,8 +192,7 @@ class Channel:
             return  # viewers already got info from the snapshot
         self.broadcast(ev)
         if kind == "transcript":
-            self.broadcast({"type": "progress", "processed_to": self.processed_to, "complete": self.complete,
-                            "viewers": len(self.subscribers)})
+            self.broadcast(self._progress())
 
     def broadcast(self, ev: dict) -> None:
         for q in list(self.subscribers):
@@ -186,9 +203,11 @@ class Channel:
                 self.subscribers.discard(q)
 
     # ---- processing ------------------------------------------------------------------------
-    async def ensure_running(self, language: str | None, _retry: bool = False) -> None:
+    async def ensure_running(self, language: str | None, _retry: bool = False, start_seconds: float | None = None) -> None:
         if self.complete or (self.run_task and not self.run_task.done()):
             return
+        if start_seconds is not None:
+            self._start_override = start_seconds
         if not _retry:
             self._retries = 0
         if _retry and not self.subscribers:
@@ -196,10 +215,10 @@ class Channel:
         language = language or self._language
         self._language = language
         self.pipeline = self.manager.make_pipeline(self.emit)
-        start = 0.0 if self.info.is_live else self.processed_to
+        start = 0.0 if self.info.is_live else (self._start_override if self._start_override is not None else self.processed_to)
         self.status = {"state": "resolving", "message": "Resolving stream…"}
         self.broadcast({"type": "status", **self.status})
-        self.manager.cache.save_video(self.video_id, self.url, self.info, "processing", self.processed_to)
+        self._save("processing")
 
         async def run() -> None:
             try:
@@ -210,8 +229,7 @@ class Channel:
                 log.exception("channel %s: pipeline failed", self.video_id)
                 await self.emit({"type": "status", "state": "error", "message": f"Processing failed: {e}"})
             finally:
-                self.manager.cache.save_video(self.video_id, self.url, self.info,
-                                              "complete" if self.complete else "stopped", self.processed_to)
+                self._save("complete" if self.complete else "stopped")
 
         self.run_task = asyncio.create_task(run())
 
@@ -223,6 +241,8 @@ class Channel:
             await self.pipeline.stop(keep_verifications=True)
         self.status = {"state": "idle", "message": "Stopped"}
         self.broadcast({"type": "status", **self.status})
+        if self.private:
+            self.manager.private_channels.discard(self)
 
     async def recheck(self, claim_id: str) -> None:
         if self.pipeline is None:
@@ -243,6 +263,7 @@ class ChannelManager:
         self.make_pipeline = make_pipeline
         self.cache = Cache(cache_path)
         self.channels: dict[str, Channel] = {}
+        self.private_channels: set[Channel] = set()
         self._locks: dict[str, asyncio.Lock] = {}
 
     async def get(self, url: str) -> Channel:
@@ -263,8 +284,18 @@ class ChannelManager:
                 self.channels[vid] = ch
             return ch
 
+    async def private(self, url: str) -> Channel:
+        """A one-off channel for a single viewer: fresh pipeline, no cache read/write, not shared.
+        Used to measure true end-to-end latency instead of being served from cache."""
+        info, _media = await audio.resolve_stream(url)
+        vid = info.video_id or audio.extract_video_id(url) or url
+        ch = Channel(self, vid, url, info, private=True)
+        self.private_channels.add(ch)
+        return ch
+
     def stats(self) -> dict:
         return {**self.cache.stats(), "active": [
             {"video_id": c.video_id, "title": c.info.title, "viewers": len(c.subscribers),
              "processing": bool(c.run_task and not c.run_task.done()), "complete": c.complete,
-             "processed_to": c.processed_to} for c in {id(c): c for c in self.channels.values()}.values()]}
+             "processed_to": c.processed_to, "fresh": c.private}
+            for c in list({id(c): c for c in self.channels.values()}.values()) + list(self.private_channels)]}

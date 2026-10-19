@@ -5,6 +5,7 @@ web search never delays the next transcription.
 """
 import asyncio
 import logging
+import time
 import uuid
 from collections import deque
 from collections.abc import Awaitable, Callable
@@ -87,7 +88,8 @@ class Pipeline:
             self.transcribe_sem.release()
         if not text:
             return
-        seg = TranscriptSegment(id=f"seg-{self.run_id}-{chunk.index}", text=text, start=chunk.start, end=chunk.end)
+        seg = TranscriptSegment(id=f"seg-{self.run_id}-{chunk.index}", text=text, start=chunk.start, end=chunk.end,
+                                captured_at=chunk.captured_at or None, transcribed_at=time.time())
         log.info("transcript[%s] %.0fs: %s", self.run_id, chunk.start, text)
         await self.emit({"type": "transcript", "segment": seg.model_dump()})
 
@@ -109,6 +111,8 @@ class Pipeline:
                 confidence=0,
                 start=chunk.start,
                 end=chunk.end,
+                captured_at=chunk.captured_at or None,
+                extracted_at=time.time(),
             )
             self.claims[claim.id] = (claim, f"{context} {text}")
             await self.emit({"type": "claim", "claim": claim.model_dump()})
@@ -122,6 +126,7 @@ class Pipeline:
                 log.exception("verification failed")
                 r = VerifyResult(Verdict.INCONCLUSIVE, 0.0, f"Verification failed: {e}")
         self._apply(claim, r)
+        claim.verified_at = time.time()
         if r.verdict == Verdict.INCONCLUSIVE and settings.deep_check:
             claim.deep_pending = True
             self._spawn(self._deep(claim, context), verification=True)
@@ -135,6 +140,7 @@ class Pipeline:
                 log.exception("deep verification failed")
                 r = VerifyResult(claim.verdict, claim.confidence, claim.explanation, claim.sources, claim.method or "web")
         self._apply(claim, r)
+        claim.verified_at = time.time()
         claim.deep_pending = False
         await self.emit({"type": "claim", "claim": claim.model_dump()})
 

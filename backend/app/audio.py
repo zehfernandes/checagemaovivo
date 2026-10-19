@@ -6,6 +6,7 @@ import json
 import logging
 import os
 import shutil
+import time
 import wave
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -24,6 +25,7 @@ class AudioChunk:
     start: float
     end: float
     pcm: bytes
+    captured_at: float = 0.0  # wall clock when the last byte of this chunk arrived from the source
 
     def to_wav(self) -> bytes:
         buf = io.BytesIO()
@@ -68,10 +70,17 @@ async def resolve_stream(url: str) -> tuple[StreamInfo, str]:
         media_url = info["requested_formats"][0].get("url")
     if not media_url:
         raise RuntimeError("yt-dlp returned no media URL")
+    live_status = info.get("live_status")
+    if str(info.get("protocol", "")).startswith("http_dash_segments") and "m3u8" not in media_url:
+        # ffmpeg can't read a segmented-DASH URL directly (yields a single ~2s segment). Typical
+        # for a live that just ended: YouTube hasn't finished turning it into a normal recording.
+        hint = "this live stream just ended and YouTube is still processing the recording — try again later" \
+            if live_status == "post_live" else "YouTube only offers segmented DASH audio for this video"
+        raise RuntimeError(f"No directly readable audio stream: {hint}")
     meta = StreamInfo(
         video_id=info.get("id", ""),
         title=info.get("title", ""),
-        is_live=bool(info.get("is_live")),
+        is_live=bool(info.get("is_live")) or live_status == "is_live",
         duration=info.get("duration"),
     )
     return meta, media_url
@@ -101,7 +110,8 @@ async def iter_chunks(
     """
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin"]
     if is_live:
-        cmd += ["-live_start_index", "-1"]
+        if "m3u8" in media_url or "/hls" in media_url:
+            cmd += ["-live_start_index", "-1"]  # HLS only: start at the live edge
     else:
         if realtime:
             cmd += ["-re"]
@@ -126,10 +136,10 @@ async def iter_chunks(
                 pcm = e.partial
                 if len(pcm) > SAMPLE_RATE * BYTES_PER_SAMPLE:  # keep tail if > 1s
                     start = start_seconds + index * chunk_seconds
-                    yield AudioChunk(index, start, start + len(pcm) / (SAMPLE_RATE * BYTES_PER_SAMPLE), pcm)
+                    yield AudioChunk(index, start, start + len(pcm) / (SAMPLE_RATE * BYTES_PER_SAMPLE), pcm, time.time())
                 break
             start = start_seconds + index * chunk_seconds
-            yield AudioChunk(index, start, start + chunk_seconds, pcm)
+            yield AudioChunk(index, start, start + chunk_seconds, pcm, time.time())
             index += 1
     finally:
         if proc.returncode is None:

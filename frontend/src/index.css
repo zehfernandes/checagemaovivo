@@ -219,3 +219,8 @@ a { color: #93c5fd; }
 .review__segment .btn--small { margin-left: 8px; margin-top: 0; }
 .review__missed { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 13px; }
 .review__missed p { margin: 4px 0; }
+
+.check { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; cursor: pointer; }
+.check input { accent-color: var(--accent); }
+.latency { margin-left: 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.claim__latency { margin: 2px 0 6px; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }

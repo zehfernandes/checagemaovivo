@@ -25,6 +25,7 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(0)
   const [tab, setTab] = useState<'claims' | 'transcript'>('claims')
   const [danmu, setDanmu] = useState(() => localStorage.getItem('danmu') !== 'off')
+  const [fresh, setFresh] = useState(false)
   useEffect(() => localStorage.setItem('danmu', danmu ? 'on' : 'off'), [danmu])
   const session = useSession()
 
@@ -65,6 +66,18 @@ export default function App() {
     [session.transcript, currentTime, isLive],
   )
 
+  // End-to-end processing latency, measured on the server: audio arrived from YouTube -> claim shown -> verdict.
+  const latency = useMemo(() => {
+    const recent = session.claims.filter((c) => c.captured_at && c.extracted_at).slice(-20)
+    if (recent.length === 0) return null
+    const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null)
+    return {
+      n: recent.length,
+      claim: avg(recent.map((c) => c.extracted_at! - c.captured_at!)),
+      verdict: avg(recent.filter((c) => c.verified_at).map((c) => c.verified_at! - c.captured_at!)),
+    }
+  }, [session.claims])
+
   const counts = useMemo(() => {
     const c: Record<Verdict, number> = { pending: 0, fake: 0, valid: 0, inconclusive: 0 }
     for (const cl of visibleClaims) c[cl.verdict]++
@@ -74,7 +87,7 @@ export default function App() {
   function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (running) session.stop()
-    else session.start(url.trim(), language, currentTime)
+    else session.start(url.trim(), language, currentTime, false, fresh)
   }
 
   return (
@@ -101,6 +114,9 @@ export default function App() {
           <button type="submit" className={running ? 'btn btn--stop' : 'btn'}>
             {running ? 'Stop' : 'Start'}
           </button>
+          <label className="check" title="Fresh run: process this video again from scratch in a private pipeline — no cached results, not shared with other viewers. Use it to measure real end-to-end latency.">
+            <input type="checkbox" checked={fresh} onChange={(e) => setFresh(e.target.checked)} disabled={running} /> Fresh (no cache)
+          </label>
         </form>
         <div className={`status status--${session.state}`}>
           {session.state === 'listening' && <span className="dot" />}
@@ -108,8 +124,13 @@ export default function App() {
           {session.info?.is_live && <span className="live-tag">LIVE</span>}
           {session.progress && (
             <span className="muted" title="Processing is shared by all viewers of this video and cached">
-              {' '}· {session.progress.viewers} viewer{session.progress.viewers === 1 ? '' : 's'}
+              {' '}· {session.progress.fresh ? 'fresh run · not cached' : `${session.progress.viewers} viewer${session.progress.viewers === 1 ? '' : 's'}`}
               {!isLive && ` · ${session.progress.complete ? 'fully processed' : `processed to ${fmtTime(session.progress.processed_to)}`}`}
+            </span>
+          )}
+          {latency && (isLive || session.progress?.fresh) && (
+            <span className="latency" title={`Average over the last ${latency.n} claims, measured on the server from the moment the audio arrived from YouTube`}>
+              ⏱ claim +{latency.claim!.toFixed(1)}s{latency.verdict != null && ` · verdict +${latency.verdict.toFixed(1)}s`}
             </span>
           )}
         </div>

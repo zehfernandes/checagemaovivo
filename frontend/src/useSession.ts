@@ -48,7 +48,7 @@ export function useSession() {
         setError(msg.message)
         break
       case 'progress':
-        setProgress({ processed_to: msg.processed_to, complete: msg.complete, viewers: msg.viewers })
+        setProgress({ processed_to: msg.processed_to, complete: msg.complete, viewers: msg.viewers, fresh: !!msg.fresh })
         break
     }
   }, [])
@@ -72,7 +72,7 @@ export function useSession() {
   }, [handle])
 
   const start = useCallback(
-    (url: string, language: string, startSeconds = 0, keep = false) => {
+    (url: string, language: string, startSeconds = 0, keep = false, fresh = false) => {
       setError(null)
       if (!keep) {
         setInfo(null)
@@ -83,7 +83,7 @@ export function useSession() {
       setState('connecting')
       setStatusText(keep ? 'Re-syncing…' : 'Connecting…')
       const socket = connect()
-      const payload = JSON.stringify({ type: 'start', url, language: language || null, start_seconds: startSeconds })
+      const payload = JSON.stringify({ type: 'start', url, language: language || null, start_seconds: startSeconds, fresh })
       if (socket.readyState === WebSocket.OPEN) socket.send(payload)
       else socket.addEventListener('open', () => socket.send(payload), { once: true })
     },

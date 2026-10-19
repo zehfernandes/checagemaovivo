@@ -38,6 +38,12 @@ export function ClaimCard({ claim, compact, onRecheck }: Props) {
         <span className="claim__time">{fmt(claim.start)}</span>
       </header>
       <p className="claim__text">“{claim.text}”</p>
+      {!compact && claim.captured_at && claim.extracted_at && (
+        <p className="claim__latency" title="Seconds after the audio arrived from YouTube (server-side)">
+          ⏱ claim +{(claim.extracted_at - claim.captured_at).toFixed(1)}s
+          {claim.verified_at && ` · verdict +${(claim.verified_at - claim.captured_at).toFixed(1)}s`}
+        </p>
+      )}
       {claim.explanation && <p className="claim__explanation">{claim.explanation}</p>}
       {!compact && onRecheck && claim.verdict !== 'pending' && !claim.deep_pending && (
         <button type="button" className="btn btn--ghost btn--small" onClick={() => onRecheck(claim.id)}>

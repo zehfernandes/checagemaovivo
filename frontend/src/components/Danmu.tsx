@@ -59,9 +59,13 @@ export function Danmu({ claims, isLive, currentTime, enabled }: Props) {
       const prev = seen.current.get(c.id)
       if (prev === c.verdict) continue
       seen.current.set(c.id, c.verdict)
+      if (prev !== undefined) {
+        // verdict (or deep result) for a claim we already showed: update the flying pill in place
+        updates.set(c.id, c.verdict)
+        continue
+      }
       // backlog (history from the shared channel / far behind the player): remember, don't fly
       if (isLive ? now - (c.revealAt ?? c.receivedAt) > 15_000 : c.start < currentTime - 20) continue
-      if (prev !== undefined) updates.set(c.id, c.verdict)
       if (prev === undefined || prev === 'pending') {
         if (prev === 'pending') continue
         const widthPx = c.text.length * CHAR_PX + PADDING_PX

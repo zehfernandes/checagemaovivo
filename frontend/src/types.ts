@@ -52,10 +52,10 @@ export type ServerMessage =
   | { type: 'pong' }
 
 export const VERDICT_LABEL: Record<Verdict, string> = {
-  pending: 'Checking…',
-  fake: 'Fake',
-  valid: 'Valid',
-  inconclusive: 'Inconclusive',
+  pending: 'Verificando…',
+  fake: 'Falso',
+  valid: 'Verdadeiro',
+  inconclusive: 'Inconclusivo',
 }
 
 export interface UsageSummary {

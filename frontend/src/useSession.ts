@@ -65,7 +65,7 @@ export function useSession() {
       ws.current = null
       setState((s) => {
         if (s === 'connecting' || s === 'resolving' || s === 'listening') {
-          setStatusText('Disconnected from backend')
+          setStatusText('Conexão com o servidor perdida')
           return 'error'
         }
         return s
@@ -85,7 +85,7 @@ export function useSession() {
         setProgress(null)
       }
       setState('connecting')
-      setStatusText(keep ? 'Re-syncing…' : 'Connecting…')
+      setStatusText(keep ? 'Ressincronizando…' : 'Conectando…')
       const socket = connect()
       const payload = JSON.stringify({ type: 'start', url, language: language || null, start_seconds: startSeconds, fresh, save })
       if (socket.readyState === WebSocket.OPEN) socket.send(payload)

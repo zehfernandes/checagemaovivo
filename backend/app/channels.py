@@ -93,7 +93,7 @@ class Channel:
         self.subscribers: set[asyncio.Queue] = set()
         self.transcripts: dict[str, dict] = {}
         self.claims: dict[str, dict] = {}
-        self.status = {"state": "idle", "message": "Idle"}
+        self.status = {"state": "idle", "message": "Pronto"}
         self.processed_to = 0.0
         self.complete = False
         self.pipeline: Pipeline | None = None
@@ -176,18 +176,18 @@ class Channel:
                                and self.processed_to >= self.info.duration - 2 * settings.chunk_seconds)
                 if reached_end:
                     self.complete = True
-                    self.status = {"state": "listening", "message": "Fully processed · served from cache"}
+                    self.status = {"state": "listening", "message": "Processado por completo · servido do cache"}
                     self._save("complete")
                 else:
                     self._save("stopped")
                     if self.subscribers and self._retries < 3:
                         self._retries += 1
-                        self.status = {"state": "resolving", "message": f"Audio stream dropped at {_mmss(self.processed_to)} — reconnecting ({self._retries}/3)…"}
+                        self.status = {"state": "resolving", "message": f"Áudio caiu em {_mmss(self.processed_to)} — reconectando ({self._retries}/3)…"}
                         asyncio.get_running_loop().call_later(3, lambda: asyncio.create_task(self.ensure_running(None, _retry=True)))
                     elif self.info.is_live:
-                        self.status = {"state": "ended", "message": "Live audio ended — press Start to reconnect"}
+                        self.status = {"state": "ended", "message": "Áudio da live terminou — clique em Iniciar para reconectar"}
                     else:
-                        self.status = {"state": "error", "message": f"Audio stream stopped at {_mmss(self.processed_to)} — press Start to resume"}
+                        self.status = {"state": "error", "message": f"Áudio parou em {_mmss(self.processed_to)} — clique em Iniciar para continuar"}
                 ev = {"type": "status", **self.status}
             elif ev.get("state") in ("listening", "resolving", "error", "ended"):
                 self.status = {"state": ev["state"], "message": ev.get("message", "")}
@@ -219,7 +219,7 @@ class Channel:
         self._language = language
         self.pipeline = self.manager.make_pipeline(self.emit, self.save)
         start = 0.0 if self.info.is_live else (self._start_override if self._start_override is not None else self.processed_to)
-        self.status = {"state": "resolving", "message": "Resolving stream…"}
+        self.status = {"state": "resolving", "message": "Abrindo o vídeo…"}
         self.broadcast({"type": "status", **self.status})
         self._save("processing")
 
@@ -242,7 +242,7 @@ class Channel:
             await asyncio.gather(self.run_task, return_exceptions=True)
         if self.pipeline:
             await self.pipeline.stop(keep_verifications=True)
-        self.status = {"state": "idle", "message": "Stopped"}
+        self.status = {"state": "idle", "message": "Parado"}
         self.broadcast({"type": "status", **self.status})
         if self.private:
             self.manager.private_channels.discard(self)

@@ -200,12 +200,12 @@ async def ws_endpoint(ws: WebSocket) -> None:
                     await ws.send_json({"type": "error", "message": e.errors()[0]["msg"]})
                     continue
                 await leave()
-                await ws.send_json({"type": "status", "state": "resolving", "message": "Resolving stream…"})
+                await ws.send_json({"type": "status", "state": "resolving", "message": "Abrindo o vídeo…"})
                 try:
                     channel = await channels.private(req.url, req.save) if req.fresh else await channels.get(req.url, req.save)
                 except Exception as e:  # noqa: BLE001
                     log.exception("resolve failed")
-                    await ws.send_json({"type": "status", "state": "error", "message": f"Could not resolve video: {e}"})
+                    await ws.send_json({"type": "status", "state": "error", "message": f"Não foi possível abrir o vídeo: {e}"})
                     continue
                 queue = channel.subscribe()
                 for ev in channel.snapshot():
@@ -215,7 +215,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
                                              start_seconds=req.start_seconds if req.fresh else None)
             elif kind == "stop":
                 await leave()
-                await ws.send_json({"type": "status", "state": "idle", "message": "Stopped"})
+                await ws.send_json({"type": "status", "state": "idle", "message": "Parado"})
             elif kind == "recheck":
                 if channel:
                     await channel.recheck(str(data.get("claim_id", "")))

@@ -7,12 +7,12 @@ interface Props {
   onRecheck?: (id: string) => void
 }
 
-const METHOD_LABEL = { cache: 'Cache', db: 'DB', web: 'Web', deep: 'Deep' } as const
+const METHOD_LABEL = { cache: 'memória', db: 'base de notícias', web: 'busca na web', deep: 'checagem profunda' } as const
 const METHOD_TITLE = {
-  cache: 'Reused the verdict of an identical claim settled earlier (no AI calls)',
-  db: 'Answered from the news database',
-  web: 'Answered via live web search',
-  deep: 'Answered by the deep check (stronger model, multiple searches)',
+  cache: 'Reaproveitou o veredito de uma afirmação idêntica já checada (sem chamadas de IA)',
+  db: 'Respondida pela base de notícias',
+  web: 'Respondida por busca na web',
+  deep: 'Respondida pela checagem profunda (modelo mais forte, várias buscas)',
 } as const
 
 export function ClaimCard({ claim, compact, onRecheck }: Props) {
@@ -23,34 +23,21 @@ export function ClaimCard({ claim, compact, onRecheck }: Props) {
           {claim.verdict === 'pending' && <span className="spinner" aria-hidden />}
           {VERDICT_LABEL[claim.verdict]}
         </span>
-        {claim.verdict !== 'pending' && (
-          <span className="claim__confidence">{Math.round(claim.confidence * 100)}%</span>
-        )}
+        {claim.verdict !== 'pending' && <span className="claim__confidence">{Math.round(claim.confidence * 100)}%</span>}
         {claim.method && (
-          <span className={`claim__method claim__method--${claim.method}`} title={METHOD_TITLE[claim.method]}>
+          <span className="claim__method" title={METHOD_TITLE[claim.method]}>
             {METHOD_LABEL[claim.method]}
           </span>
         )}
         {claim.deep_pending && (
-          <span className="claim__deep" title="Running a deeper check: stronger model, several web searches">
-            <span className="spinner" aria-hidden /> Deep check…
+          <span className="claim__deep" title="Rodando uma checagem mais profunda: modelo mais forte, várias buscas na web">
+            <span className="spinner" aria-hidden /> checagem profunda…
           </span>
         )}
         <span className="claim__time">{fmt(claim.start)}</span>
       </header>
       <p className="claim__text">“{claim.text}”</p>
-      {!compact && claim.captured_at && claim.extracted_at && (
-        <p className="claim__latency" title="Seconds after the audio arrived from YouTube (server-side)">
-          ⏱ claim +{(claim.extracted_at - claim.captured_at).toFixed(1)}s
-          {claim.verified_at && ` · verdict +${(claim.verified_at - claim.captured_at).toFixed(1)}s`}
-        </p>
-      )}
       {claim.explanation && <p className="claim__explanation">{claim.explanation}</p>}
-      {!compact && onRecheck && claim.verdict !== 'pending' && !claim.deep_pending && (
-        <button type="button" className="btn btn--ghost btn--small" onClick={() => onRecheck(claim.id)}>
-          Re-check
-        </button>
-      )}
       {!compact && claim.sources.length > 0 && (
         <ul className="claim__sources">
           {claim.sources.map((s) => (
@@ -61,6 +48,21 @@ export function ClaimCard({ claim, compact, onRecheck }: Props) {
             </li>
           ))}
         </ul>
+      )}
+      {!compact && (
+        <footer className="claim__footer">
+          {claim.captured_at && claim.extracted_at && (
+            <span className="claim__latency" title="Segundos depois de o áudio chegar do YouTube (medido no servidor)">
+              ⏱ +{(claim.extracted_at - claim.captured_at).toFixed(1)}s
+              {claim.verified_at && ` · veredito +${(claim.verified_at - claim.captured_at).toFixed(1)}s`}
+            </span>
+          )}
+          {onRecheck && claim.verdict !== 'pending' && !claim.deep_pending && (
+            <button type="button" className="link" onClick={() => onRecheck(claim.id)}>
+              rechecar
+            </button>
+          )}
+        </footer>
       )}
     </article>
   )

@@ -19,8 +19,12 @@ interface Metrics {
   per_method: Record<string, { correct: number; wrong: number; accuracy: number }>
 }
 
-const LABEL_TEXT: Record<Label, string> = { correct: 'Correct', wrong: 'Wrong verdict', not_claim: 'Not a claim', unsure: 'Unsure' }
+const LABEL_TEXT: Record<Label, string> = { correct: 'Correto', wrong: 'Veredito errado', not_claim: 'Não é afirmação', unsure: 'Não sei' }
 const FINALS: Final[] = ['fake', 'valid', 'inconclusive']
+const FILTER_TEXT: Record<string, string> = {
+  unlabelled: 'sem rótulo', all: 'todas', correct: 'corretas', wrong: 'erradas', not_claim: 'não é afirmação', unsure: 'não sei',
+  fake: 'falsas', valid: 'verdadeiras', inconclusive: 'inconclusivas',
+}
 
 export function Review() {
   const [runs, setRuns] = useState<Run[]>([])
@@ -71,7 +75,7 @@ export function Review() {
   }
 
   async function addMissed(seg: Segment) {
-    const claim = window.prompt('Claim that should have been checked (as a short factual sentence):', '')
+    const claim = window.prompt('Afirmação que deveria ter sido checada (uma frase factual curta):', '')
     if (!claim) return
     await fetch('/review/missed', { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ run, start: seg.start, segment: seg.text, claim }) })
@@ -95,23 +99,23 @@ export function Review() {
   return (
     <div className="app review">
       <header className="topbar">
-        <h1><span className="logo">●</span> Review <span className="muted">· offline labelling</span></h1>
+        <h1><span className="logo">●</span> Revisão <span className="muted">· rotulagem offline</span></h1>
         <select value={run} onChange={(e) => setRun(e.target.value)}>
-          {runs.map((r) => <option key={r.name} value={r.name}>{r.title} ({r.items} claims, {r.labelled} labelled)</option>)}
+          {runs.map((r) => <option key={r.name} value={r.name}>{r.title} ({r.items} afirmações, {r.labelled} rotuladas)</option>)}
         </select>
-        <a className="btn btn--ghost" href={`/review/export?run=${encodeURIComponent(run)}`} download>Download golden set (.jsonl)</a>
+        <a className="btn btn--ghost" href={`/review/export?run=${encodeURIComponent(run)}`} download>Baixar conjunto de referência (.jsonl)</a>
         <button type="button" className="btn btn--ghost" onClick={runEval} disabled={evaluating || !run}>
-          {evaluating ? 'Evaluating…' : 'Eval current pipeline'}
+          {evaluating ? 'Avaliando…' : 'Avaliar pipeline atual'}
         </button>
-        <a className="btn btn--ghost" href="#">← Live</a>
+        <a className="btn btn--ghost" href="#">← Ao vivo</a>
       </header>
 
       {metrics && (
         <div className="review__metrics">
-          <span><strong>{metrics.labelled}</strong>/{metrics.items} labelled</span>
-          <span>Extraction precision <strong>{pct(metrics.extraction_precision)}</strong></span>
-          <span>Extraction recall <strong>{pct(metrics.extraction_recall)}</strong> ({metrics.missed} missed)</span>
-          <span>Verdict accuracy <strong>{pct(metrics.verdict_accuracy)}</strong></span>
+          <span><strong>{metrics.labelled}</strong>/{metrics.items} rotuladas</span>
+          <span>Precisão da extração <strong>{pct(metrics.extraction_precision)}</strong></span>
+          <span>Cobertura da extração <strong>{pct(metrics.extraction_recall)}</strong> ({metrics.missed} perdidas)</span>
+          <span>Acerto dos vereditos <strong>{pct(metrics.verdict_accuracy)}</strong></span>
           {Object.entries(metrics.per_method).map(([m, v]) => (
             <span key={m}>{m}: <strong>{pct(v.accuracy)}</strong> ({v.correct + v.wrong})</span>
           ))}
@@ -121,18 +125,18 @@ export function Review() {
 
       <main className="review__main">
         <nav className="tabs">
-          <button className={tab === 'claims' ? 'active' : ''} onClick={() => setTab('claims')}>Claims ({items.length})</button>
-          <button className={tab === 'transcript' ? 'active' : ''} onClick={() => setTab('transcript')}>Transcript · mark missed ({missed.length})</button>
+          <button className={tab === 'claims' ? 'active' : ''} onClick={() => setTab('claims')}>Afirmações ({items.length})</button>
+          <button className={tab === 'transcript' ? 'active' : ''} onClick={() => setTab('transcript')}>Transcrição · marcar perdidas ({missed.length})</button>
         </nav>
         {tab === 'claims' ? (
           <>
             <div className="review__filters">
               {(['unlabelled', 'all', 'correct', 'wrong', 'not_claim', 'unsure', 'fake', 'valid', 'inconclusive'] as const).map((f) => (
-                <button key={f} className={filter === f ? 'active' : ''} onClick={() => setFilter(f)}>{f}</button>
+                <button key={f} className={filter === f ? 'active' : ''} onClick={() => setFilter(f)}>{FILTER_TEXT[f]}</button>
               ))}
             </div>
             <div className="review__list">
-              {visible.length === 0 && <p className="muted">Nothing here.</p>}
+              {visible.length === 0 && <p className="muted">Nada aqui.</p>}
               {visible.map((it) => <ReviewItem key={it.id} item={it} onSave={save} />)}
             </div>
           </>
@@ -140,17 +144,17 @@ export function Review() {
           <div className="review__list">
             {missed.length > 0 && (
               <div className="review__missed">
-                <strong>Missed claims</strong>
+                <strong>Afirmações perdidas</strong>
                 {missed.map((m) => (
                   <p key={m.id}><span className="transcript__time">{fmt(m.start)}</span> {m.claim}
-                    <button className="btn btn--ghost btn--small" onClick={() => removeMissed(m.id)}>remove</button></p>
+                    <button className="btn btn--ghost btn--small" onClick={() => removeMissed(m.id)}>remover</button></p>
                 ))}
               </div>
             )}
             {segments.map((s) => (
               <p key={s.idx} className="transcript__line review__segment">
                 <span className="transcript__time">{fmt(s.start)}</span>{s.text}
-                <button className="btn btn--ghost btn--small" onClick={() => addMissed(s)}>+ missed claim</button>
+                <button className="btn btn--ghost btn--small" onClick={() => addMissed(s)}>+ afirmação perdida</button>
               </p>
             ))}
           </div>
@@ -190,13 +194,13 @@ function ReviewItem({ item, onSave }: { item: Item; onSave: (i: Item, l: Label, 
       {open && (
         <div className="review__fix">
           <select value={correct} onChange={(e) => setCorrect(e.target.value as Final)}>
-            <option value="">Correct verdict…</option>
+            <option value="">Veredito correto…</option>
             {FINALS.map((v) => <option key={v} value={v}>{VERDICT_LABEL[v]}</option>)}
           </select>
-          <input placeholder="Source URL that proves it (goes into the news DB)" value={url} onChange={(e) => setUrl(e.target.value)} />
-          <input placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
+          <input placeholder="URL da fonte que comprova (entra na base de notícias)" value={url} onChange={(e) => setUrl(e.target.value)} />
+          <input placeholder="Observação (opcional)" value={note} onChange={(e) => setNote(e.target.value)} />
           <button type="button" className="btn" disabled={!correct}
-            onClick={() => onSave(item, 'wrong', { correct_verdict: correct || null, source_url: url, note })}>Save</button>
+            onClick={() => onSave(item, 'wrong', { correct_verdict: correct || null, source_url: url, note })}>Salvar</button>
         </div>
       )}
     </article>

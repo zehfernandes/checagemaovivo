@@ -54,13 +54,13 @@ class Pipeline:
 
     async def run(self, url: str, language: str | None, start_seconds: float, realtime: bool = True) -> None:
         usage.current.set(self.usage)  # child tasks inherit the context -> all calls of this run are metered
-        await self.emit({"type": "status", "state": "resolving", "message": "Resolving stream…"})
+        await self.emit({"type": "status", "state": "resolving", "message": "Abrindo o vídeo…"})
         if settings.provider == "mock" and not url.strip():
             info = StreamInfo(video_id="", title="Mock stream", is_live=True)
         else:
             info, media_url = await audio.resolve_stream(url)
         await self.emit({"type": "info", "info": info.model_dump()})
-        await self.emit({"type": "status", "state": "listening", "message": "Listening…"})
+        await self.emit({"type": "status", "state": "listening", "message": "Ouvindo…"})
 
         if settings.provider == "mock" and not url.strip():
             chunks = self._mock_chunks()
@@ -73,7 +73,7 @@ class Pipeline:
             # backpressure: never hold more than MAX_CONCURRENT_TRANSCRIPTIONS chunks in flight
             await self.transcribe_sem.acquire()
             self._spawn(self._handle_chunk(chunk, language))
-        await self.emit({"type": "status", "state": "ended", "message": "Stream ended"})
+        await self.emit({"type": "status", "state": "ended", "message": "Transmissão encerrada"})
 
     async def _mock_chunks(self):
         i = 0
@@ -88,7 +88,7 @@ class Pipeline:
             text = await self.transcriber.transcribe(chunk, language)
         except Exception as e:  # noqa: BLE001
             log.exception("transcription failed")
-            await self.emit({"type": "error", "message": f"Transcription failed: {e}"})
+            await self.emit({"type": "error", "message": f"Falha na transcrição: {e}"})
             return
         finally:
             self.transcribe_sem.release()
@@ -107,7 +107,7 @@ class Pipeline:
             claims = await self.checker.extract_claims(context, text, list(self.recent_claims), strict=self.save)
         except Exception as e:  # noqa: BLE001
             log.exception("claim extraction failed")
-            await self.emit({"type": "error", "message": f"Claim extraction failed: {e}"})
+            await self.emit({"type": "error", "message": f"Falha ao extrair afirmações: {e}"})
             return
         log.info("claims[%s] %.0fs: %s", self.run_id, chunk.start, claims)
         for claim_text in claims:
@@ -138,7 +138,7 @@ class Pipeline:
                 r = await self.checker.verify(claim.text, context)
             except Exception as e:  # noqa: BLE001
                 log.exception("verification failed")
-                r = VerifyResult(Verdict.INCONCLUSIVE, 0.0, f"Verification failed: {e}")
+                r = VerifyResult(Verdict.INCONCLUSIVE, 0.0, f"Falha na verificação: {e}")
         self._apply(claim, r)
         claim.verified_at = claim.verified_at or time.time()  # first settled verdict; deep/re-check keep it
         if r.verdict == Verdict.INCONCLUSIVE and settings.deep_check and not self.save:  # save mode: deep only via Re-check
@@ -162,7 +162,7 @@ class Pipeline:
         """Manual re-check from the UI: run the deep pass on an already-settled claim."""
         entry = self.claims.get(claim_id)
         if not entry:
-            await self.emit({"type": "error", "message": "Claim not found for re-check"})
+            await self.emit({"type": "error", "message": "Afirmação não encontrada"})
             return
         claim, context = entry
         if claim.deep_pending or claim.verdict == Verdict.PENDING:

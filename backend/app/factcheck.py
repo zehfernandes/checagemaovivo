@@ -77,7 +77,7 @@ and major news outlets). Classify as:
 - "inconclusive": evidence is insufficient, contradictory, outdated, the claim is a promise/opinion,
   or it is too vague to verify.
 Relative time expressions ("faltam sete dias", "ontem", "este ano") must be interpreted against TODAY,
-given in the input. Be fast. "explanation" is 1-2 plain sentences in the SAME LANGUAGE as the claim, without links or
+given in the input. Be fast. "explanation" is 1-2 plain sentences in Brazilian Portuguese (pt-BR), whatever the language of the claim, without links or
 citations (sources go in the "sources" array). Respond ONLY with JSON:
 {"verdict": "fake|valid|inconclusive", "confidence": 0.0-1.0, "explanation": "...",
  "sources": [{"title": "...", "url": "https://..."}]}"""
@@ -118,7 +118,7 @@ When in doubt between fake/valid and inconclusive, choose inconclusive with "suf
 deeper check can run. Interpret relative time expressions against TODAY, given in the input.
 Set "sufficient": true only when the evidence genuinely supports your fake/valid decision; otherwise
 false (a web search will then be performed). "used" lists the evidence numbers you relied on.
-"explanation" is 1-2 plain sentences in the SAME LANGUAGE as the claim, no links. Respond ONLY with JSON:
+"explanation" is 1-2 plain sentences in Brazilian Portuguese (pt-BR), whatever the language of the claim, no links. Respond ONLY with JSON:
 {"verdict": "fake|valid|inconclusive", "confidence": 0.0-1.0, "sufficient": true|false,
  "used": [1, 3], "explanation": "..."}"""
 

@@ -54,8 +54,24 @@ def _ytdlp_cmd() -> list[str]:
     return ["python3", "-m", "yt_dlp"]
 
 
-async def resolve_stream(url: str) -> tuple[StreamInfo, str]:
-    """Return stream metadata and a direct audio URL ffmpeg can read."""
+async def resolve_stream(url: str, attempts: int = 3) -> tuple[StreamInfo, str]:
+    """Return stream metadata and a direct audio URL ffmpeg can read.
+    YouTube intermittently answers "No video formats found!" / transient 403s; retry briefly."""
+    last: Exception | None = None
+    for i in range(attempts):
+        try:
+            return await _resolve_once(url)
+        except RuntimeError as e:
+            last = e
+            msg = str(e)
+            if "not a bot" in msg or "Private video" in msg or "unavailable" in msg.lower():
+                raise
+            log.warning("resolve_stream attempt %d/%d failed: %s", i + 1, attempts, msg[-160:])
+            await asyncio.sleep(1.5 * (i + 1))
+    raise last  # type: ignore[misc]
+
+
+async def _resolve_once(url: str) -> tuple[StreamInfo, str]:
     cmd = [*_ytdlp_cmd(), *shlex.split(settings.ytdlp_args), "-f", "bestaudio[protocol^=m3u8]/bestaudio/best",
            "-j", "--no-playlist", "--no-warnings", url]
     node = _node_path()

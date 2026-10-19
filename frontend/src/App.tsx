@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { ClaimCard } from './components/ClaimCard'
-import { adminHeaders, adminPassword } from './admin'
 import { Danmu } from './components/Danmu'
 import { Player } from './components/Player'
 import { useSession } from './useSession'
-import type { NewsStats, Verdict } from './types'
+import type { NewsStats, Room, Verdict } from './types'
 
 const DEFAULT_URL = 'https://www.youtube.com/watch?v=Amwukq3hviM'
 // A chunk's audio spans [captured_at - 8, captured_at] on the server clock. Measured on YouTube live:
@@ -29,36 +28,8 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState(0)
   const [tab, setTab] = useState<'recent' | 'all'>('recent')
   const [danmu, setDanmu] = useState(() => localStorage.getItem('danmu') !== 'off')
-  const [fresh, setFresh] = useState(false)
-  const [save, setSave] = useState(() => localStorage.getItem('save') === 'on')
   const [sideOpen, setSideOpen] = useState(() => localStorage.getItem('side') !== 'closed')
   const [details, setDetails] = useState(false)
-  const [admin, setAdmin] = useState(false)
-  const [pwd, setPwd] = useState('')
-  const [pwdError, setPwdError] = useState(false)
-  useEffect(() => {
-    fetch('/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: adminPassword() }) })
-      .then((r) => r.json()).then((d) => setAdmin(Boolean(d.ok))).catch(() => {})
-  }, [])
-  async function login(e: FormEvent) {
-    e.preventDefault()
-    const r = await fetch('/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: pwd }) })
-    const d = await r.json()
-    if (d.ok) {
-      localStorage.setItem('admin', pwd)
-      setAdmin(true)
-      setPwdError(false)
-    } else setPwdError(true)
-    setPwd('')
-  }
-  function logout() {
-    localStorage.removeItem('admin')
-    setAdmin(false)
-  }
-  async function override(id: string, verdict: 'fake' | 'valid' | 'inconclusive', explanation: string) {
-    await fetch('/admin/claim', { method: 'POST', headers: { 'content-type': 'application/json', ...adminHeaders() },
-      body: JSON.stringify({ url: url.trim(), claim_id: id, verdict, explanation }) })
-  }
   // recordings: show only what is said from the position where Start was pressed (no backlog dump)
   const [baseline, setBaseline] = useState(0)
   useEffect(() => localStorage.setItem('side', sideOpen ? 'open' : 'closed'), [sideOpen])
@@ -67,9 +38,39 @@ export default function App() {
   const [behind, setBehind] = useState<number | null>(null)
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => localStorage.setItem('danmu', danmu ? 'on' : 'off'), [danmu])
-  useEffect(() => localStorage.setItem('save', save ? 'on' : 'off'), [save])
   useEffect(() => localStorage.setItem('delay', String(delay)), [delay])
   const session = useSession()
+
+  // Rooms: broadcasts opened by the newsroom. When there are rooms, viewers pick one instead of pasting a URL.
+  const [rooms, setRooms] = useState<Room[] | null>(null)
+  const [roomId, setRoomId] = useState(() => new URLSearchParams(location.search).get('room') ?? '')
+  useEffect(() => {
+    let alive = true
+    const load = () => fetch('/rooms').then((r) => r.json()).then((d: Room[]) => alive && setRooms(d)).catch(() => alive && setRooms([]))
+    load()
+    const t = setInterval(load, 30_000)
+    return () => {
+      alive = false
+      clearInterval(t)
+    }
+  }, [])
+  const room = rooms?.find((r) => r.id === roomId) ?? rooms?.[0]
+  const roomUrl = room?.url
+  useEffect(() => {
+    if (!roomUrl) return
+    // oxlint-disable-next-line react-hooks/set-state-in-effect -- the room decides the URL
+    setUrl(roomUrl)
+    setBehind(null)
+    setBaseline(0)
+    session.start(roomUrl, language, 0, false, false, false)
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- (re)start only when the room changes
+  }, [roomUrl])
+  function pickRoom(id: string) {
+    setRoomId(id)
+    const p = new URLSearchParams(location.search)
+    p.set('room', id)
+    history.replaceState(null, '', `?${p}`)
+  }
 
   const typedId = extractVideoId(url)
   const videoId = session.info?.video_id || (typedId && typedId.length === 11 ? typedId : null)
@@ -91,7 +92,6 @@ export default function App() {
     capturedAt ? (capturedAt + delay + nudge + PLAYER_EDGE_LAG_S + session.clockOffset) * 1000 : 0
 
   const [news, setNews] = useState<NewsStats | null>(null)
-  const [refreshing, setRefreshing] = useState(false)
   useEffect(() => {
     let alive = true
     const load = () => fetch('/news').then((r) => r.json()).then((d) => alive && setNews(d)).catch(() => {})
@@ -102,15 +102,6 @@ export default function App() {
       clearInterval(t)
     }
   }, [])
-  async function refreshNews() {
-    setRefreshing(true)
-    try {
-      const r = await fetch('/news/refresh', { method: 'POST', headers: adminHeaders() })
-      setNews(await r.json())
-    } finally {
-      setRefreshing(false)
-    }
-  }
 
   // Processing is shared per video and cached server-side; for a recording we only reveal
   // what has been said up to the player position; for a delayed live, what the viewer heard.
@@ -153,7 +144,7 @@ export default function App() {
     else {
       setBehind(null)
       setBaseline(Math.max(0, currentTime))
-      session.start(url.trim(), language, currentTime, false, fresh, save)
+      session.start(url.trim(), language, currentTime)
     }
   }
 
@@ -172,16 +163,22 @@ export default function App() {
       <header className="topbar">
         <form className="controls" onSubmit={onSubmit}>
           <span className="logo" aria-hidden>●</span>
-          <input
-            type="url"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="Cole a URL de um vídeo ou live do YouTube"
-            disabled={running}
-            required
-          />
+          {rooms && rooms.length > 0 ? (
+            <select className="room-picker" value={room?.id ?? ''} onChange={(e) => pickRoom(e.target.value)} title="Transmissão">
+              {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+          ) : (
+            <input
+              type="url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="Cole a URL de um vídeo ou live do YouTube"
+              disabled={running}
+              required
+            />
+          )}
           <button type="submit" className={running ? 'btn btn--stop' : 'btn'}>
-            {running ? 'Parar' : admin ? 'Iniciar' : 'Assistir'}
+            {running ? 'Parar' : 'Assistir'}
           </button>
           <span className={`indicator status--${session.state}`}>
             {session.state === 'listening' && <span className="dot" />}
@@ -223,36 +220,13 @@ export default function App() {
               <span>Danmu sobre o vídeo</span>
               <input type="checkbox" checked={danmu} onChange={(e) => setDanmu(e.target.checked)} />
             </label>
-            {admin && <label className="menu__row menu__row--check" title="Mesma experiência com menos chamadas de IA: sem checagem profunda automática (o botão Rechecar continua funcionando), filtro de afirmações mais rígido, no máximo 6 afirmações/min.">
-              <span>Modo econômico</span>
-              <input type="checkbox" checked={save} onChange={(e) => setSave(e.target.checked)} disabled={running} />
-            </label>}
-            {admin && <label className="menu__row menu__row--check" title="Processa de novo do zero, em um canal privado, sem ler nem gravar o cache compartilhado. Serve para medir a latência real.">
-              <span>Sem cache (teste)</span>
-              <input type="checkbox" checked={fresh} onChange={(e) => setFresh(e.target.checked)} disabled={running} />
-            </label>}
             <div className="menu__row menu__row--info" title={news ? Object.entries(news.sources).map(([k, v]) => `${k}: ${v}`).join('\n') : ''}>
               <span>Base de notícias</span>
               <span>
                 {news ? `${news.docs} artigos` : '–'}
                 {news?.last_refresh && <span className="muted"> · {ago(news.last_refresh)}</span>}
-                {admin && <button type="button" className="link" onClick={refreshNews} disabled={refreshing || !news}>
-                  {refreshing ? 'atualizando…' : 'atualizar'}
-                </button>}
               </span>
             </div>
-            {admin && <a className="menu__row menu__row--link" href="#review">Revisão offline →</a>}
-            {admin ? (
-              <div className="menu__row menu__row--info">
-                <span>Administrador</span>
-                <button type="button" className="link" onClick={logout}>sair</button>
-              </div>
-            ) : (
-              <form className={`menu__row menu__row--login${pwdError ? ' menu__row--error' : ''}`} onSubmit={login}>
-                <input type="password" value={pwd} onChange={(e) => setPwd(e.target.value)} placeholder="Senha de administrador" />
-                <button type="submit" className="link" disabled={!pwd}>entrar</button>
-              </form>
-            )}
           </div>
         </details>
       </header>
@@ -331,7 +305,7 @@ export default function App() {
                 <p className="muted empty">{tab === 'recent' ? 'Nada nos últimos 5 minutos.' : 'As afirmações verificadas aparecem aqui.'}</p>
               )}
               {[...(tab === 'recent' ? recentClaims : visibleClaims)].reverse().map((c) => (
-                <ClaimCard key={c.id} claim={c} onRecheck={admin ? session.recheck : undefined} onOverride={admin ? override : undefined} />
+                <ClaimCard key={c.id} claim={c} />
               ))}
           </div>
         </aside>

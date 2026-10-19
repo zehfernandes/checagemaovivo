@@ -50,6 +50,9 @@ export function useSession() {
       case 'error':
         setError(msg.message)
         break
+      case 'claim_removed':
+        setClaims((cs) => cs.filter((c) => c.id !== msg.id))
+        break
       case 'progress':
         setProgress({ processed_to: msg.processed_to, complete: msg.complete, viewers: msg.viewers, fresh: !!msg.fresh,
           save: !!msg.save, usage: msg.usage ?? null })
@@ -77,7 +80,7 @@ export function useSession() {
   }, [handle])
 
   const start = useCallback(
-    (url: string, language: string, startSeconds = 0, keep = false, fresh = false, save = false) => {
+    (url: string, language: string, startSeconds = 0, keep = false, fresh = false, save = false, watch = false) => {
       setError(null)
       if (!keep) {
         setInfo(null)
@@ -88,7 +91,7 @@ export function useSession() {
       setState('connecting')
       setStatusText(keep ? 'Ressincronizando…' : 'Conectando…')
       const socket = connect()
-      const payload = JSON.stringify({ type: 'start', url, language: language || null, start_seconds: startSeconds, fresh, save, admin: adminPassword() })
+      const payload = JSON.stringify({ type: 'start', url, language: language || null, start_seconds: startSeconds, fresh, save, watch, admin: adminPassword() })
       if (socket.readyState === WebSocket.OPEN) socket.send(payload)
       else socket.addEventListener('open', () => socket.send(payload), { once: true })
     },

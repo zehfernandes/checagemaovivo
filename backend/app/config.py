@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     )
     factcheck_model: str = "gpt-4.1-mini"
     # Deeper second pass for claims the fast pass left inconclusive (stronger model, more searches).
-    deep_model: str = "gpt-5"
+    deep_model: str = "gpt-5-mini"
     deep_check: bool = True
     # "openai" (gpt-4.1-mini decides from DB evidence) or "jev" (TypeSafe Jev via Vercel AI Gateway, ~0.3 s).
     decider: str = "openai"

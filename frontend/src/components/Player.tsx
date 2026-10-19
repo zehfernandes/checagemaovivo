@@ -45,8 +45,16 @@ export function Player({ videoId, onTime, liveDelay = 0, onDelay }: Props) {
   // viewer hears each sentence when its verdict is already there. Pre-roll ads and the player
   // snapping back to the edge are handled by re-checking and re-seeking a few times; the final
   // distance behind the edge is reported via onDelay.
+  const prevDelay = useRef(0)
   useEffect(() => {
-    if (!liveDelay) return
+    const was = prevDelay.current
+    prevDelay.current = liveDelay
+    if (!liveDelay) {
+      // delay switched off on a stream we had pulled back: return to the live edge
+      const p = player.current
+      if (was && p && typeof p.getDuration === 'function' && p.getDuration() > 0) p.seekTo(p.getDuration(), true)
+      return
+    }
     let attempts = 0
     let seekedAt = 0
     const poll = window.setInterval(() => {

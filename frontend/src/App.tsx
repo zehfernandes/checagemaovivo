@@ -41,7 +41,8 @@ export default function App() {
   const videoId = session.info?.video_id || (typedId && typedId.length === 11 ? typedId : null)
   const running = session.state === 'connecting' || session.state === 'resolving' || session.state === 'listening'
   const isLive = session.info?.is_live ?? true
-  const delayed = running && isLive && delay > 0
+  // only once the server has confirmed a live stream (never seek a recording toward its end)
+  const delayed = running && session.info?.is_live === true && delay > 0
   useEffect(() => {
     if (!delayed) return
     const t = setInterval(() => setNow(Date.now()), 500)
@@ -163,7 +164,7 @@ export default function App() {
         <div className={`status status--${session.state}`}>
           {session.state === 'listening' && <span className="dot" />}
           {session.statusText || 'Idle'}
-          {session.info?.is_live && <span className="live-tag">LIVE</span>}
+          {running && session.info?.is_live && <span className="live-tag">LIVE</span>}
           {running && session.progress && (
             <span className="muted" title="Processing is shared by all viewers of this video and cached">
               {' '}· {session.progress.fresh ? 'fresh run · not cached' : `${session.progress.viewers} viewer${session.progress.viewers === 1 ? '' : 's'}`}

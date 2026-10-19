@@ -71,7 +71,7 @@ button { font: inherit; }
 .statusline {
   display: flex; align-items: center; gap: 8px; padding: 0 16px 8px; font-size: 12px; color: var(--muted); flex-wrap: wrap; min-height: 20px;
 }
-.indicator { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.indicator { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); white-space: nowrap; }
 .indicator.status--listening > span:nth-child(2) { color: var(--valid); }
 .indicator.status--error > span, .statusline.status--error > span:first-child { color: var(--fake); }
 .menu__button--on { color: var(--text); }

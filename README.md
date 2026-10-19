@@ -87,6 +87,12 @@ fly secrets set OPENAI_API_KEY=... ADMIN_PASSWORD=...
 fly deploy --remote-only                    # every release (builds on Fly, no local Docker needed)
 ```
 
+Continuous deploy: `.github/workflows/fly-deploy.yml` runs `flyctl deploy --remote-only` on every push to
+`main` (or manually via *Run workflow*). It only needs the repo secret `FLY_API_TOKEN`
+(`fly tokens create deploy -a debate-fact-check -x 8760h`), so contributors deploy by merging —
+no Fly account or production secrets required. Production secrets (`OPENAI_API_KEY`,
+`ADMIN_PASSWORD`, `AI_GATEWAY_API_KEY`) live only in Fly (`fly secrets set`).
+
 ## Configuration (`.env`)
 
 | Variable | Default | Description |

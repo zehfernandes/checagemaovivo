@@ -104,7 +104,7 @@ fly deploy --remote-only                    # every release (builds on Fly, no l
 | `NEWS_FEEDS` | built-in list | override feeds: `Name=url,Name2=url2` |
 | `TRANSCRIBE_MODEL` | `gpt-4o-mini-transcribe` | speech-to-text model |
 | `FACTCHECK_MODEL` | `gpt-4.1-mini` | model for claim extraction and verification |
-| `DEEP_MODEL` | `gpt-5` | reasoning model for the deep check (third level / Rechecar in `/admin`); `reasoning.effort=low`, no `temperature` |
+| `DEEP_MODEL` | `gpt-5-mini` | reasoning model for the deep check (third level / Rechecar in `/admin`); `reasoning.effort=low`, no `temperature` |
 | `DEEP_CHECK` | `true` | automatically run the deep check on claims the fast pass left inconclusive |
 | `DECIDER` | `openai` | `jev`: TypeSafe Jev decision model via Vercel AI Gateway decides from DB evidence in ~0.3 s and gates non-checkable claims; falls back to OpenAI on low confidence/error |
 | `AI_GATEWAY_API_KEY` | – | Vercel AI Gateway key (required for `DECIDER=jev`; the team needs paid credits) |

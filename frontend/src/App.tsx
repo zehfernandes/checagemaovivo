@@ -147,15 +147,31 @@ export default function App() {
     return c
   }, [visibleClaims])
 
+  function begin() {
+    setBehind(null)
+    setBaseline(Math.max(0, currentTime))
+    session.start(url.trim(), language, currentTime, false, fresh, save)
+  }
   function onSubmit(e: FormEvent) {
     e.preventDefault()
-    if (running) session.stop()
-    else {
-      setBehind(null)
-      setBaseline(Math.max(0, currentTime))
-      session.start(url.trim(), language, currentTime, false, fresh, save)
+    if (admin) {
+      if (running) session.stop()
+      else begin()
+    } else if (running) {
+      // visitor: a new URL simply switches the video being followed
+      session.stop()
     }
   }
+  // visitors have no button: checking starts by itself, follows the player and reconnects if the
+  // connection drops (e.g. server restart)
+  useEffect(() => {
+    if (admin || !url.trim()) return
+    const retry = session.state === 'error' && session.lost
+    if (session.state !== 'idle' && !retry) return
+    const t = setTimeout(begin, retry ? 2000 : 0)
+    return () => clearTimeout(t)
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [admin, session.state, session.lost, url])
 
   const progress = session.progress
   const clip = useMemo<[number, number] | undefined>(() => {
@@ -177,12 +193,14 @@ export default function App() {
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="Cole a URL de um vídeo ou live do YouTube"
-            disabled={running}
+            disabled={admin && running}
             required
           />
-          <button type="submit" className={running ? 'btn btn--stop' : 'btn'}>
-            {running ? 'Parar' : admin ? 'Iniciar' : 'Assistir'}
-          </button>
+          {admin && (
+            <button type="submit" className={running ? 'btn btn--stop' : 'btn'}>
+              {running ? 'Parar' : 'Iniciar'}
+            </button>
+          )}
           <span className={`indicator status--${session.state}`}>
             {session.state === 'listening' && <span className="dot" />}
             {running && <span>{session.statusText}</span>}

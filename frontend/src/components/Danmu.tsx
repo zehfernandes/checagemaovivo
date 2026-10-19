@@ -35,6 +35,7 @@ export function Danmu({ claims, isLive, currentTime, enabled }: Props) {
   const [bullets, setBullets] = useState<Bullet[]>([])
   const seen = useRef(new Map<string, Verdict>())
   const laneFree = useRef<number[]>(Array(LANES).fill(0))
+  const lastTime = useRef(0)
 
   useEffect(() => {
     const el = box.current
@@ -54,6 +55,18 @@ export function Danmu({ claims, isLive, currentTime, enabled }: Props) {
     const now = Date.now()
     const spawned: Bullet[] = []
     const updates = new Map<string, Verdict>()
+    if (!isLive) {
+      // the viewer dragged the timeline: pills in flight belong to the old position, and claims that
+      // left the visible window (seek backwards) must fly again when the player reaches them
+      const jumped = Math.abs(currentTime - lastTime.current) > 5
+      lastTime.current = currentTime
+      if (jumped) {
+        setBullets([])
+        laneFree.current.fill(0)
+      }
+      const ids = new Set(claims.map((c) => c.id))
+      for (const id of [...seen.current.keys()]) if (!ids.has(id)) seen.current.delete(id)
+    }
     for (const c of claims) {
       if (!isLive && c.start > currentTime + 1) continue
       const prev = seen.current.get(c.id)

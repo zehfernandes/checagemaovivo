@@ -12,6 +12,7 @@ function wsUrl() {
 export function useSession() {
   const ws = useRef<WebSocket | null>(null)
   const [state, setState] = useState<SessionState>('idle')
+  const [lost, setLost] = useState(false)
   const [statusText, setStatusText] = useState('')
   const [info, setInfo] = useState<StreamInfo | null>(null)
   const [transcript, setTranscript] = useState<TranscriptSegment[]>([])
@@ -67,6 +68,7 @@ export function useSession() {
       setState((s) => {
         if (s === 'connecting' || s === 'resolving' || s === 'listening') {
           setStatusText('Conexão com o servidor perdida')
+          setLost(true)
           return 'error'
         }
         return s
@@ -79,6 +81,7 @@ export function useSession() {
   const start = useCallback(
     (url: string, language: string, startSeconds = 0, keep = false, fresh = false, save = false) => {
       setError(null)
+      setLost(false)
       if (!keep) {
         setInfo(null)
         setTranscript([])
@@ -106,5 +109,5 @@ export function useSession() {
 
   useEffect(() => () => ws.current?.close(), [])
 
-  return { state, statusText, info, transcript, claims, error, progress, clockOffset, start, stop, recheck }
+  return { state, lost, statusText, info, transcript, claims, error, progress, clockOffset, start, stop, recheck }
 }

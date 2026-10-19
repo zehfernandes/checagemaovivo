@@ -81,6 +81,7 @@ class Pipeline:
         if not text:
             return
         seg = TranscriptSegment(id=f"seg-{self.run_id}-{chunk.index}", text=text, start=chunk.start, end=chunk.end)
+        log.info("transcript[%s] %.0fs: %s", self.run_id, chunk.start, text)
         await self.emit({"type": "transcript", "segment": seg.model_dump()})
 
         context = " ".join(self.context)
@@ -91,6 +92,7 @@ class Pipeline:
             log.exception("claim extraction failed")
             await self.emit({"type": "error", "message": f"Claim extraction failed: {e}"})
             return
+        log.info("claims[%s] %.0fs: %s", self.run_id, chunk.start, claims)
         for claim_text in claims:
             self.recent_claims.append(claim_text)
             claim = Claim(

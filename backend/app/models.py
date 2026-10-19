@@ -26,6 +26,7 @@ class Claim(BaseModel):
     start: float
     end: float
     speaker: str | None = None
+    method: Literal["db", "web"] | None = None
 
 
 class TranscriptSegment(BaseModel):

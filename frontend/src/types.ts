@@ -14,6 +14,7 @@ export interface Claim {
   sources: Source[]
   start: number
   end: number
+  method?: 'db' | 'web' | null
   receivedAt: number
   settledAt?: number
 }
@@ -47,4 +48,11 @@ export const VERDICT_LABEL: Record<Verdict, string> = {
   fake: 'Fake',
   valid: 'Valid',
   inconclusive: 'Inconclusive',
+}
+
+export interface NewsStats {
+  docs: number
+  chunks: number
+  sources: Record<string, number>
+  last_refresh: number | null
 }

@@ -1,10 +1,10 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { ClaimCard } from './components/ClaimCard'
 import { Overlay } from './components/Overlay'
 import { Player } from './components/Player'
 import { TranscriptRail } from './components/TranscriptRail'
 import { useSession } from './useSession'
-import type { Verdict } from './types'
+import type { NewsStats, Verdict } from './types'
 
 const DEFAULT_URL = 'https://www.youtube.com/watch?v=Amwukq3hviM'
 
@@ -28,6 +28,40 @@ export default function App() {
 
   const videoId = session.info?.video_id || extractVideoId(url)
   const running = session.state === 'connecting' || session.state === 'resolving' || session.state === 'listening'
+  const isLive = session.info?.is_live ?? true
+
+  const [news, setNews] = useState<NewsStats | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
+  useEffect(() => {
+    let alive = true
+    const load = () => fetch('/news').then((r) => r.json()).then((d) => alive && setNews(d)).catch(() => {})
+    load()
+    const t = setInterval(load, 60_000)
+    return () => {
+      alive = false
+      clearInterval(t)
+    }
+  }, [])
+  async function refreshNews() {
+    setRefreshing(true)
+    try {
+      const r = await fetch('/news/refresh', { method: 'POST' })
+      setNews(await r.json())
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  // Recorded video: if the viewer seeks, restart processing from the new position.
+  const lastTime = useRef(0)
+  useEffect(() => {
+    const jumped = Math.abs(currentTime - lastTime.current) > 5
+    lastTime.current = currentTime
+    if (jumped && running && session.state === 'listening' && !isLive) {
+      session.start(url.trim(), language, currentTime, true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentTime])
 
   const counts = useMemo(() => {
     const c: Record<Verdict, number> = { pending: 0, fake: 0, valid: 0, inconclusive: 0 }
@@ -38,7 +72,7 @@ export default function App() {
   function onSubmit(e: FormEvent) {
     e.preventDefault()
     if (running) session.stop()
-    else session.start(url.trim(), language)
+    else session.start(url.trim(), language, currentTime)
   }
 
   return (
@@ -71,6 +105,14 @@ export default function App() {
           {session.statusText || 'Idle'}
           {session.info?.is_live && <span className="live-tag">LIVE</span>}
         </div>
+        <div className="news-pill" title={news ? Object.entries(news.sources).map(([k, v]) => `${k}: ${v}`).join('\n') : ''}>
+          <span className="news-pill__label">News DB</span>
+          <strong>{news ? news.docs : '–'}</strong> articles
+          {news?.last_refresh && <span className="muted"> · {ago(news.last_refresh)}</span>}
+          <button type="button" className="btn btn--ghost" onClick={refreshNews} disabled={refreshing || !news}>
+            {refreshing ? 'Updating…' : 'Update'}
+          </button>
+        </div>
       </header>
 
       {session.error && <div className="banner banner--error">{session.error}</div>}
@@ -82,7 +124,7 @@ export default function App() {
           ) : (
             <div className="player player--empty">Paste a YouTube URL to begin</div>
           )}
-          <Overlay claims={session.claims} isLive={session.info?.is_live ?? true} currentTime={currentTime} />
+          <Overlay claims={session.claims} isLive={isLive} currentTime={currentTime} />
           <div className="scoreboard">
             <Score label="Fake" n={counts.fake} kind="fake" />
             <Score label="Valid" n={counts.valid} kind="valid" />
@@ -114,6 +156,13 @@ export default function App() {
       </main>
     </div>
   )
+}
+
+function ago(ts: number) {
+  const m = Math.round((Date.now() / 1000 - ts) / 60)
+  if (m < 1) return 'just now'
+  if (m < 60) return `${m} min ago`
+  return `${Math.round(m / 60)} h ago`
 }
 
 function Score({ label, n, kind }: { label: string; n: number; kind: Verdict }) {

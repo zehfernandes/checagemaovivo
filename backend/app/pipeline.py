@@ -11,7 +11,7 @@ from collections.abc import Awaitable, Callable
 
 from . import audio
 from .config import settings
-from .factcheck import FactChecker
+from .factcheck import FactChecker, VerifyResult
 from .models import Claim, StreamInfo, TranscriptSegment, Verdict
 from .transcribe import Transcriber
 
@@ -104,13 +104,12 @@ class Pipeline:
     async def _verify(self, claim: Claim, context: str) -> None:
         async with self.verify_sem:
             try:
-                verdict, confidence, explanation, sources = await self.checker.verify(claim.text, context)
+                r = await self.checker.verify(claim.text, context)
             except Exception as e:  # noqa: BLE001
                 log.exception("verification failed")
-                verdict, confidence, explanation, sources = (
-                    Verdict.INCONCLUSIVE, 0.0, f"Verification failed: {e}", [])
-        claim.verdict, claim.confidence, claim.explanation, claim.sources = (
-            verdict, confidence, explanation, sources)
+                r = VerifyResult(Verdict.INCONCLUSIVE, 0.0, f"Verification failed: {e}")
+        claim.verdict, claim.confidence, claim.explanation, claim.sources, claim.method = (
+            r.verdict, r.confidence, r.explanation, r.sources, r.method)
         await self.emit({"type": "claim", "claim": claim.model_dump()})
 
     async def stop(self) -> None:

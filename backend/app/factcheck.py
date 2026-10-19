@@ -1,27 +1,42 @@
 """Two-stage fact-checking.
 
 Stage 1 (fast, no tools): extract check-worthy factual claims from the newest
-transcript segment. Stage 2 (slower, web search): verify each claim and label it
-fake / valid / inconclusive.
+transcript segment. Stage 2: verify each claim and label it fake / valid /
+inconclusive — first against the local news DB (fast, curated), falling back to
+live web search when the DB has nothing conclusive; pages found by web search are
+written back into the DB.
 """
 import asyncio
 import json
 import logging
 import random
 import re
+import time
+from dataclasses import dataclass, field
 from typing import Protocol
+from urllib.parse import urlparse
 
 from openai import AsyncOpenAI
 
 from .config import settings
 from .models import Source, Verdict
+from .news import Evidence, NewsStore
 
 log = logging.getLogger(__name__)
 
 
+@dataclass
+class VerifyResult:
+    verdict: Verdict
+    confidence: float
+    explanation: str
+    sources: list[Source] = field(default_factory=list)
+    method: str = "web"
+
+
 class FactChecker(Protocol):
     async def extract_claims(self, context: str, latest: str, recent_claims: list[str]) -> list[str]: ...
-    async def verify(self, claim: str, context: str) -> tuple[Verdict, float, str, list[Source]]: ...
+    async def verify(self, claim: str, context: str) -> VerifyResult: ...
 
 
 EXTRACT_SYSTEM = """You are a fact-checking assistant watching a live political debate / broadcast.
@@ -48,10 +63,28 @@ and major news outlets). Classify as:
 - "valid": the claim is accurate or essentially accurate according to reliable evidence.
 - "inconclusive": evidence is insufficient, contradictory, outdated, the claim is a promise/opinion,
   or it is too vague to verify.
-Be fast. "explanation" is 1-2 plain sentences in the SAME LANGUAGE as the claim, without links or
+Relative time expressions ("faltam sete dias", "ontem", "este ano") must be interpreted against TODAY,
+given in the input. Be fast. "explanation" is 1-2 plain sentences in the SAME LANGUAGE as the claim, without links or
 citations (sources go in the "sources" array). Respond ONLY with JSON:
 {"verdict": "fake|valid|inconclusive", "confidence": 0.0-1.0, "explanation": "...",
  "sources": [{"title": "...", "url": "https://..."}]}"""
+
+
+VERIFY_DB_SYSTEM = """You are a rigorous, neutral fact-checker working live during a political debate.
+Decide whether the CLAIM is TRUE ABOUT THE REAL WORLD using ONLY the numbered EVIDENCE excerpts
+(from trusted news outlets, fact-checkers and official sources). The transcript context only
+disambiguates the claim; the fact that someone said it is NOT evidence.
+Classify as:
+- "fake": the evidence shows the claim is false or substantially misleading.
+- "valid": the evidence shows the claim is accurate or essentially accurate.
+- "inconclusive": the evidence does not settle it (off-topic, partial, outdated, or the claim is
+  a promise/opinion/too vague).
+Interpret relative time expressions against TODAY, given in the input.
+Set "sufficient": true only when the evidence genuinely supports your fake/valid decision; otherwise
+false (a web search will then be performed). "used" lists the evidence numbers you relied on.
+"explanation" is 1-2 plain sentences in the SAME LANGUAGE as the claim, no links. Respond ONLY with JSON:
+{"verdict": "fake|valid|inconclusive", "confidence": 0.0-1.0, "sufficient": true|false,
+ "used": [1, 3], "explanation": "..."}"""
 
 
 CLAIMS_SCHEMA = {
@@ -86,6 +119,22 @@ def _add_source(sources: list[Source], title: str, url: str, limit: int = 4) -> 
     sources.append(Source(title=title.strip(), url=key))
 
 
+def _today() -> str:
+    return time.strftime("%Y-%m-%d (%A)", time.gmtime())
+
+
+def _parse_verdict(data: dict) -> tuple[Verdict, float]:
+    verdict_raw = str(data.get("verdict", "inconclusive")).lower()
+    verdict = Verdict(verdict_raw) if verdict_raw in {v.value for v in Verdict} else Verdict.INCONCLUSIVE
+    if verdict == Verdict.PENDING:
+        verdict = Verdict.INCONCLUSIVE
+    try:
+        confidence = max(0.0, min(1.0, float(data.get("confidence", 0.5))))
+    except (TypeError, ValueError):
+        confidence = 0.5
+    return verdict, confidence
+
+
 def _parse_json(text: str) -> dict:
     text = text.strip()
     m = re.search(r"\{.*\}", text, re.S)
@@ -98,14 +147,19 @@ def _parse_json(text: str) -> dict:
 
 
 class OpenAIFactChecker:
-    def __init__(self, client: AsyncOpenAI, model: str):
+    def __init__(self, client: AsyncOpenAI, model: str, store: NewsStore | None = None,
+                 min_similarity: float = 0.55):
         self.client = client
         self.model = model
+        self.store = store
+        self.min_similarity = min_similarity
+        self._bg: set[asyncio.Task] = set()
 
     async def extract_claims(self, context: str, latest: str, recent_claims: list[str]) -> list[str]:
         if not latest.strip():
             return []
         user = (
+            f"TODAY: {_today()}\n"
             f"CONTEXT (previous segments):\n{context or '(none)'}\n\n"
             f"LATEST SEGMENT:\n{latest}\n\n"
             f"RECENT CLAIMS (already extracted):\n" + ("\n".join(f"- {c}" for c in recent_claims) or "(none)")
@@ -121,8 +175,58 @@ class OpenAIFactChecker:
         claims = [c.strip() for c in data.get("claims", []) if isinstance(c, str) and c.strip()]
         return claims[:2]
 
-    async def verify(self, claim: str, context: str) -> tuple[Verdict, float, str, list[Source]]:
-        user = f"CLAIM: {claim}\n\nTRANSCRIPT CONTEXT: {context[-800:]}"
+    async def verify(self, claim: str, context: str) -> VerifyResult:
+        """First level: local news DB. Second level (fallback): live web search + write-back."""
+        t0 = time.monotonic()
+        if self.store is not None:
+            try:
+                evidence = [e for e in await self.store.search(claim, k=5) if e.score >= self.min_similarity]
+            except Exception:  # noqa: BLE001
+                log.exception("news DB search failed")
+                evidence = []
+            if evidence:
+                result = await self._verify_with_evidence(claim, context, evidence)
+                if result is not None:
+                    log.info("verify[db] %.1fs top=%.2f %s -> %s", time.monotonic() - t0,
+                             evidence[0].score, claim[:60], result.verdict.value)
+                    return result
+        result = await self._verify_with_web(claim, context)
+        log.info("verify[web] %.1fs %s -> %s", time.monotonic() - t0, claim[:60], result.verdict.value)
+        if self.store is not None:
+            summary = f"{claim}\n\nVeredito da busca na web: {result.verdict.value} — {result.explanation}"
+            for src in result.sources:
+                self._spawn(self.store.add_url(src.url, src.title, source=urlparse(src.url).netloc,
+                                               fallback_text=summary))
+        return result
+
+    def _spawn(self, coro) -> None:
+        t = asyncio.create_task(coro)
+        self._bg.add(t)
+        t.add_done_callback(self._bg.discard)
+
+    async def _verify_with_evidence(self, claim: str, context: str, evidence: list[Evidence]) -> VerifyResult | None:
+        blocks = []
+        for i, e in enumerate(evidence, 1):
+            when = time.strftime("%Y-%m-%d", time.gmtime(e.published)) if e.published else "date unknown"
+            flag = " [unverified summary from an earlier web search — weak evidence]" if e.kind == "web-summary" else ""
+            blocks.append(f"[{i}] {e.source} — {e.title} ({when}){flag}\n{e.text[:1200]}")
+        user = (f"TODAY: {_today()}\nCLAIM: {claim}\n\nTRANSCRIPT CONTEXT: {context[-600:]}\n\n"
+                f"EVIDENCE:\n\n" + "\n\n".join(blocks))
+        res = await self.client.responses.create(
+            model=self.model, instructions=VERIFY_DB_SYSTEM, input=user, temperature=0)
+        data = _parse_json(res.output_text)
+        verdict, confidence = _parse_verdict(data)
+        if verdict == Verdict.INCONCLUSIVE or not data.get("sufficient", True):
+            return None
+        used = [int(i) for i in data.get("used", []) if str(i).isdigit() and 1 <= int(i) <= len(evidence)]
+        picked = [evidence[i - 1] for i in used] or evidence[:2]
+        sources: list[Source] = []
+        for e in picked:
+            _add_source(sources, e.title or e.source, e.url)
+        return VerifyResult(verdict, confidence, _clean_explanation(str(data.get("explanation", ""))), sources, "db")
+
+    async def _verify_with_web(self, claim: str, context: str) -> VerifyResult:
+        user = f"TODAY: {_today()}\nCLAIM: {claim}\n\nTRANSCRIPT CONTEXT: {context[-800:]}"
         res = await self.client.responses.create(
             model=self.model,
             instructions=VERIFY_SYSTEM,
@@ -131,14 +235,7 @@ class OpenAIFactChecker:
             temperature=0,
         )
         data = _parse_json(res.output_text)
-        verdict_raw = str(data.get("verdict", "inconclusive")).lower()
-        verdict = Verdict(verdict_raw) if verdict_raw in {v.value for v in Verdict} else Verdict.INCONCLUSIVE
-        if verdict == Verdict.PENDING:
-            verdict = Verdict.INCONCLUSIVE
-        try:
-            confidence = max(0.0, min(1.0, float(data.get("confidence", 0.5))))
-        except (TypeError, ValueError):
-            confidence = 0.5
+        verdict, confidence = _parse_verdict(data)
         sources: list[Source] = []
         for item in data.get("sources", []) or []:
             if isinstance(item, dict) and item.get("url"):
@@ -150,7 +247,7 @@ class OpenAIFactChecker:
                     url = getattr(ann, "url", None)
                     if url:
                         _add_source(sources, getattr(ann, "title", "") or "", url)
-        return verdict, confidence, _clean_explanation(str(data.get("explanation", ""))), sources
+        return VerifyResult(verdict, confidence, _clean_explanation(str(data.get("explanation", ""))), sources, "web")
 
 
 class MockFactChecker:
@@ -160,7 +257,7 @@ class MockFactChecker:
             return []
         return [latest.strip()]
 
-    async def verify(self, claim: str, context: str) -> tuple[Verdict, float, str, list[Source]]:
+    async def verify(self, claim: str, context: str) -> VerifyResult:
         await asyncio.sleep(random.uniform(2, 5))
         verdict = random.choice([Verdict.FAKE, Verdict.VALID, Verdict.INCONCLUSIVE])
         explanations = {
@@ -168,15 +265,16 @@ class MockFactChecker:
             Verdict.VALID: "Confirmado por fontes oficiais.",
             Verdict.INCONCLUSIVE: "Não há dados suficientes para confirmar ou refutar.",
         }
-        return (
+        return VerifyResult(
             verdict,
             round(random.uniform(0.55, 0.95), 2),
             explanations[verdict],
             [Source(title="Fonte de exemplo", url="https://example.com/fact-check")],
+            random.choice(["db", "web"]),
         )
 
 
-def make_factchecker(client: AsyncOpenAI | None) -> FactChecker:
+def make_factchecker(client: AsyncOpenAI | None, store: NewsStore | None = None) -> FactChecker:
     if settings.provider == "openai" and client:
-        return OpenAIFactChecker(client, settings.factcheck_model)
+        return OpenAIFactChecker(client, settings.factcheck_model, store, settings.news_min_similarity)
     return MockFactChecker()

@@ -68,13 +68,15 @@ export function useSession() {
   }, [handle])
 
   const start = useCallback(
-    (url: string, language: string, startSeconds = 0) => {
+    (url: string, language: string, startSeconds = 0, keep = false) => {
       setError(null)
-      setInfo(null)
-      setTranscript([])
-      setClaims([])
+      if (!keep) {
+        setInfo(null)
+        setTranscript([])
+        setClaims([])
+      }
       setState('connecting')
-      setStatusText('Connecting…')
+      setStatusText(keep ? 'Re-syncing…' : 'Connecting…')
       const socket = connect()
       const payload = JSON.stringify({ type: 'start', url, language: language || null, start_seconds: startSeconds })
       if (socket.readyState === WebSocket.OPEN) socket.send(payload)

@@ -17,6 +17,11 @@ export function ClaimCard({ claim, compact }: Props) {
         {claim.verdict !== 'pending' && (
           <span className="claim__confidence">{Math.round(claim.confidence * 100)}%</span>
         )}
+        {claim.method && (
+          <span className={`claim__method claim__method--${claim.method}`} title={claim.method === 'db' ? 'Answered from the news database' : 'Answered via live web search'}>
+            {claim.method === 'db' ? 'DB' : 'Web'}
+          </span>
+        )}
         <span className="claim__time">{fmt(claim.start)}</span>
       </header>
       <p className="claim__text">“{claim.text}”</p>

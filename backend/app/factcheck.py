@@ -105,6 +105,11 @@ Federal vs. Dívida Bruta do Governo Geral, PIB nominal vs. real, desemprego PNA
 "fake": say which metric it fits and answer "valid" (if it fits one) or "inconclusive", never "fake"
 just because another series gives a different number. Reserve confidence above 0.9 for facts settled
 by primary sources; a single news article is not enough for 0.9+.
+Exaggeration, rounding or loose wording around a TRUE core fact (e.g. "12 anos" when it is 11.8,
+"56%" when a reputable series says 57%, "todos os roubos caíram" when most categories fell) is "valid"
+with confidence <= 0.75 and the caveat stated in the explanation — NOT "fake". Reserve "fake" for a
+claim whose central fact (number, date, person, event, direction) is wrong, or whose framing inverts
+the meaning. Do not grade the speaker's intent, only the fact.
 Relative time expressions ("faltam sete dias", "ontem", "este ano") must be interpreted against TODAY,
 given in the input. Be fast. "explanation" is 1-2 plain sentences in Brazilian Portuguese (pt-BR), whatever the language of the claim, without links or
 citations (sources go in the "sources" array). Respond ONLY with JSON:
@@ -128,6 +133,9 @@ that a fast first pass left inconclusive. Work carefully:
    "fake": say which metric it fits and answer "valid" (if it fits one) or "inconclusive", never "fake"
    just because another series gives a different number. Reserve confidence above 0.9 for facts settled
    by primary sources; a single news article is not enough for 0.9+.
+4. Exaggeration, rounding or loose wording around a TRUE core fact is "valid" with confidence <= 0.75 and
+   the caveat in the explanation — NOT "fake". "fake" is for a wrong central fact (number, date, person,
+   event, direction) or a framing that inverts the meaning.
 Interpret relative time expressions against TODAY. "explanation" is 2-3 plain sentences in the SAME
 LANGUAGE as the claim, no links or citations (sources go in the array). Respond ONLY with JSON:
 {"verdict": "fake|valid|inconclusive", "confidence": 0.0-1.0, "explanation": "...",
@@ -193,11 +201,11 @@ def _today() -> str:
     return time.strftime("%Y-%m-%d (%A)", time.gmtime())
 
 
-def _gen_params(model: str) -> dict:
-    """Reasoning models (gpt-5*, o*) reject `temperature`; keep their thinking short instead."""
+def _gen_params(model: str, effort: str = "low") -> dict:
+    """Reasoning models (gpt-5*, o*) reject `temperature`; they take a reasoning effort instead."""
     m = model.lower()
     if m.startswith(("gpt-5", "o1", "o3", "o4")):
-        return {"reasoning": {"effort": "low"}}
+        return {"reasoning": {"effort": effort}}
     return {"temperature": 0}
 
 
@@ -226,10 +234,14 @@ def _parse_json(text: str) -> dict:
 
 class OpenAIFactChecker:
     def __init__(self, client: AsyncOpenAI, model: str, store: NewsStore | None = None,
-                 min_similarity: float = 0.55, deep_model: str | None = None):
+                 min_similarity: float = 0.55, deep_model: str | None = None, verdict_model: str | None = None,
+                 verdict_effort: str = "low", deep_effort: str = "low"):
         self.client = client
         self.model = model
-        self.deep_model = deep_model or model
+        self.verdict_model = verdict_model or model
+        self.verdict_effort = verdict_effort
+        self.deep_model = deep_model or self.verdict_model
+        self.deep_effort = deep_effort
         self.jev: JevDecider | None = None
         self.store = store
         self.min_similarity = min_similarity
@@ -371,8 +383,8 @@ class OpenAIFactChecker:
     async def deep_verify(self, claim: str, context: str) -> VerifyResult:
         """Third level: slower, stronger pass for claims left inconclusive (or a manual re-check)."""
         t0 = time.monotonic()
-        result = await self._verify_with_web(claim, context, model=self.deep_model, system=DEEP_SYSTEM,
-                                             context_size="high", method="deep")
+        result = await self._verify_with_web(claim, context, model=self.deep_model, effort=self.deep_effort,
+                                             system=DEEP_SYSTEM, context_size="high", method="deep")
         log.info("verify[deep] %.1fs %s -> %s", time.monotonic() - t0, claim[:60], result.verdict.value)
         self._write_back(claim, result)
         self._remember(claim, await self._claim_vec(claim), result)
@@ -449,17 +461,18 @@ class OpenAIFactChecker:
         return VerifyResult(verdict, round(d.probabilities.get(d.verdict, 0), 2), explanation, sources, "db"), False
 
     async def _verify_with_web(self, claim: str, context: str, *, model: str | None = None,
-                               system: str = VERIFY_SYSTEM, context_size: str = "low",
-                               method: str = "web") -> VerifyResult:
+                               effort: str | None = None, system: str = VERIFY_SYSTEM,
+                               context_size: str = "low", method: str = "web") -> VerifyResult:
         user = f"TODAY: {_today()}\nCLAIM: {claim}\n\nTRANSCRIPT CONTEXT: {context[-800:]}"
+        model = model or self.verdict_model
         res = await self.client.responses.create(
-            model=model or self.model,
+            model=model,
             instructions=system,
             input=user,
             tools=[{"type": "web_search_preview", "search_context_size": context_size}],
-            **_gen_params(model or self.model),
+            **_gen_params(model, effort or self.verdict_effort),
         )
-        usage.track(model or self.model, res)
+        usage.track(model, res)
         data = _parse_json(res.output_text)
         verdict, confidence = _parse_verdict(data)
         sources: list[Source] = []
@@ -508,7 +521,9 @@ class MockFactChecker:
 
 def make_factchecker(client: AsyncOpenAI | None, store: NewsStore | None = None) -> FactChecker:
     if settings.provider == "openai" and client:
-        checker = OpenAIFactChecker(client, settings.factcheck_model, store, settings.news_min_similarity, deep_model=settings.deep_model)
+        checker = OpenAIFactChecker(client, settings.factcheck_model, store, settings.news_min_similarity,
+                                    deep_model=settings.deep_model, verdict_model=settings.verdict_model,
+                                    verdict_effort=settings.verdict_effort, deep_effort=settings.deep_effort)
         if settings.decider == "jev" and settings.ai_gateway_api_key:
             checker.jev = JevDecider(settings.ai_gateway_api_key, settings.jev_model)
         return checker

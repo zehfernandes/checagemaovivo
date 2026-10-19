@@ -21,8 +21,12 @@ class Settings(BaseSettings):
         "Dark Horse, fundo partidário, PL, PT, Alckmin, Vorcaro negou, R$ 134 milhões."
     )
     factcheck_model: str = "gpt-4.1-mini"
+    # Verdict model for the web-search pass; gpt-5 models take a reasoning effort instead of temperature.
+    verdict_model: str = "gpt-5-mini"
+    verdict_effort: str = "low"
     # Deeper second pass for claims the fast pass left inconclusive (stronger model, more searches).
     deep_model: str = "gpt-5-mini"
+    deep_effort: str = "low"
     deep_check: bool = True
     # "openai" (gpt-4.1-mini decides from DB evidence) or "jev" (TypeSafe Jev via Vercel AI Gateway, ~0.3 s).
     decider: str = "openai"

@@ -27,7 +27,7 @@ export default function App() {
   const [url, setUrl] = useState(DEFAULT_URL)
   const [language, setLanguage] = useState('pt')
   const [currentTime, setCurrentTime] = useState(0)
-  const [tab, setTab] = useState<'claims' | 'transcript'>('claims')
+  const [tab, setTab] = useState<'recent' | 'all' | 'transcript'>('recent')
   const [danmu, setDanmu] = useState(() => localStorage.getItem('danmu') !== 'off')
   const [fresh, setFresh] = useState(false)
   const [save, setSave] = useState(() => localStorage.getItem('save') === 'on')
@@ -113,6 +113,12 @@ export default function App() {
       verdict: avg(recent.filter((c) => c.verified_at).map((c) => c.verified_at! - c.captured_at!)),
     }
   }, [session.claims])
+
+  // last 5 minutes of the video (stream time), newest first
+  const recentClaims = useMemo(() => {
+    const latest = visibleClaims.reduce((m, c) => Math.max(m, c.start), 0)
+    return visibleClaims.filter((c) => c.start >= latest - 300)
+  }, [visibleClaims])
 
   const counts = useMemo(() => {
     const c: Record<Verdict, number> = { pending: 0, fake: 0, valid: 0, inconclusive: 0 }
@@ -277,17 +283,22 @@ export default function App() {
         {sideOpen && (
         <aside className="side">
           <nav className="tabs">
-            <button className={tab === 'claims' ? 'active' : ''} onClick={() => setTab('claims')}>
-              Afirmações {visibleClaims.length > 0 && <span className="muted">{visibleClaims.length}</span>}
+            <button className={tab === 'recent' ? 'active' : ''} onClick={() => setTab('recent')} title="Afirmações dos últimos 5 minutos">
+              Recentes {recentClaims.length > 0 && <span className="muted">{recentClaims.length}</span>}
+            </button>
+            <button className={tab === 'all' ? 'active' : ''} onClick={() => setTab('all')}>
+              Todas {visibleClaims.length > 0 && <span className="muted">{visibleClaims.length}</span>}
             </button>
             <button className={tab === 'transcript' ? 'active' : ''} onClick={() => setTab('transcript')}>
               Transcrição
             </button>
           </nav>
-          {tab === 'claims' ? (
+          {tab !== 'transcript' ? (
             <div className="claims-list">
-              {visibleClaims.length === 0 && <p className="muted empty">As afirmações verificadas aparecem aqui.</p>}
-              {[...visibleClaims].reverse().map((c) => (
+              {(tab === 'recent' ? recentClaims : visibleClaims).length === 0 && (
+                <p className="muted empty">{tab === 'recent' ? 'Nada nos últimos 5 minutos.' : 'As afirmações verificadas aparecem aqui.'}</p>
+              )}
+              {[...(tab === 'recent' ? recentClaims : visibleClaims)].reverse().map((c) => (
                 <ClaimCard key={c.id} claim={c} onRecheck={session.recheck} />
               ))}
             </div>

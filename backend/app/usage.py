@@ -12,6 +12,8 @@ PRICES = {
     "gpt-4.1-mini": (0.40, 1.60),
     "gpt-4.1-nano": (0.10, 0.40),
     "gpt-4.1": (2.00, 8.00),
+    "gpt-5-mini": (0.25, 2.00),
+    "gpt-5": (1.25, 10.00),
     "text-embedding-3-small": (0.02, 0.0),
 }
 SEARCH_USD = 0.03  # per web_search tool call (approx.; higher with search_context_size=high)

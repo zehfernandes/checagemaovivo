@@ -48,6 +48,13 @@ class FactChecker(Protocol):
 DUPLICATE_SIMILARITY = 0.90
 RECENT_VEC_WINDOW = 40
 
+_GENERIC_SUBJECT = re.compile(
+    r"^(O|A)\s+(orador|oradora|candidat[oa]|presidente|senador|senadora|deputad[oa]|ex-presidente|governo|adversári[oa]|"
+    r"ministr[oa]|governador|prefeit[oa]|pessoa|político|petista|bolsonarista)\b(\s+(atual|mencionad[oa]|citad[oa]|em questão))?",
+    re.I,
+)
+_NAMED = re.compile(r"\b[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]{2,}")  # a proper name somewhere after the first char
+
 EXTRACT_SYSTEM = """You are a fact-checking assistant watching a live political debate / broadcast.
 You receive a rolling transcript. From the LATEST segment only, extract factual claims about the real
 world that can be verified against public evidence: statistics, numbers, dates, past events, laws,
@@ -71,6 +78,9 @@ or replaced by "ele", "o cara", "esse governo", "a turma dele". Resolve it with 
 (the most recent matching person/institution), and normalise slang into plain facts ("pegou" -> recebeu,
 "deu um calote" -> não pagou, "tá preso" -> está preso, "botou" -> nomeou/colocou). If the subject is still
 ambiguous between two people, skip the claim rather than guess.
+NEVER use a role or a generic as the subject — "o orador", "o candidato", "a candidata", "o presidente", "o senador",
+"o ex-presidente", "o governo atual", "o governo mencionado", "o adversário": write the person's NAME (Lula, Flávio
+Bolsonaro, Jair Bolsonaro, governo Lula…). If you cannot name them from the context, do not extract the claim.
 In a debate, "você"/"o senhor" is the opponent being addressed: resolve it to that person from the context, and
 "X milhões do <nome> que você pegou" means the ADDRESSEE received X from <nome> (the named person is the source, not the receiver).
 If the transcript garbled a name, use the context/known names to write it correctly (e.g. "vocário" -> "Vorcaro").
@@ -230,6 +240,13 @@ class OpenAIFactChecker:
         usage.track(self.model, res)
         data = _parse_json(res.output_text)
         claims = [c.strip() for c in data.get("claims", []) if isinstance(c, str) and c.strip()]
+        kept = []
+        for c in claims:
+            if _GENERIC_SUBJECT.match(c) and not _NAMED.search(c[1:]):
+                log.info("extract: dropped generic subject: %s", c[:80])
+            else:
+                kept.append(c)
+        claims = kept
         claims = await self._gate(claims[:2], f"{context} {latest}",
                                   settings.claim_gate_min_save if strict else settings.claim_gate_min)
         return await self._drop_duplicates(claims)

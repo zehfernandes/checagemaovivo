@@ -126,7 +126,7 @@ async def ws_endpoint(ws: WebSocket):
                 await stop(keep_verifications=True)
                 run_task = asyncio.create_task(run(req))
             elif kind == "stop":
-                await stop()
+                await stop(keep_verifications=True)
                 await emit({"type": "status", "state": "idle", "message": "Stopped"})
             elif kind == "ping":
                 await emit({"type": "pong"})

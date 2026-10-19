@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useRef, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { ClaimCard } from './components/ClaimCard'
 import { Danmu } from './components/Danmu'
 import { Player } from './components/Player'
@@ -62,17 +62,7 @@ export default function App() {
     setUrl(roomUrl)
     setBehind(null)
     setBaseline(0)
-    session.start(roomUrl, language, 0, false, false, false, true)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- (re)start only when the room changes
   }, [roomUrl])
-  // the room exists but the newsroom hasn't started checking yet: keep trying quietly
-  const roomWaiting = !!roomUrl && session.state === 'error'
-  useEffect(() => {
-    if (!roomWaiting) return
-    const t = setTimeout(() => session.start(roomUrl!, language, 0, false, false, false, true), 15000)
-    return () => clearTimeout(t)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- retry cadence only depends on the waiting flag
-  }, [roomWaiting, roomUrl])
   function pickRoom(id: string) {
     setRoomId(id)
     const p = new URLSearchParams(location.search)
@@ -146,15 +136,31 @@ export default function App() {
     return c
   }, [visibleClaims])
 
+  const startedFor = useRef('')
+  function begin() {
+    const u = url.trim()
+    const from = u === startedFor.current ? currentTime : 0 // a new video starts from the top; retries resume
+    startedFor.current = u
+    setBehind(null)
+    setBaseline(Math.max(0, from))
+    session.start(u, language, from, false, false, false, true)
+  }
   function onSubmit(e: FormEvent) {
     e.preventDefault()
-    if (running) session.stop()
-    else {
-      setBehind(null)
-      setBaseline(Math.max(0, currentTime))
-      session.start(url.trim(), language, currentTime, false, false, false, true)
-    }
   }
+  // no button: checking starts by itself when a video is chosen, follows the player and reconnects
+  // if the connection drops (e.g. server restart). A room whose checking hasn't started is retried quietly.
+  useEffect(() => {
+    const u = url.trim()
+    if (!u || (!roomUrl && !(typedId && typedId.length === 11))) return
+    const isNew = u !== startedFor.current
+    const lost = session.state === 'error' && session.lost
+    const waiting = session.state === 'error' && !lost && !!roomUrl
+    if (!isNew && !lost && !waiting) return
+    const t = setTimeout(begin, isNew ? 0 : lost ? 2000 : 15000)
+    return () => clearTimeout(t)
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.state, session.lost, url, roomUrl, typedId])
 
   const progress = session.progress
   const clip = useMemo<[number, number] | undefined>(() => {
@@ -181,13 +187,9 @@ export default function App() {
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="Cole a URL de um vídeo ou live do YouTube"
-              disabled={running}
               required
             />
           )}
-          <button type="submit" className={running ? 'btn btn--stop' : 'btn'}>
-            {running ? 'Parar' : 'Assistir'}
-          </button>
           <span className={`indicator status--${session.state}`}>
             {session.state === 'listening' && <span className="dot" />}
             {running && <span>{session.statusText}</span>}

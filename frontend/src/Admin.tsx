@@ -64,7 +64,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [toast, setToast] = useState<string | null>(null)
   const notify = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(null), 4000) }, [])
 
-  const loadRooms = useCallback(() => api<Room[]>('/admin/rooms').then(setRooms).catch((e) => notify(e.message)), [notify])
+  const loadRooms = useCallback(async () => {
+    try { setRooms(await api<Room[]>('/admin/rooms')) } catch (e) { notify((e as Error).message) }
+  }, [notify])
   useEffect(() => {
     loadRooms()
     const t = setInterval(loadRooms, 5000)
@@ -76,7 +78,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     if (roomId) p.set('room', roomId)
     history.replaceState(null, '', `/admin?${p}`)
   }, [tab, roomId])
-  const room = rooms.find((r) => r.id === roomId) ?? rooms[0]
+  const room = rooms.find((r) => r.id === roomId) ?? rooms.find((r) => r.processing || r.claims > 0) ?? rooms[0]
 
   return (
     <div className="app admin">

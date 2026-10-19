@@ -11,6 +11,8 @@ export default defineConfig({
       '/health': backend,
       '/news': backend,
       '/review': backend,
+      '/rooms': backend,
+      '/channels': backend,
       // API calls go to the backend; a browser navigation to /admin is the SPA page
       '/admin': {
         target: backend,

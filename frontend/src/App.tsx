@@ -62,9 +62,17 @@ export default function App() {
     setUrl(roomUrl)
     setBehind(null)
     setBaseline(0)
-    session.start(roomUrl, language, 0, false, false, false)
+    session.start(roomUrl, language, 0, false, false, false, true)
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- (re)start only when the room changes
   }, [roomUrl])
+  // the room exists but the newsroom hasn't started checking yet: keep trying quietly
+  const roomWaiting = !!roomUrl && session.state === 'error'
+  useEffect(() => {
+    if (!roomWaiting) return
+    const t = setTimeout(() => session.start(roomUrl!, language, 0, false, false, false, true), 15000)
+    return () => clearTimeout(t)
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- retry cadence only depends on the waiting flag
+  }, [roomWaiting, roomUrl])
   function pickRoom(id: string) {
     setRoomId(id)
     const p = new URLSearchParams(location.search)
@@ -144,7 +152,7 @@ export default function App() {
     else {
       setBehind(null)
       setBaseline(Math.max(0, currentTime))
-      session.start(url.trim(), language, currentTime)
+      session.start(url.trim(), language, currentTime, false, false, false, true)
     }
   }
 

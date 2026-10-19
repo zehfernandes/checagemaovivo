@@ -28,7 +28,7 @@ class RoomStore:
         self.conn.executescript(SCHEMA)
 
     def list(self, active_only: bool = False) -> list[dict]:
-        sql = "SELECT * FROM rooms" + (" WHERE active = 1" if active_only else "") + " ORDER BY created DESC"
+        sql = "SELECT * FROM rooms" + (" WHERE active = 1" if active_only else "") + " ORDER BY created ASC"
         return [dict(r) for r in self.conn.execute(sql)]
 
     def get(self, room_id: str) -> dict | None:

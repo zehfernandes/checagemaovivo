@@ -32,6 +32,7 @@ export default function App() {
   const [fresh, setFresh] = useState(false)
   const [save, setSave] = useState(() => localStorage.getItem('save') === 'on')
   const [sideOpen, setSideOpen] = useState(() => localStorage.getItem('side') !== 'closed')
+  const [details, setDetails] = useState(false)
   useEffect(() => localStorage.setItem('side', sideOpen ? 'open' : 'closed'), [sideOpen])
   const [delay, setDelay] = useState(() => Number(localStorage.getItem('delay') ?? 20))
   const [nudge, setNudge] = useState(0)
@@ -144,7 +145,21 @@ export default function App() {
           <button type="submit" className={running ? 'btn btn--stop' : 'btn'}>
             {running ? 'Parar' : 'Iniciar'}
           </button>
+          <span className={`indicator status--${session.state}`}>
+            {session.state === 'listening' && <span className="dot" />}
+            {running && <span>{session.statusText}</span>}
+            {running && session.info?.is_live && <span className="live-tag">AO VIVO</span>}
+          </span>
         </form>
+        <button
+          type="button"
+          className={`menu__button${details ? ' menu__button--on' : ''}`}
+          onClick={() => setDetails((d) => !d)}
+          title="Detalhes da execução: espectadores, custo, latência, atraso"
+          aria-expanded={details}
+        >
+          Detalhes
+        </button>
         <details className="menu">
           <summary className="menu__button">Opções</summary>
           <div className="menu__panel">
@@ -193,10 +208,9 @@ export default function App() {
         </details>
       </header>
 
+      {details && (
       <div className={`statusline status--${session.state}`}>
-        {session.state === 'listening' && <span className="dot" />}
         <span>{session.statusText || 'Pronto'}</span>
-        {running && session.info?.is_live && <span className="live-tag">AO VIVO</span>}
         {running && progress && (
           <span className="muted">
             {progress.fresh ? 'sem cache' : `${progress.viewers} ${progress.viewers === 1 ? 'espectador' : 'espectadores'}`}
@@ -221,7 +235,9 @@ export default function App() {
             · ⏱ afirmação +{latency.claim!.toFixed(1)}s{latency.verdict != null && ` · veredito +${latency.verdict.toFixed(1)}s`}
           </span>
         )}
+        {!running && <span className="muted">· os detalhes aparecem com uma execução em andamento</span>}
       </div>
+      )}
 
       {session.error && <div className="banner banner--error">{session.error}</div>}
 

@@ -80,7 +80,9 @@ class JevDecider:
                                "instructions": f"Claim [{i}] is a concrete, verifiable factual statement about the real world "
                                                f"(a number, date, past event, law, or what someone did) — NOT a promise, intention, "
                                                f"opinion, insult, question, hypothetical or vague generality. It must be of public interest "
-                                               f"(public figures, institutions, statistics, laws, public events) — not a private person's personal story."}
+                                               f"(public figures, institutions, statistics, laws, public events) — not a private person's personal story. "
+                                               f"It must be SPECIFIC: it names who did/received/said what; a sentence without an explicit "
+                                               f"subject or built on 'it was mentioned that…' is NOT checkable."}
                      for i in range(len(claims))}
         data = await self._ask(state, questions)
         return [float(data["answers"][f"c{i}"]["probability"]) for i in range(len(claims))]

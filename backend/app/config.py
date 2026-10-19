@@ -17,7 +17,8 @@ class Settings(BaseSettings):
     transcribe_glossary: str = (
         "Debate presidencial 2026 na Band. Lula, Flávio Bolsonaro, Jair Bolsonaro, Haddad, Galípolo, "
         "Daniel Vorcaro, Banco Master, André Mendonça, STF, TCU, Polícia Federal, Banco Central, "
-        "Rui Costa, Jaques Wagner, Lulinha, Tarcísio, Michelle Bolsonaro, CACs, Pix, Bolsa Família."
+        "Rui Costa, Jaques Wagner, Lulinha, Tarcísio, Michelle Bolsonaro, CACs, Pix, Bolsa Família, "
+        "Dark Horse, fundo partidário, PL, PT, Alckmin, Vorcaro negou, R$ 134 milhões."
     )
     factcheck_model: str = "gpt-4.1-mini"
     # Deeper second pass for claims the fast pass left inconclusive (stronger model, more searches).

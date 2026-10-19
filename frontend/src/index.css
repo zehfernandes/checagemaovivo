@@ -71,8 +71,10 @@ button { font: inherit; }
 .statusline {
   display: flex; align-items: center; gap: 8px; padding: 0 16px 8px; font-size: 12px; color: var(--muted); flex-wrap: wrap; min-height: 20px;
 }
-.status--listening > span:nth-child(2) { color: var(--valid); }
-.status--error > span { color: var(--fake); }
+.indicator { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.indicator.status--listening > span:nth-child(2) { color: var(--valid); }
+.indicator.status--error > span, .statusline.status--error > span:first-child { color: var(--fake); }
+.menu__button--on { color: var(--text); }
 .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--valid); animation: pulse 1.4s infinite; }
 .live-tag { color: var(--fake); font-size: 10px; font-weight: 700; letter-spacing: .08em; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }

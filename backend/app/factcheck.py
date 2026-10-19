@@ -53,7 +53,7 @@ _GENERIC_SUBJECT = re.compile(
     r"ministr[oa]|governador|prefeit[oa]|pessoa|político|petista|bolsonarista)\b(\s+(atual|mencionad[oa]|citad[oa]|em questão))?",
     re.I,
 )
-_NAMED = re.compile(r"\b[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]{2,}")  # a proper name somewhere after the first char
+_NAMED = re.compile(r"[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]{2,}")  # the role must be followed by a proper name
 
 EXTRACT_SYSTEM = """You are a fact-checking assistant watching a live political debate / broadcast.
 You receive a rolling transcript. From the LATEST segment only, extract factual claims about the real
@@ -242,7 +242,8 @@ class OpenAIFactChecker:
         claims = [c.strip() for c in data.get("claims", []) if isinstance(c, str) and c.strip()]
         kept = []
         for c in claims:
-            if _GENERIC_SUBJECT.match(c) and not _NAMED.search(c[1:]):
+            m = _GENERIC_SUBJECT.match(c)
+            if m and not _NAMED.match(c[m.end():].lstrip()):  # "O presidente Lula…" ok, "O candidato recebeu…" not
                 log.info("extract: dropped generic subject: %s", c[:80])
             else:
                 kept.append(c)

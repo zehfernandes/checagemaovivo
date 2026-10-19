@@ -7,6 +7,7 @@ import { useSession } from './useSession'
 import type { NewsStats, Verdict } from './types'
 
 const DEFAULT_URL = 'https://www.youtube.com/watch?v=Amwukq3hviM'
+const PLAYER_EDGE_LAG_S = 10
 
 function extractVideoId(url: string): string | null {
   try {
@@ -46,9 +47,11 @@ export default function App() {
     const t = setInterval(() => setNow(Date.now()), 500)
     return () => clearInterval(t)
   }, [delayed])
-  // the sentence behind a claim ends at captured_at (server clock); the delayed viewer hears it `delay` s later
+  // A chunk's audio spans [captured_at - 8, captured_at] on the server clock. Measured on YouTube live
+  // (Record News): the embedded player's own live edge trails the server's HLS reader by ~12 s, so a
+  // viewer `delay` s behind the player edge starts hearing that chunk at about captured_at + delay + 10.
   const revealAt = (capturedAt?: number | null) =>
-    capturedAt ? (capturedAt + delay + nudge - 3 + session.clockOffset) * 1000 : 0
+    capturedAt ? (capturedAt + delay + nudge + PLAYER_EDGE_LAG_S + session.clockOffset) * 1000 : 0
 
   const [news, setNews] = useState<NewsStats | null>(null)
   const [refreshing, setRefreshing] = useState(false)

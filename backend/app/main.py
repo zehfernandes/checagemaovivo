@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Header, WebSocket, WebSocketDisconnect
 from fastapi.responses import PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
@@ -282,3 +283,9 @@ async def ws_endpoint(ws: WebSocket) -> None:
         pass
     finally:
         await leave()
+
+
+# Production: serve the built frontend from the same origin (Dockerfile copies it here), so /ws, /news… are same-host.
+_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+if _dist.is_dir():
+    app.mount("/", StaticFiles(directory=_dist, html=True), name="frontend")

@@ -1,0 +1,27 @@
+# fly launch --copy-config --no-deploy ; fly volumes create data --size 3 ; fly secrets set OPENAI_API_KEY=... ADMIN_PASSWORD=... ; fly deploy
+app = "debate-fact-check"
+primary_region = "gru"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PROVIDER = "openai"
+  LANGUAGE = "pt"
+  VIDEO_CLIPS = "Amwukq3hviM=7740-14640"
+  CORS_ORIGINS = "https://debate-fact-check.fly.dev"
+
+[[mounts]]
+  source = "data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = "off"   # keep the shared processing + WebSockets alive
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"

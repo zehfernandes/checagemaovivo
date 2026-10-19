@@ -11,6 +11,7 @@ export default defineConfig({
       '/health': backend,
       '/news': backend,
       '/review': backend,
+      '/admin': backend,
     },
   },
 })

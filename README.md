@@ -20,10 +20,10 @@ frontend/  React + Vite. Embedded YouTube player, verdict overlay, scoreboard, c
 - Node 20+ (used by yt-dlp as JS runtime for YouTube, and for the frontend)
 - An OpenAI API key (`gpt-4o-mini-transcribe` for speech, `gpt-4.1-mini` + web search for verification)
 
-## Run
+## Run locally
 
 ```bash
-cp .env.example .env            # set PROVIDER=openai and OPENAI_API_KEY=...
+cp .env.example .env            # set PROVIDER=openai and OPENAI_API_KEY=... (or keep PROVIDER=mock)
 
 # backend
 pip install -r backend/requirements.txt
@@ -33,10 +33,59 @@ cd backend && uvicorn app.main:app --reload --port 8000
 cd frontend && npm install && npm run dev
 ```
 
-Open http://localhost:5173, paste a YouTube live/video URL and press **Start**.
+- Viewer: http://localhost:5173 — opens the first published room (the Band debate is created
+  automatically on an empty DB, see `DEFAULT_ROOM_URL`). Visitors never start processing; they
+  watch what the newsroom started and get the cached history instantly.
+- Newsroom: http://localhost:5173/admin — rooms, live claim editor, news DB (see [Admin](#admin-admin)).
+  With `ADMIN_PASSWORD` empty (the dev default) no login is needed and **everyone is admin**.
+- Nothing happens until an admin presses **Iniciar** on a room in `/admin` → *Salas*.
 
 `PROVIDER=mock` runs the whole UI without any API key (synthetic transcript and random
-verdicts); leave the URL empty in mock mode to skip YouTube entirely.
+verdicts); the news DB is disabled in mock mode. With `PROVIDER=openai` the first start ingests
+the Brazilian feeds into `backend/data/news.db` (~1–2 min, a few cents of embeddings) and refreshes
+every `NEWS_REFRESH_MINUTES`. `backend/data/` is gitignored — every clone starts with empty DBs.
+
+### Checklist for a new contributor
+
+1. Access to this repo (it is private) and `git clone` + `git checkout main`.
+2. Python 3.10+, `ffmpeg` on PATH, Node 20+.
+3. An OpenAI API key of their own (or `PROVIDER=mock` for UI work).
+4. `cp .env.example .env`, set `PROVIDER`/`OPENAI_API_KEY`; optionally `ADMIN_PASSWORD`.
+5. Backend + frontend as above; `cd frontend && npm run lint && npx tsc -b` before pushing.
+6. To test the production site no setup is needed: https://debate-fact-check.fly.dev (viewer) and
+   https://debate-fact-check.fly.dev/admin (newsroom, needs the deployed `ADMIN_PASSWORD`).
+7. If yt-dlp says *Sign in to confirm you're not a bot*, see `YTDLP_ARGS` below.
+
+## Admin (`/admin`)
+
+The viewer UI has no admin controls; everything operational lives at `/admin` (password =
+`ADMIN_PASSWORD`, sent as the `x-admin-password` header / `admin` field on the WebSocket).
+
+- **Salas** — rooms are YouTube URLs (debate, live interview…) stored in the cache DB. Create, rename,
+  hide/publish (`active`), delete; **Iniciar/Parar** the shared processing (optionally in save mode);
+  viewer count, claim count and progress per room. Only published rooms appear in the viewer's room picker.
+  Endpoints: `GET /rooms` (public, active only), `GET/POST /admin/rooms`, `PATCH/DELETE /admin/rooms/{id}`,
+  `POST /admin/rooms/{id}/start|stop`.
+- **Checagens** — the fact-check cache of a room, live: filter by verdict, search, change the verdict,
+  rewrite the explanation, add/edit/remove source links (pushed to every connected viewer at once as a
+  human correction), **Rechecar** with the deep model, or delete a claim (`claim_removed` fan-out).
+  Endpoints: `GET /admin/claims?url=`, `POST /admin/claim`, `DELETE /admin/claims/{video_id}/{claim_id}`.
+- **Base de notícias** — browse/search the evidence DB, add an article by URL (extracted + embedded) or by
+  pasted text, delete documents, refresh the feeds. Endpoints: `GET/POST /admin/news/docs`,
+  `DELETE /admin/news/docs/{id}`, `POST /news/refresh`.
+
+## Deploy (Fly.io)
+
+One Docker image (`Dockerfile`): the frontend is built and served by FastAPI, SQLite DBs live on the
+`data` volume at `/data`. Config in `fly.toml` (app `debate-fact-check`, region `gru`, machines never
+auto-stop so WebSockets and the shared pipeline stay alive).
+
+```bash
+fly launch --copy-config --no-deploy        # first time only
+fly volumes create data --size 3 -r gru     # first time only
+fly secrets set OPENAI_API_KEY=... ADMIN_PASSWORD=...
+fly deploy --remote-only                    # every release (builds on Fly, no local Docker needed)
+```
 
 ## Configuration (`.env`)
 
@@ -65,6 +114,10 @@ verdicts); leave the URL empty in mock mode to skip YouTube entirely.
 | `CHUNK_SECONDS` | `8` | audio chunk size; smaller = lower latency, more API calls |
 | `LANGUAGE` | `pt` | transcription language hint (ISO-639-1), empty for auto |
 | `CORS_ORIGINS` | `http://localhost:5173` | allowed frontend origins |
+| `ADMIN_PASSWORD` | | password for `/admin` and admin WebSocket actions; **empty = everyone is admin** (dev only) |
+| `DEFAULT_ROOM_URL` / `DEFAULT_ROOM_NAME` | Band debate | room created on an empty DB; empty URL = none |
+| `VIDEO_CLIPS` | | only process a slice of recordings: `VIDEO_ID=start-end,...` (seconds) |
+| `YTDLP_ARGS` | | extra yt-dlp args, e.g. `--cookies-from-browser chrome:/path` when YouTube asks to confirm you're not a bot |
 
 ## News database (first level) + web search (fallback) + deep check (third level)
 
@@ -93,8 +146,8 @@ Verification ladder (fastest first):
    sufficient, the claim goes to OpenAI web search (~4–6 s, **Web** badge). Pages cited by the
    search are written back into the DB so the next similar claim is a DB hit.
 
-The DB refreshes on backend start and every `NEWS_REFRESH_MINUTES`; the UI header shows the
-article count and an **Update** button (`POST /news/refresh`). CLI:
+The DB refreshes on backend start and every `NEWS_REFRESH_MINUTES`; `/admin` → *Base de notícias* shows the
+article count and an **Atualizar feeds** button (`POST /news/refresh`). CLI:
 
 ```bash
 cd backend
@@ -108,7 +161,7 @@ python -m app.news stats
 A claim that is still `inconclusive` after the DB and web passes is automatically re-run through a
 slower, stronger pass (`DEEP_MODEL`, several web searches targeting fact-checkers and official sources,
 two independent sources required for fake/valid). While it runs the card shows "Deep check…"; the result
-replaces the verdict with a `Deep` badge. Every settled card also has a **Re-check** button that triggers
+replaces the verdict with a `Deep` badge. Every settled card in `/admin` → *Checagens* also has a **Rechecar** button that triggers
 the same pass manually (`{"type":"recheck","claim_id":"…"}` over the WebSocket).
 
 ## Shared processing + cache (many viewers, one pipeline)
@@ -125,7 +178,7 @@ up to the player position for recordings, so seeking is instant and spoiler-free
 
 ### Fresh run (no cache) + latency readout
 
-Tick **Fresh (no cache)** next to Start (or send `"fresh": true`) to bypass the shared channel: a private
+Admins can send `"fresh": true` on `start` (the public viewer has no such control) to bypass the shared channel: a private
 pipeline processes the video again from scratch, reads nothing from and writes nothing to the cache, and
 dies a few seconds after you stop. Use it to measure true end-to-end latency instead of being served from
 cache. Every transcript/claim event carries server wall-clock timestamps (`captured_at` = audio arrived from
@@ -157,7 +210,8 @@ next similar claim is answered from it. Data lives in `backend/data/review.db` (
 
 ## WebSocket protocol (`/ws`)
 
-Client → server: `{"type":"start","url":"...","language":"pt","start_seconds":0,"fresh":false}` · `{"type":"stop"}` · `{"type":"recheck","claim_id":"..."}`
+Client → server: `{"type":"start","url":"...","language":"pt","start_seconds":0,"fresh":false,"save":false,"watch":false,"admin":"<ADMIN_PASSWORD>"}`
+(`watch: true` subscribes without starting processing — what the viewer sends; non-admins are always watch-only) · `{"type":"stop"}` · `{"type":"recheck","claim_id":"..."}`
 
 Server → client:
 
@@ -166,6 +220,7 @@ Server → client:
 - `{"type":"transcript","segment":{"id","text","start","end","captured_at","transcribed_at"}}`
 - `{"type":"claim","claim":{"id","text","verdict":"pending|fake|valid|inconclusive","confidence","explanation","sources":[{"title","url"}],"start","end","method","deep_pending","captured_at","extracted_at","verified_at"}}`
   — sent once with `pending` and again when the verdict is ready
+- `{"type":"claim_removed","id":"..."}` — an admin deleted the claim
 - `{"type":"error","message":"..."}`
 - `{"type":"progress","processed_to","complete","viewers","fresh"}`
 
@@ -185,7 +240,7 @@ If yt-dlp fails with *Sign in to confirm you're not a bot* (YouTube rate-limits 
 
 ## Save mode + cost meter
 
-**Save mode** (checkbox next to Fresh) keeps the full experience but cuts the expensive calls: no
+**Save mode** (*modo econômico* when starting a room in `/admin`) keeps the full experience but cuts the expensive calls: no
 automatic deep check (the Re-check button still runs one), stricter Jev claim gate
 (`CLAIM_GATE_MIN_SAVE`, 0.5), at most `SAVE_MAX_CLAIMS_PER_MIN` (6) claims, two segments of
 extraction context instead of three, and chunks under 12 words are not sent to the extractor.

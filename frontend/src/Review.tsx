@@ -67,6 +67,7 @@ export function Review() {
     setItems((is) => is.map((i) => (i.id === item.id ? { ...i, ...body } : i)))
     await fetch('/review/label', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
     fetch(`/review/items?run=${encodeURIComponent(run)}`).then((r) => r.json()).then((d) => setMetrics(d.metrics)).catch(() => {})
+    fetch('/review/runs').then((r) => r.json()).then(setRuns).catch(() => {})
   }
 
   async function addMissed(seg: Segment) {
@@ -98,7 +99,7 @@ export function Review() {
         <select value={run} onChange={(e) => setRun(e.target.value)}>
           {runs.map((r) => <option key={r.name} value={r.name}>{r.title} ({r.items} claims, {r.labelled} labelled)</option>)}
         </select>
-        <a className="btn btn--ghost" href={`/review/export?run=${encodeURIComponent(run)}`} target="_blank" rel="noreferrer">Export golden set</a>
+        <a className="btn btn--ghost" href={`/review/export?run=${encodeURIComponent(run)}`} download>Download golden set (.jsonl)</a>
         <button type="button" className="btn btn--ghost" onClick={runEval} disabled={evaluating || !run}>
           {evaluating ? 'Evaluating…' : 'Eval current pipeline'}
         </button>

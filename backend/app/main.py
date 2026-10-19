@@ -145,7 +145,8 @@ async def review_missed_delete(mid: str):
 @app.get("/review/export")
 async def review_export(run: str):
     body = "\n".join(json.dumps(r, ensure_ascii=False) for r in review.golden(run))
-    return PlainTextResponse(body, media_type="application/x-ndjson")
+    return PlainTextResponse(body, media_type="application/x-ndjson",
+                             headers={"Content-Disposition": f'attachment; filename="golden-{run}.jsonl"'})
 
 
 @app.get("/review/eval")
@@ -164,6 +165,7 @@ async def ws_endpoint(ws: WebSocket):
             await ws.send_json(msg)
 
     pipeline: Pipeline | None = None
+    last_pipeline: Pipeline | None = None  # keeps claims re-checkable after Stop
     run_task: asyncio.Task | None = None
 
     async def run(req: StartRequest) -> None:
@@ -179,7 +181,9 @@ async def ws_endpoint(ws: WebSocket):
             await emit({"type": "status", "state": "error", "message": "Stopped"})
 
     async def stop(keep_verifications: bool = False) -> None:
-        nonlocal run_task, pipeline
+        nonlocal run_task, pipeline, last_pipeline
+        if pipeline:
+            last_pipeline = pipeline
         if run_task and not run_task.done():
             run_task.cancel()
             await asyncio.gather(run_task, return_exceptions=True)
@@ -203,8 +207,9 @@ async def ws_endpoint(ws: WebSocket):
                 await stop(keep_verifications=True)
                 await emit({"type": "status", "state": "idle", "message": "Stopped"})
             elif kind == "recheck":
-                if pipeline:
-                    await pipeline.recheck(str(data.get("claim_id", "")))
+                target = pipeline or last_pipeline
+                if target:
+                    await target.recheck(str(data.get("claim_id", "")))
             elif kind == "ping":
                 await emit({"type": "pong"})
     except WebSocketDisconnect:

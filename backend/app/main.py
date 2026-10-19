@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import PlainTextResponse
@@ -12,6 +13,7 @@ from .config import settings
 from .factcheck import make_factchecker
 from .models import StartRequest
 from .news import NewsStore
+from .channels import ChannelManager
 from .pipeline import Pipeline
 from .review import LABELS, ReviewStore, run_eval
 from .transcribe import make_transcriber
@@ -42,6 +44,10 @@ store: NewsStore | None = (
     else None
 )
 review = ReviewStore()
+channels = ChannelManager(
+    lambda emit: Pipeline(make_transcriber(client), make_factchecker(client, store), emit),
+    settings.news_db_file.parent / Path(settings.cache_db_path).name,
+)
 _bg_tasks: set[asyncio.Task] = set()
 
 
@@ -83,6 +89,11 @@ async def health():
         "news": store.stats() if store else None,
     }
 
+
+
+@app.get("/channels")
+async def channel_stats():
+    return channels.stats()
 
 
 # ---- offline review loop (human labels -> golden set -> eval) ----------------------------------
@@ -156,40 +167,27 @@ async def review_eval(run: str, rerun: bool = False):
 
 
 @app.websocket("/ws")
-async def ws_endpoint(ws: WebSocket):
+async def ws_endpoint(ws: WebSocket) -> None:
+    """One socket = one viewer. Processing is shared per video (see channels.py): `start`
+    subscribes to the video's channel (history first, then live events), `stop` unsubscribes."""
     await ws.accept()
-    send_lock = asyncio.Lock()
+    channel = None
+    queue: asyncio.Queue | None = None
+    sender: asyncio.Task | None = None
 
-    async def emit(msg: dict) -> None:
-        async with send_lock:
-            await ws.send_json(msg)
+    async def pump(q: asyncio.Queue) -> None:
+        while True:
+            await ws.send_json(await q.get())
 
-    pipeline: Pipeline | None = None
-    last_pipeline: Pipeline | None = None  # keeps claims re-checkable after Stop
-    run_task: asyncio.Task | None = None
-
-    async def run(req: StartRequest) -> None:
-        nonlocal pipeline
-        pipeline = Pipeline(make_transcriber(client), make_factchecker(client, store), emit)
-        try:
-            await pipeline.run(req.url, req.language or settings.language or None, req.start_seconds)
-        except asyncio.CancelledError:
-            raise
-        except Exception as e:  # noqa: BLE001
-            log.exception("pipeline failed")
-            await emit({"type": "error", "message": str(e)})
-            await emit({"type": "status", "state": "error", "message": "Stopped"})
-
-    async def stop(keep_verifications: bool = False) -> None:
-        nonlocal run_task, pipeline, last_pipeline
-        if pipeline:
-            last_pipeline = pipeline
-        if run_task and not run_task.done():
-            run_task.cancel()
-            await asyncio.gather(run_task, return_exceptions=True)
-        if pipeline:
-            await pipeline.stop(keep_verifications)
-        run_task, pipeline = None, None
+    async def leave() -> None:
+        nonlocal queue, sender
+        if sender:
+            sender.cancel()
+            await asyncio.gather(sender, return_exceptions=True)
+            sender = None
+        if channel and queue is not None:
+            channel.unsubscribe(queue)
+        queue = None
 
     try:
         while True:
@@ -199,20 +197,30 @@ async def ws_endpoint(ws: WebSocket):
                 try:
                     req = StartRequest.model_validate(data)
                 except ValidationError as e:
-                    await emit({"type": "error", "message": e.errors()[0]["msg"]})
+                    await ws.send_json({"type": "error", "message": e.errors()[0]["msg"]})
                     continue
-                await stop(keep_verifications=True)
-                run_task = asyncio.create_task(run(req))
+                await leave()
+                await ws.send_json({"type": "status", "state": "resolving", "message": "Resolving stream…"})
+                try:
+                    channel = await channels.get(req.url)
+                except Exception as e:  # noqa: BLE001
+                    log.exception("resolve failed")
+                    await ws.send_json({"type": "status", "state": "error", "message": f"Could not resolve video: {e}"})
+                    continue
+                queue = channel.subscribe()
+                for ev in channel.snapshot():
+                    await ws.send_json(ev)
+                sender = asyncio.create_task(pump(queue))
+                await channel.ensure_running(req.language or settings.language or None)
             elif kind == "stop":
-                await stop(keep_verifications=True)
-                await emit({"type": "status", "state": "idle", "message": "Stopped"})
+                await leave()
+                await ws.send_json({"type": "status", "state": "idle", "message": "Stopped"})
             elif kind == "recheck":
-                target = pipeline or last_pipeline
-                if target:
-                    await target.recheck(str(data.get("claim_id", "")))
+                if channel:
+                    await channel.recheck(str(data.get("claim_id", "")))
             elif kind == "ping":
-                await emit({"type": "pong"})
+                await ws.send_json({"type": "pong"})
     except WebSocketDisconnect:
         pass
     finally:
-        await stop()
+        await leave()

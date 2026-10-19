@@ -21,6 +21,7 @@ Emit = Callable[[dict], Awaitable[None]]
 
 MAX_CONCURRENT_VERIFICATIONS = 6
 CONTEXT_SEGMENTS = 3
+MAX_CONCURRENT_TRANSCRIPTIONS = 6
 RECENT_CLAIMS = 12
 
 
@@ -34,6 +35,7 @@ class Pipeline:
         self.context: deque[str] = deque(maxlen=CONTEXT_SEGMENTS)
         self.recent_claims: deque[str] = deque(maxlen=RECENT_CLAIMS)
         self.verify_sem = asyncio.Semaphore(MAX_CONCURRENT_VERIFICATIONS)
+        self.transcribe_sem = asyncio.Semaphore(MAX_CONCURRENT_TRANSCRIPTIONS)
         self._stopped = False
         self.run_id = uuid.uuid4().hex[:6]
         self.claims: dict[str, tuple[Claim, str]] = {}
@@ -44,7 +46,7 @@ class Pipeline:
         bucket.add(t)
         t.add_done_callback(bucket.discard)
 
-    async def run(self, url: str, language: str | None, start_seconds: float) -> None:
+    async def run(self, url: str, language: str | None, start_seconds: float, realtime: bool = True) -> None:
         await self.emit({"type": "status", "state": "resolving", "message": "Resolving stream…"})
         if settings.provider == "mock" and not url.strip():
             info = StreamInfo(video_id="", title="Mock stream", is_live=True)
@@ -56,11 +58,13 @@ class Pipeline:
         if settings.provider == "mock" and not url.strip():
             chunks = self._mock_chunks()
         else:
-            chunks = audio.iter_chunks(media_url, settings.chunk_seconds, info.is_live, start_seconds)
+            chunks = audio.iter_chunks(media_url, settings.chunk_seconds, info.is_live, start_seconds, realtime)
 
         async for chunk in chunks:
             if self._stopped:
                 break
+            # backpressure: never hold more than MAX_CONCURRENT_TRANSCRIPTIONS chunks in flight
+            await self.transcribe_sem.acquire()
             self._spawn(self._handle_chunk(chunk, language))
         await self.emit({"type": "status", "state": "ended", "message": "Stream ended"})
 
@@ -79,6 +83,8 @@ class Pipeline:
             log.exception("transcription failed")
             await self.emit({"type": "error", "message": f"Transcription failed: {e}"})
             return
+        finally:
+            self.transcribe_sem.release()
         if not text:
             return
         seg = TranscriptSegment(id=f"seg-{self.run_id}-{chunk.index}", text=text, start=chunk.start, end=chunk.end)

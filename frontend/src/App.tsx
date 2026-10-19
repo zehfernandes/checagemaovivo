@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { ClaimCard } from './components/ClaimCard'
 import { Danmu } from './components/Danmu'
 import { Player } from './components/Player'
@@ -54,22 +54,22 @@ export default function App() {
     }
   }
 
-  // Recorded video: if the viewer seeks, restart processing from the new position.
-  const lastTime = useRef(0)
-  useEffect(() => {
-    const jumped = Math.abs(currentTime - lastTime.current) > 5
-    lastTime.current = currentTime
-    if (jumped && running && session.state === 'listening' && !isLive) {
-      session.start(url.trim(), language, currentTime, true)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentTime])
+  // Processing is shared per video and cached server-side; for a recording we only reveal
+  // what has been said up to the player position (no spoilers, instant seeks).
+  const visibleClaims = useMemo(
+    () => (isLive ? session.claims : session.claims.filter((c) => c.start <= currentTime + 1)),
+    [session.claims, currentTime, isLive],
+  )
+  const visibleTranscript = useMemo(
+    () => (isLive ? session.transcript : session.transcript.filter((s) => s.start <= currentTime + 1)),
+    [session.transcript, currentTime, isLive],
+  )
 
   const counts = useMemo(() => {
     const c: Record<Verdict, number> = { pending: 0, fake: 0, valid: 0, inconclusive: 0 }
-    for (const cl of session.claims) c[cl.verdict]++
+    for (const cl of visibleClaims) c[cl.verdict]++
     return c
-  }, [session.claims])
+  }, [visibleClaims])
 
   function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -106,6 +106,12 @@ export default function App() {
           {session.state === 'listening' && <span className="dot" />}
           {session.statusText || 'Idle'}
           {session.info?.is_live && <span className="live-tag">LIVE</span>}
+          {session.progress && (
+            <span className="muted" title="Processing is shared by all viewers of this video and cached">
+              {' '}· {session.progress.viewers} viewer{session.progress.viewers === 1 ? '' : 's'}
+              {!isLive && ` · ${session.progress.complete ? 'fully processed' : `processed to ${fmtTime(session.progress.processed_to)}`}`}
+            </span>
+          )}
         </div>
         <button
           type="button"
@@ -148,7 +154,7 @@ export default function App() {
         <aside className="side">
           <nav className="tabs">
             <button className={tab === 'claims' ? 'active' : ''} onClick={() => setTab('claims')}>
-              Claims ({session.claims.length})
+              Claims ({visibleClaims.length})
             </button>
             <button className={tab === 'transcript' ? 'active' : ''} onClick={() => setTab('transcript')}>
               Transcript
@@ -156,18 +162,23 @@ export default function App() {
           </nav>
           {tab === 'claims' ? (
             <div className="claims-list">
-              {session.claims.length === 0 && <p className="muted">Checked claims will appear here…</p>}
-              {[...session.claims].reverse().map((c) => (
+              {visibleClaims.length === 0 && <p className="muted">Checked claims will appear here…</p>}
+              {[...visibleClaims].reverse().map((c) => (
                 <ClaimCard key={c.id} claim={c} onRecheck={session.recheck} />
               ))}
             </div>
           ) : (
-            <TranscriptRail segments={session.transcript} />
+            <TranscriptRail segments={visibleTranscript} />
           )}
         </aside>
       </main>
     </div>
   )
+}
+
+function fmtTime(s: number) {
+  const m = Math.floor(s / 60)
+  return `${m}:${Math.floor(s % 60).toString().padStart(2, '0')}`
 }
 
 function ago(ts: number) {

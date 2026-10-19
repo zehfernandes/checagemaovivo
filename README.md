@@ -47,6 +47,8 @@ verdicts); leave the URL empty in mock mode to skip YouTube entirely.
 | `OPENAI_BASE_URL` | | optional OpenAI-compatible base URL (e.g. Vercel AI Gateway) |
 | `NEWS_DB_PATH` | `data/news.db` | SQLite file for the news/evidence DB (relative to `backend/`) |
 | `EMBEDDING_MODEL` | `text-embedding-3-small` | embedding model for the news DB |
+| `CACHE_DB_PATH` | `data/cache.db` | per-video transcript/claim cache shared by all viewers |
+| `VOD_FULL_SPEED` | `false` | process recordings at full speed once instead of pacing with playback |
 | `NEWS_MIN_SIMILARITY` | `0.55` | min cosine similarity for a DB hit to count as evidence |
 | `NEWS_MAX_AGE_DAYS` | `14` | ignore feed items older than this |
 | `NEWS_REFRESH_MINUTES` | `30` | background feed refresh interval (0 = off) |
@@ -95,6 +97,18 @@ slower, stronger pass (`DEEP_MODEL`, several web searches targeting fact-checker
 two independent sources required for fake/valid). While it runs the card shows "Deep check…"; the result
 replaces the verdict with a `Deep` badge. Every settled card also has a **Re-check** button that triggers
 the same pass manually (`{"type":"recheck","claim_id":"…"}` over the WebSocket).
+
+## Shared processing + cache (many viewers, one pipeline)
+
+Processing is **per video, not per viewer** (`backend/app/channels.py`): the first viewer of a URL starts
+one pipeline (one audio pull, one set of AI calls); every other browser just subscribes to that video's
+channel over `/ws` and receives the same transcript/claim events. Everything is persisted in
+`backend/data/cache.db`, so a late joiner (or a later day) gets the history instantly and a video is never
+processed twice; a recording resumes from where processing stopped. Live pipelines stop 5 min after the
+last viewer leaves; paced VOD processing stops after 60 s and resumes on the next viewer. Set
+`VOD_FULL_SPEED=true` to run a recording through at full speed once instead (one-off cost, instant seeks).
+`GET /channels` shows active channels, viewer counts and progress. The UI reveals only what has been said
+up to the player position for recordings, so seeking is instant and spoiler-free.
 
 ## Offline review loop (learn from human checks)
 

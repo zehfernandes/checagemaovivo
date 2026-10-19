@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     # News/evidence DB (first-level lookup before web search)
     news_db_path: str = "data/news.db"
+    cache_db_path: str = "data/cache.db"
+    # Recorded videos: process at playback speed while viewers are connected (default, cheap) or
+    # run through the whole video at full speed once (one-off cost, instant seeks for everyone).
+    vod_full_speed: bool = False
     embedding_model: str = "text-embedding-3-small"
     news_min_similarity: float = 0.55
     news_max_age_days: int = 14

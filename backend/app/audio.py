@@ -77,8 +77,22 @@ async def resolve_stream(url: str) -> tuple[StreamInfo, str]:
     return meta, media_url
 
 
+def extract_video_id(url: str) -> str | None:
+    from urllib.parse import parse_qs, urlparse
+    try:
+        u = urlparse(url)
+    except ValueError:
+        return None
+    if u.hostname and u.hostname.endswith("youtu.be"):
+        return u.path.strip("/").split("/")[0] or None
+    if u.path.startswith("/live/") or u.path.startswith("/shorts/"):
+        parts = u.path.split("/")
+        return parts[2] if len(parts) > 2 and parts[2] else None
+    return (parse_qs(u.query).get("v") or [None])[0]
+
+
 async def iter_chunks(
-    media_url: str, chunk_seconds: int, is_live: bool, start_seconds: float = 0
+    media_url: str, chunk_seconds: int, is_live: bool, start_seconds: float = 0, realtime: bool = True
 ) -> AsyncIterator[AudioChunk]:
     """Decode with ffmpeg to raw PCM and yield one chunk every `chunk_seconds`.
 
@@ -89,7 +103,8 @@ async def iter_chunks(
     if is_live:
         cmd += ["-live_start_index", "-1"]
     else:
-        cmd += ["-re"]
+        if realtime:
+            cmd += ["-re"]
         if start_seconds > 0:
             cmd += ["-ss", str(start_seconds)]
     cmd += [

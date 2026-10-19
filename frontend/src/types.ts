@@ -42,6 +42,7 @@ export type ServerMessage =
   | { type: 'transcript'; segment: TranscriptSegment }
   | { type: 'claim'; claim: Omit<Claim, 'receivedAt' | 'settledAt'> }
   | { type: 'error'; message: string }
+  | { type: 'progress'; processed_to: number; complete: boolean; viewers: number }
   | { type: 'pong' }
 
 export const VERDICT_LABEL: Record<Verdict, string> = {
@@ -49,6 +50,12 @@ export const VERDICT_LABEL: Record<Verdict, string> = {
   fake: 'Fake',
   valid: 'Valid',
   inconclusive: 'Inconclusive',
+}
+
+export interface Progress {
+  processed_to: number
+  complete: boolean
+  viewers: number
 }
 
 export interface NewsStats {

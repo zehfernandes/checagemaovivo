@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Claim, ServerMessage, SessionState, StreamInfo, TranscriptSegment } from './types'
+import type { Claim, Progress, ServerMessage, SessionState, StreamInfo, TranscriptSegment } from './types'
 
-const MAX_TRANSCRIPT = 200
+const MAX_TRANSCRIPT = 5000
 
 function wsUrl() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws'
@@ -16,6 +16,7 @@ export function useSession() {
   const [transcript, setTranscript] = useState<TranscriptSegment[]>([])
   const [claims, setClaims] = useState<Claim[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [progress, setProgress] = useState<Progress | null>(null)
 
   const handle = useCallback((msg: ServerMessage) => {
     switch (msg.type) {
@@ -27,7 +28,7 @@ export function useSession() {
         setInfo(msg.info)
         break
       case 'transcript':
-        setTranscript((t) => [...t, msg.segment].slice(-MAX_TRANSCRIPT))
+        setTranscript((t) => (t.some((s) => s.id === msg.segment.id) ? t : [...t, msg.segment].slice(-MAX_TRANSCRIPT)))
         break
       case 'claim':
         setClaims((cs) => {
@@ -45,6 +46,9 @@ export function useSession() {
         break
       case 'error':
         setError(msg.message)
+        break
+      case 'progress':
+        setProgress({ processed_to: msg.processed_to, complete: msg.complete, viewers: msg.viewers })
         break
     }
   }, [])
@@ -74,6 +78,7 @@ export function useSession() {
         setInfo(null)
         setTranscript([])
         setClaims([])
+        setProgress(null)
       }
       setState('connecting')
       setStatusText(keep ? 'Re-syncing…' : 'Connecting…')
@@ -96,5 +101,5 @@ export function useSession() {
 
   useEffect(() => () => ws.current?.close(), [])
 
-  return { state, statusText, info, transcript, claims, error, start, stop, recheck }
+  return { state, statusText, info, transcript, claims, error, progress, start, stop, recheck }
 }

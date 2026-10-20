@@ -333,7 +333,7 @@ class OpenAIFactChecker:
                 log.info("extract: dropped generic subject: %s", c[:80])
             elif _UNRESOLVED.search(c) or _META.match(c):
                 log.info("extract: dropped unresolved/meta claim: %s", c[:80])
-            elif any(y not in f"{context} {latest}" and not re.search(rf"\b{y[2:]}\b", f"{context} {latest}")  # "de 88" = 1988
+            elif any(y not in f"{context} {latest}" and not re.search(rf"\b(?:de|em|anos?)\s+{y[2:]}\b", f"{context} {latest}", re.I)  # "de 88" = 1988, "dia 25" ≠ 2025
                      for y in _YEAR.findall(c)):
                 log.info("extract: dropped claim with a year not in the transcript: %s", c[:80])
             else:

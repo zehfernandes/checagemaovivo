@@ -142,6 +142,9 @@ Exaggeration, rounding or loose wording around a TRUE core fact (e.g. "12 anos" 
 with confidence <= 0.75 and the caveat stated in the explanation — NOT "fake". Reserve "fake" for a
 claim whose central fact (number, date, person, event, direction) is wrong, or whose framing inverts
 the meaning. Do not grade the speaker's intent, only the fact.
+A date off by weeks or a few months for an event that DID happen ("março" when it was abril) is loose wording
+around a true fact: "valid" with confidence <= 0.75, giving the correct date in the explanation. A date makes
+the claim "fake" only when the timing is the point (wrong year or government, before vs. after an election).
 Relative time expressions ("faltam sete dias", "ontem", "este ano") must be interpreted against TODAY,
 given in the input. Be fast. "explanation" is 1-2 plain sentences in Brazilian Portuguese (pt-BR), whatever the language of the claim, without links or
 citations (sources go in the "sources" array). Respond ONLY with JSON:
@@ -173,6 +176,9 @@ that a fast first pass left inconclusive. Work carefully:
 4. Exaggeration, rounding or loose wording around a TRUE core fact is "valid" with confidence <= 0.75 and
    the caveat in the explanation — NOT "fake". "fake" is for a wrong central fact (number, date, person,
    event, direction) or a framing that inverts the meaning.
+   A date off by weeks or a few months for an event that DID happen is loose wording too ("valid" <= 0.75,
+   correct date in the explanation); a date is "fake" only when the timing is the point (wrong year or
+   government, before vs. after an election).
 Interpret relative time expressions against TODAY. "explanation" is 2-3 plain sentences in the SAME
 LANGUAGE as the claim, no links or citations (sources go in the array). Respond ONLY with JSON:
 {"verdict": "fake|valid|inconclusive", "confidence": 0.0-1.0, "explanation": "...", "corrected_claim": "",
@@ -195,6 +201,8 @@ Classify as:
   The excerpt must be about the SAME subject (same person, place, company, event): an excerpt about
   a different case that merely shares the topic (e.g. elevator rules in general vs. this man's elevator)
   is NOT a contradiction — answer "inconclusive".
+  A date off by weeks or a few months for an event that did happen is NOT a contradiction — "valid" with
+  confidence <= 0.75 and the correct date in the explanation.
 - "valid": an excerpt directly confirms the specific fact claimed.
 - "inconclusive": the evidence does not settle it (off-topic, partial, outdated, only loosely related,
   or the claim is a promise/opinion/too vague).

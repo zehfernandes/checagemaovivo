@@ -18,7 +18,7 @@ GATEWAY_URL = "https://ai-gateway.vercel.sh/v4/ai/decision-model"
 
 VERDICT_CRITERIA = {
     "valid": "The evidence directly confirms the specific fact claimed (same entity, figure, date, event).",
-    "fake": "The evidence directly contradicts the specific fact claimed. Absence of a fact from the evidence is NOT a contradiction.",
+    "fake": "The evidence directly contradicts the specific fact claimed. Absence of a fact from the evidence is NOT a contradiction, nor is a date off by weeks or a few months for an event that did happen.",
     "inconclusive": "The evidence does not settle it: missing, partial, off-topic, outdated, or the claim is a promise/opinion/too vague.",
 }
 

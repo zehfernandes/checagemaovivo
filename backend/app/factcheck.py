@@ -60,6 +60,10 @@ _NAMED = re.compile(r"[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]{2,}
 _UNRESOLVED = re.compile(r"\b(speaker|addressee|orador|oradora|interlocutor|interlocutora|falante|oponente|adversári[oa]|você|vocês|o senhor|a senhora|eu|nós|meu|minha|meus|minhas|nosso|nossa|seu pai|seu partido|seu governo)\b", re.I)
 _META = re.compile(r"^(\S+\s+){0,4}(afirma|afirmou|disse|diz|alega|alegou|declarou|declara|mencionou|menciona|sugeriu|sugere|acusou|acusa|perguntou|pergunta|questionou)\s+(que|se|a|o|sobre)\b"
                    r"|\b(de acordo com|segundo) (a|o) (declaração|fala|candidato|orador|falante)\b", re.I)
+# a year the extractor added on its own ("começa hoje, 20 de outubro de 2026") becomes a wrong date the verifier calls fake.
+# ponytail: digits only — a year spelled out in the transcript ("dois mil e vinte e dois") drops the claim too
+_YEAR = re.compile(r"\b(?:19|20)\d\d\b")
+_MODERATOR = re.compile(r"moderad|mediad|apresentad|âncora|jornalista|host", re.I)
 
 EXTRACT_SYSTEM = """You are a fact-checking assistant watching a live political debate / broadcast.
 You receive a rolling transcript. From the LATEST segment only, extract factual claims about the real
@@ -68,6 +72,12 @@ what someone did or did not do, comparisons, cause-effect statements.
 
 Do NOT extract: promises or intentions about the future ("vou fazer", "vamos acabar com"), opinions,
 values, insults, questions, greetings, procedural talk, hypotheticals, or anything already in RECENT CLAIMS.
+The moderator / host / journalist running the broadcast is never a source of claims: when they are the one speaking
+(opening and closing, which debate this is and when, who is in the studio, rules and time, partners, channels that air
+it, music, calling a candidate, asking a question), set "speaker" to "moderador" and return no claims.
+Never ADD anything that is not in the transcript: no dates, years, numbers, places or names you inferred or
+know from elsewhere. Relative time words ("hoje", "agora", "este ano", "recentemente") stay as said or are left out —
+never turn them into a calendar date or year.
 If several sentences make the same point, merge them into ONE claim. Return at most 2 claims; usually 0 or 1.
 
 FIRST decide WHO IS SPEAKING in the latest segment and WHOM they address ("speaker"/"addressee": a name from the
@@ -295,7 +305,6 @@ class OpenAIFactChecker:
         if not latest.strip():
             return []
         user = (
-            f"TODAY: {_today()}\n"
             f"CONTEXT (previous segments):\n{context or '(none)'}\n\n"
             f"PEOPLE / ENTITIES MENTIONED IN THE LAST MINUTE (use them to resolve ele/ela/o cara/você/esse governo):\n"
             f"{', '.join(entities) if entities else '(none)'}\n\n"
@@ -314,6 +323,9 @@ class OpenAIFactChecker:
         if data.get("speaker") or data.get("addressee"):
             log.info("extract: speaker=%r addressee=%r", data.get("speaker"), data.get("addressee"))
         claims = [c.strip() for c in data.get("claims", []) if isinstance(c, str) and c.strip()]
+        if claims and _MODERATOR.search(str(data.get("speaker", ""))):  # the moderator reading the rules got a "Falso"
+            log.info("extract: dropped moderator segment: %s", claims[0][:80])
+            claims = []
         kept = []
         for c in claims:
             m = _GENERIC_SUBJECT.match(c)
@@ -321,6 +333,9 @@ class OpenAIFactChecker:
                 log.info("extract: dropped generic subject: %s", c[:80])
             elif _UNRESOLVED.search(c) or _META.match(c):
                 log.info("extract: dropped unresolved/meta claim: %s", c[:80])
+            elif any(y not in f"{context} {latest}" and not re.search(rf"\b{y[2:]}\b", f"{context} {latest}")  # "de 88" = 1988
+                     for y in _YEAR.findall(c)):
+                log.info("extract: dropped claim with a year not in the transcript: %s", c[:80])
             else:
                 kept.append(c)
         claims = kept

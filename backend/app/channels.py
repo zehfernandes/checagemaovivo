@@ -28,6 +28,26 @@ LIVE_IDLE_SECONDS = 300  # stop a live pipeline this long after the last viewer 
 VOD_IDLE_SECONDS = 60  # paced VOD processing stops this long after the last viewer leaves (resumes later)
 PRIVATE_IDLE_SECONDS = 5  # a fresh (uncached) run dies shortly after its only viewer leaves
 MAX_QUEUE = 2000
+REVIEW_LEASE_SECONDS = 120  # an open review card holds its claim this long; the newsroom UI renews it while open
+# newsroom-only fields: who is reviewing / reviewed a claim never reaches the public site
+REVIEW_FIELDS = ("status", "claimed_by", "claimed_until", "reviewed_by", "reviewed_at", "rev", "skipped_by")
+
+
+class ReviewConflict(Exception):
+    """Another reviewer holds the claim, or changed it since this reviewer loaded it."""
+
+
+def is_public(c: dict) -> bool:
+    # claims cached before human review existed have no status and stay on the site
+    return c.get("status", "published") == "published"
+
+
+def public_view(ev: dict) -> dict:
+    return {**ev, "claim": {k: v for k, v in ev["claim"].items() if k not in REVIEW_FIELDS}}
+
+
+def _held_by_other(c: dict, reviewer: str) -> bool:
+    return bool(c.get("claimed_by")) and c["claimed_by"] != reviewer and (c.get("claimed_until") or 0) > time.time()
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS videos (
@@ -119,7 +139,8 @@ class Channel:
         self.video_id = video_id
         self.url = url
         self.info = info
-        self.subscribers: set[asyncio.Queue] = set()
+        # queue -> True for the newsroom (sees drafts and who reviews what), False for the public site
+        self.subscribers: dict[asyncio.Queue, bool] = {}
         self.transcripts: dict[str, dict] = {}
         self.claims: dict[str, dict] = {}
         self.status = {"state": "idle", "message": "Pronto"}
@@ -148,16 +169,16 @@ class Channel:
                 self.status = {"state": "listening", "message": "Processado por completo · servido do cache"}
 
     # ---- fan-out ---------------------------------------------------------------------------
-    def subscribe(self) -> asyncio.Queue:
+    def subscribe(self, newsroom: bool = False) -> asyncio.Queue:
         q: asyncio.Queue = asyncio.Queue(maxsize=MAX_QUEUE)
-        self.subscribers.add(q)
+        self.subscribers[q] = newsroom
         if self._idle_task:
             self._idle_task.cancel()
             self._idle_task = None
         return q
 
     def unsubscribe(self, q: asyncio.Queue) -> None:
-        self.subscribers.discard(q)
+        self.subscribers.pop(q, None)
         paced_vod = not self.info.is_live and not settings.vod_full_speed
         if not self.subscribers and (self.private or self.info.is_live or paced_vod) and self.run_task and not self.run_task.done():
             idle = PRIVATE_IDLE_SECONDS if self.private else LIVE_IDLE_SECONDS if self.info.is_live else VOD_IDLE_SECONDS
@@ -169,11 +190,13 @@ class Channel:
             log.info("channel %s: no viewers for %ss, stopping pipeline (processed to %.0fs)", self.video_id, seconds, self.processed_to)
             await self.stop_pipeline()
 
-    def snapshot(self) -> list[dict]:
-        """Everything a new viewer needs: info, history (time-ordered), current status."""
+    def snapshot(self, newsroom: bool = False) -> list[dict]:
+        """Everything a new viewer needs: info, history (time-ordered), current status.
+        The public only gets published claims, without the newsroom's review fields."""
         events: list[dict] = [{"type": "info", "info": self.info.model_dump()}]
         events += sorted(self.transcripts.values(), key=lambda e: e["segment"]["start"])
-        events += sorted(self.claims.values(), key=lambda e: e["claim"]["start"])
+        claims = sorted(self.claims.values(), key=lambda e: e["claim"]["start"])
+        events += claims if newsroom else [public_view(e) for e in claims if is_public(e["claim"])]
         events.append({"type": "status", **self.status})
         events.append(self._progress())
         return events
@@ -205,9 +228,17 @@ class Channel:
                 self.broadcast({"type": "status", **self.status})
                 asyncio.get_running_loop().call_soon(lambda: asyncio.create_task(self.stop_pipeline()))
         elif kind == "claim":
+            # the machine (extraction, verdict, deep check): a claim waits for the newsroom unless review is off
             c = ev["claim"]
-            self.claims[c["id"]] = ev
-            self._put("claim", c["id"], c["start"], ev)
+            old = self.claims.get(c["id"])
+            if old is None:
+                c = {**c, "status": "draft" if settings.human_review and not self.private else "published", "rev": 0}
+            elif old["claim"].get("reviewed_by"):
+                return  # a person already decided it: a late deep check must not overwrite their verdict
+            else:
+                c = {**c, **{k: old["claim"][k] for k in REVIEW_FIELDS if k in old["claim"]}}
+            self._store_claim({**ev, "claim": c}, old)
+            return
         elif kind == "status":
             if ev.get("state") == "ended":
                 # Only trust "ended" when we actually reached the end of a recording; an audio source
@@ -237,13 +268,117 @@ class Channel:
         if kind == "transcript":
             self.broadcast(self._progress())
 
-    def broadcast(self, ev: dict) -> None:
-        for q in list(self.subscribers):
+    def broadcast(self, ev: dict, public: dict | None | bool = True) -> None:
+        """Send `ev` to the newsroom; the public gets `public` instead (True = the same event, None = nothing)."""
+        for q, newsroom in list(self.subscribers.items()):
+            out = ev if newsroom or public is True else public
+            if out is None:
+                continue
             try:
-                q.put_nowait(ev)
+                q.put_nowait(out)
             except asyncio.QueueFull:
                 log.warning("channel %s: dropping slow subscriber", self.video_id)
-                self.subscribers.discard(q)
+                self.subscribers.pop(q, None)
+
+    def _store_claim(self, ev: dict, old: dict | None) -> None:
+        c = ev["claim"]
+        self.claims[c["id"]] = ev
+        self._put("claim", c["id"], c["start"], ev)
+        was_public = old is not None and is_public(old["claim"])
+        if is_public(c):
+            public = public_view(ev)
+            if was_public and public == public_view(old):
+                public = None  # only the newsroom's fields changed (a reviewer opened it): nothing new for the site
+        else:  # unpublished (draft / irrelevant): the site never sees it, and drops it if it was there
+            public = {"type": "claim_removed", "id": c["id"]} if was_public else None
+        self.broadcast(ev, public)
+
+    # ---- newsroom review: one person per claim at a time ----------------------------------
+    def _review_entry(self, claim_id: str, reviewer: str) -> dict:
+        entry = self.claims.get(claim_id)
+        if not entry:
+            raise KeyError(claim_id)
+        if _held_by_other(entry["claim"], reviewer):
+            raise ReviewConflict(f"{entry['claim']['claimed_by']} está revisando esta análise")
+        return entry
+
+    def lease(self, claim_id: str, reviewer: str) -> dict:
+        """Open (or keep open) a claim's review card. No await between check and write: atomic on the event loop."""
+        entry = self._review_entry(claim_id, reviewer)
+        c = {**entry["claim"], "claimed_by": reviewer, "claimed_until": time.time() + REVIEW_LEASE_SECONDS}
+        self._store_claim({**entry, "claim": c}, entry)
+        return c
+
+    def release(self, claim_id: str, reviewer: str) -> None:
+        entry = self.claims.get(claim_id)
+        if entry and entry["claim"].get("claimed_by") == reviewer:
+            c = {**entry["claim"], "claimed_by": None, "claimed_until": None}
+            self._store_claim({**entry, "claim": c}, entry)
+
+    def skip(self, claim_id: str, reviewer: str) -> None:
+        """`reviewer` passed on it: never offered to them again (they can still open it), still offered to others."""
+        entry = self.claims.get(claim_id)
+        if not entry:
+            raise KeyError(claim_id)
+        c = entry["claim"]
+        skipped = sorted({*(c.get("skipped_by") or []), reviewer})
+        held = c.get("claimed_by") == reviewer
+        self._store_claim({**entry, "claim": {**c, "skipped_by": skipped, **({"claimed_by": None, "claimed_until": None} if held else {})}}, entry)
+
+    def next_for_review(self, reviewer: str, skip: set[str] | None = None, after: str | None = None) -> dict | None:
+        """The next draft in speaking order that the machine has finished, nobody else is reviewing and `reviewer`
+        did not skip. With `after` (the card just closed) it continues from there and wraps to the oldest."""
+        skip = skip or set()
+        order = sorted(self.claims.values(), key=lambda e: (e["claim"]["start"], e["claim"]["id"]))
+        if after and after in self.claims:
+            mark = (self.claims[after]["claim"]["start"], after)
+            order = ([e for e in order if (e["claim"]["start"], e["claim"]["id"]) > mark]
+                     + [e for e in order if (e["claim"]["start"], e["claim"]["id"]) <= mark])
+        for entry in order:
+            c = entry["claim"]
+            if (c.get("status") == "draft" and c["id"] not in skip and c["id"] != after
+                    and reviewer not in (c.get("skipped_by") or []) and c["verdict"] != "pending"
+                    and not c.get("deep_pending") and not _held_by_other(c, reviewer)):
+                return self.lease(c["id"], reviewer)
+        return None
+
+    def decide(self, claim_id: str, reviewer: str, action: str, rev: int | None = None, verdict: str | None = None,
+               explanation: str | None = None, sources: list[dict] | None = None, text: str | None = None,
+               speaker: str | None = None, force: bool = False, quote: str | None = None) -> dict:
+        """Publish (with the reviewer's edits) or mark irrelevant. `rev` is the version the reviewer loaded:
+        if someone changed the claim since, nothing is written. Editing the verdict, explanation, sources
+        or text makes it a human verdict; publishing as-is keeps the machine's verdict and its origin."""
+        entry = self.claims.get(claim_id) if force else self._review_entry(claim_id, reviewer)
+        if not entry:
+            raise KeyError(claim_id)
+        old = entry["claim"]
+        if not force and rev is not None and rev != old.get("rev", 0):
+            raise ReviewConflict(f"{old.get('reviewed_by') or 'Outra pessoa'} alterou esta análise enquanto você revisava")
+        c = {**old}
+        if action == "publish":
+            verdict = verdict or old["verdict"]
+            explanation = old.get("explanation", "") if explanation is None else explanation
+            new_text = text.strip() if text and text.strip() and text.strip() != old["text"] else None
+            if (verdict != old["verdict"] or explanation != old.get("explanation", "") or new_text is not None
+                    or (sources is not None and sources != old.get("sources", []))):
+                c.update(verdict=verdict, explanation=explanation, method="human", confidence=1.0, deep_pending=False)
+                if sources is not None:
+                    c["sources"] = sources
+            if new_text:
+                c["text"] = new_text
+                c["quote"] = None  # viewers see the quote first; an admin rewrite must show instead
+            if speaker is not None:
+                c["speaker"] = speaker.strip() or None
+            if quote is not None and quote.strip() and quote.strip() != (c.get("quote") or c["text"]):
+                c["quote"] = quote.strip()  # wording on the site (speaker's own words): not a verdict change
+            c["status"] = "published"
+        elif action == "irrelevant":
+            c["status"] = "irrelevant"
+        else:
+            raise ValueError(action)
+        c.update(reviewed_by=reviewer, reviewed_at=time.time(), rev=old.get("rev", 0) + 1, claimed_by=None, claimed_until=None)
+        self._store_claim({**entry, "claim": c}, entry)
+        return c
 
     # ---- processing ------------------------------------------------------------------------
     async def ensure_running(self, language: str | None, _retry: bool = False, start_seconds: float | None = None) -> None:
@@ -298,28 +433,12 @@ class Channel:
             self.manager.private_channels.discard(self)
 
     async def override(self, claim_id: str, verdict: str, explanation: str, sources: list[dict] | None = None,
-                       text: str | None = None, speaker: str | None = None) -> dict | None:
-        """Human correction by an admin: replaces the verdict for every viewer (live fan-out) and in the cache.
-        Fixing only who said it keeps the verdict, its confidence and where it came from."""
-        entry = self.claims.get(claim_id)
-        if not entry:
+                       text: str | None = None, speaker: str | None = None, reviewer: str = "admin") -> dict | None:
+        """Human correction outside the review queue (POST /admin/claim): publishes for every viewer at once."""
+        try:
+            return self.decide(claim_id, reviewer, "publish", None, verdict, explanation, sources, text, speaker, force=True)
+        except KeyError:
             return None
-        old = entry["claim"]
-        new_text = text.strip() if text and text.strip() and text.strip() != old["text"] else None
-        verdict_edited = (verdict != old["verdict"] or explanation != old.get("explanation", "") or new_text is not None
-                          or (sources is not None and sources != old.get("sources", [])))
-        c = {**old}
-        if verdict_edited:
-            c.update(verdict=verdict, explanation=explanation, method="human", confidence=1.0, deep_pending=False)
-            if sources is not None:
-                c["sources"] = sources
-        if new_text:
-            c["text"] = new_text
-            c["quote"] = None  # viewers see the quote first; an admin rewrite must show instead
-        if speaker is not None:
-            c["speaker"] = speaker.strip() or None
-        await self.emit({**entry, "claim": c})
-        return c
 
     async def remove_claim(self, claim_id: str) -> bool:
         """Admin deletes a claim (bad extraction): gone from the cache and from every viewer's list."""

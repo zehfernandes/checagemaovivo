@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { adminHeaders, adminPassword } from './admin'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { adminHeaders, adminPassword, reviewerName, setReviewerName } from './admin'
 import { useSession } from './useSession'
-import type { Claim, NewsStats, Room as PublicRoom, Source, UsageSummary, Verdict } from './types'
+import type { Claim, NewsStats, ReviewStatus, Room as PublicRoom, Source, TranscriptSegment, UsageSummary, Verdict } from './types'
 import { VERDICT_LABEL } from './types'
 
 type Final = Exclude<Verdict, 'pending'>
@@ -415,41 +415,125 @@ function ActivitySection({ roomId, live }: { roomId: string; live: boolean }) {
 }
 
 // ---- Checagens --------------------------------------------------------------------------------
+const STATUS_PT: Record<ReviewStatus, string> = { draft: 'Aguardando', published: 'Publicada', irrelevant: 'Irrelevante' }
+const STATUS_FILTERS: [ReviewStatus | 'all', string][] = [['draft', 'Aguardando'], ['published', 'Publicadas'], ['irrelevant', 'Irrelevantes'], ['all', 'Todas']]
+const statusOf = (c: Claim): ReviewStatus => c.status ?? 'published'
+const CARD_SWAP_MS = 120 // the exit animation; a fast server still waits this long so the action is felt
+const LEASE_RENEW_MS = 45_000 // the server holds a review for 120 s; renew well before that while the card is open
+
+interface Edits { verdict: Final; explanation: string; sources: Source[]; quote: string; speaker: string }
+
+function ReviewerDialog({ initial, onSave, onClose }: { initial: string; onSave: (name: string) => void; onClose?: () => void }) {
+  const [name, setName] = useState(initial)
+  return (
+    <Dialog title="Quem está revisando?" onClose={onClose ?? (() => {})}>
+      <form className="form" onSubmit={(e) => { e.preventDefault(); if (name.trim()) onSave(name.trim()) }}>
+        <Field label="Seu nome" hint="Aparece para a redação enquanto você revisa uma análise e em quem publicou. Não aparece no site.">
+          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Ana Souza" />
+        </Field>
+        <button type="submit" className="btn" disabled={!name.trim()}>Começar a revisar</button>
+      </form>
+    </Dialog>
+  )
+}
+
 function ClaimsPage({ rooms, room, onPick, reload, notify }: { rooms: Room[]; room: Room | undefined; onPick: (id: string) => void; reload: () => Promise<void>; notify: (m: string) => void }) {
   const session = useSession()
-  const [filter, setFilter] = useState<'all' | Verdict>('all')
+  const [status, setStatus] = useState<ReviewStatus | 'all'>('draft')
+  const [verdictFilter, setVerdictFilter] = useState<'all' | Verdict>('all')
   const [q, setQ] = useState('')
-  const [selected, setSelected] = useState<string | null>(null)
+  const [reviewer, setReviewer] = useState(reviewerName)
+  const [askName, setAskName] = useState(false)
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [opened, setOpened] = useState<Claim | null>(null) // the server's copy until the WS delivers its own
   const url = room?.url
   useEffect(() => {
-    if (url) session.start(url, '', 0, false, false, false, true)
+    if (url) session.start(url, '', 0, false, false, false, true, true)
     else session.stop()
+    setOpenId(null)
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- (re)subscribe only when the room changes
   }, [url])
+  const serverNow = () => Date.now() / 1000 - session.clockOffset
+  const heldByOther = (c: Claim) => !!c.claimed_by && c.claimed_by !== reviewer && (c.claimed_until ?? 0) > serverNow()
+  const skippedByMe = (c: Claim) => !!reviewer && (c.skipped_by ?? []).includes(reviewer)
 
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase()
-    return [...session.claims]
-      .filter((c) => filter === 'all' || c.verdict === filter)
-      .filter((c) => !needle || c.text.toLowerCase().includes(needle) || c.explanation.toLowerCase().includes(needle))
-      .sort((a, b) => b.start - a.start)
-  }, [session.claims, filter, q])
+    return session.claims
+      .filter((c) => status === 'all' || statusOf(c) === status)
+      .filter((c) => verdictFilter === 'all' || c.verdict === verdictFilter)
+      .filter((c) => !needle || c.text.toLowerCase().includes(needle) || c.explanation.toLowerCase().includes(needle) || (c.speaker ?? '').toLowerCase().includes(needle))
+      // the queue in speaking order (same order and tie-break as the server's "next"); history newest first
+      .sort((a, b) => (status === 'draft' ? a.start - b.start || (a.id < b.id ? -1 : 1) : b.start - a.start))
+  }, [session.claims, status, verdictFilter, q])
   const counts = useMemo(() => {
-    const c: Record<Verdict, number> = { pending: 0, fake: 0, valid: 0, inconclusive: 0 }
-    for (const cl of session.claims) c[cl.verdict]++
+    const c: Record<ReviewStatus, number> = { draft: 0, published: 0, irrelevant: 0 }
+    for (const cl of session.claims) c[statusOf(cl)]++
     return c
   }, [session.claims])
-  const claim = session.claims.find((c) => c.id === selected)
+  const ready = session.claims.filter((c) => statusOf(c) === 'draft' && c.verdict !== 'pending' && !c.deep_pending && !heldByOther(c) && !skippedByMe(c)).length
+  const claim = (openId && (session.claims.find((c) => c.id === openId) ?? (opened?.id === openId ? opened : null))) || null
 
-  async function save(c: Claim, verdict: Final, explanation: string, sources: Source[], text: string, speaker: string) {
-    if (!url) return
-    await api('/admin/claim', { method: 'POST', body: JSON.stringify({ url, claim_id: c.id, verdict, explanation, sources, text, speaker }) })
+  const afterName = useRef<(() => void) | null>(null)
+  function needName(then: () => void): boolean {
+    if (reviewerName()) return false
+    afterName.current = then // carry on with what was clicked once the name is saved
+    setAskName(true)
+    return true
   }
-  async function remove(c: Claim) {
-    if (!room) return
-    await api(`/admin/claims/${room.video_id}/${c.id}`, { method: 'DELETE' })
-    setSelected(null)
+  const body = (extra: object = {}) => JSON.stringify({ url, reviewer: reviewerName(), ...extra })
+  async function openClaim(c: Claim) {
+    if (needName(() => openClaim(c)) || !url) return
+    if (heldByOther(c)) { notify(`${c.claimed_by} está revisando esta análise`); return }
+    try {
+      const r = await api<{ claim: Claim }>(`/admin/review/${c.id}/lease`, { method: 'POST', body: body() })
+      setOpened(r.claim)
+      setOpenId(c.id)
+    } catch (e) { notify((e as Error).message) }
   }
+  async function next(after?: string, clickedAt?: number) {
+    if (needName(() => next(after)) || !url) return
+    try {
+      const r = await api<{ claim: Claim | null }>('/admin/review/next', { method: 'POST', body: body({ after }) })
+      const left = clickedAt === undefined ? 0 : CARD_SWAP_MS - (performance.now() - clickedAt)
+      if (left > 0) await new Promise((ok) => setTimeout(ok, left)) // never more than the animation itself
+      if (r.claim) { setOpened(r.claim); setOpenId(r.claim.id) } else { setOpenId(null); notify('Nenhuma análise aguardando revisão agora') }
+    } catch (e) { notify((e as Error).message) }
+  }
+  function release(id: string) {
+    api(`/admin/review/${id}/release`, { method: 'POST', body: body() }).catch(() => {})
+  }
+  function close() {
+    if (openId) release(openId)
+    setOpenId(null)
+  }
+  async function skip(): Promise<boolean> {
+    if (!openId) return false
+    const id = openId
+    const t0 = performance.now()
+    try { await api(`/admin/review/${id}/skip`, { method: 'POST', body: body() }) } catch (e) { notify((e as Error).message); return false }
+    await next(id, t0) // the server never offers it to me again; others still get it
+    return true
+  }
+  async function decide(c: Claim, action: 'publish' | 'irrelevant', edits?: Edits): Promise<boolean> {
+    const t0 = performance.now()
+    try {
+      await api(`/admin/review/${c.id}/decide`, { method: 'POST', body: body({ action, rev: c.rev ?? 0, ...edits }) })
+    } catch (e) { notify((e as Error).message); return false }
+    if (statusOf(c) === 'draft') await next(c.id, t0) // working the queue: the card after this one, in speaking order
+    else setOpenId(null) // a correction of an already published claim: back to the list
+    return true
+  }
+  // keep the review while the card is open; if someone else took it over (lease expired), say so and close
+  useEffect(() => {
+    if (!openId || !url) return
+    const t = setInterval(() => {
+      api(`/admin/review/${openId}/lease`, { method: 'POST', body: JSON.stringify({ url, reviewer }) })
+        .catch((e) => { notify((e as Error).message); setOpenId(null) })
+    }, LEASE_RENEW_MS) // closing the tab without "×" just lets the lease expire
+    return () => clearInterval(t)
+  }, [openId, url, reviewer, notify])
+
   async function toggle() {
     if (!room) return
     try {
@@ -464,105 +548,175 @@ function ClaimsPage({ rooms, room, onPick, reload, notify }: { rooms: Room[]; ro
       <div className="page__content">
         <PageHeader
           title={rooms.length > 1 ? (
-            <select className="title-select" value={room?.id ?? ''} onChange={(e) => { onPick(e.target.value); setSelected(null) }}>
+            <select className="title-select" value={room?.id ?? ''} onChange={(e) => { close(); onPick(e.target.value) }}>
               {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
           ) : room?.name ?? 'Checagens'}
-          meta={st && <span className={`state state--${st.cls}`}><span className="state__dot" />{st.word}</span>}>
+          meta={<>
+            {st && <span className={`state state--${st.cls}`}><span className="state__dot" />{st.word}</span>}
+            {reviewer && <button type="button" className="link" onClick={() => setAskName(true)} title="Trocar o nome">revisando como {reviewer}</button>}
+          </>}>
+          {room && <button type="button" className="btn" onClick={() => next()} disabled={ready === 0}>Revisar{ready > 0 && ` (${ready})`}</button>}
           {room && !room.complete && (
-            <button type="button" className={room.processing ? 'btn btn--stop' : 'btn'} onClick={toggle}>{room.processing ? 'Parar' : 'Iniciar checagem'}</button>
+            <button type="button" className="btn btn--stop" onClick={toggle}>{room.processing ? 'Parar' : 'Iniciar checagem'}</button>
           )}
         </PageHeader>
         <div className="toolbar">
           <div className="pills">
-            {(['all', 'fake', 'valid', 'inconclusive', 'pending'] as const).map((f) => (
-              <button key={f} type="button" className={`pill${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>
-                {f === 'all' ? 'Todas' : f === 'pending' ? 'Verificando' : VERDICT_LABEL[f]} <span className="pill__n">{f === 'all' ? session.claims.length : counts[f]}</span>
+            {STATUS_FILTERS.map(([f, label]) => (
+              <button key={f} type="button" className={`pill${status === f ? ' active' : ''}`} onClick={() => setStatus(f)}>
+                {label} <span className="pill__n">{f === 'all' ? session.claims.length : counts[f]}</span>
               </button>
             ))}
           </div>
+          <select className="search search--select" value={verdictFilter} onChange={(e) => setVerdictFilter(e.target.value as typeof verdictFilter)} title="Veredito da máquina">
+            <option value="all">Todos os vereditos</option>
+            {(['fake', 'valid', 'inconclusive', 'pending'] as const).map((v) => <option key={v} value={v}>{VERDICT_LABEL[v]}</option>)}
+          </select>
           <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar…" />
         </div>
         {!room && <Empty><p>Crie uma sala primeiro.</p></Empty>}
         {room && visible.length === 0 && (
-          <Empty><p className="muted">{session.claims.length === 0 ? 'Nenhuma afirmação ainda — as checagens aparecem aqui em tempo real.' : 'Nada com esse filtro.'}</p></Empty>
+          <Empty><p className="muted">{session.claims.length === 0 ? 'Nenhuma afirmação ainda — as análises da máquina aparecem aqui em tempo real.'
+            : status === 'draft' ? 'Nada aguardando revisão.' : 'Nada com esse filtro.'}</p></Empty>
         )}
         <div className="rows">
-          {visible.map((c) => (
-            <button key={c.id} type="button" className={`row row--claim claim--${c.verdict}${selected === c.id ? ' active' : ''}`} onClick={() => setSelected(c.id)}>
-              <span className="claim__badge">{c.verdict === 'pending' && <span className="spinner" aria-hidden />}{VERDICT_LABEL[c.verdict]}</span>
-              <span className="row__main"><span className="row__title row__title--normal">{c.speaker && <strong>{c.speaker}: </strong>}{c.text}</span></span>
-              {c.method === 'human' && <span className="chip">editada</span>}
-              <span className="row__meta">{c.verdict !== 'pending' && `${Math.round(c.confidence * 100)}% · `}{fmt(c.start)}</span>
-              <span className="row__chevron">›</span>
-            </button>
-          ))}
+          {visible.map((c) => {
+            const other = heldByOther(c)
+            const s = statusOf(c)
+            return (
+              <button key={c.id} type="button" className={`row row--claim claim--${c.verdict} row--${s}${openId === c.id ? ' active' : ''}${other ? ' row--held' : ''}`} onClick={() => openClaim(c)}>
+                <span className="claim__badge">{c.verdict === 'pending' && <span className="spinner" aria-hidden />}{VERDICT_LABEL[c.verdict]}</span>
+                <span className="row__main"><span className="row__title row__title--normal">{c.speaker && <strong>{c.speaker}: </strong>}{c.text}</span></span>
+                {other ? <span className="chip chip--held" title="Está com o card aberto">✎ {c.claimed_by}</span>
+                  : <span className={`chip chip--${s}`} title={c.reviewed_by ? `por ${c.reviewed_by}` : undefined}>{STATUS_PT[s]}{c.method === 'human' && ' · editada'}{s === 'draft' && skippedByMe(c) && ' · você pulou'}</span>}
+                <span className="row__meta">{c.verdict !== 'pending' && `${Math.round(c.confidence * 100)}% · `}{fmt(c.start)}</span>
+                <span className="row__chevron">›</span>
+              </button>
+            )
+          })}
         </div>
       </div>
-      {claim && <ClaimPanel key={claim.id} claim={claim} onClose={() => setSelected(null)} onSave={save} onDelete={remove} onRecheck={session.recheck} notify={notify} />}
+      {claim && (
+        <ReviewCard key={`${claim.id}-${claim.verdict === 'pending'}`} claim={claim} transcript={session.transcript} queue={ready}
+          onClose={close} onSkip={skip} onDecide={decide} onRecheck={session.recheck} />
+      )}
+      {askName && <ReviewerDialog initial={reviewer} onClose={reviewer ? () => setAskName(false) : undefined}
+        onSave={(n) => { setReviewerName(n); setReviewer(n); setAskName(false); afterName.current?.(); afterName.current = null }} />}
     </div>
   )
 }
 
-function ClaimPanel({ claim: c, onClose, onSave, onDelete, onRecheck, notify }: {
-  claim: Claim; onClose: () => void; onSave: (c: Claim, v: Final, e: string, s: Source[], t: string, sp: string) => Promise<void>; onDelete: (c: Claim) => Promise<void>
-  onRecheck: (id: string) => void; notify: (m: string) => void
+function ReviewCard({ claim: live, transcript, queue, onClose, onSkip, onDecide, onRecheck }: {
+  claim: Claim; transcript: TranscriptSegment[]; queue: number; onClose: () => void; onSkip: () => Promise<boolean>
+  onDecide: (c: Claim, action: 'publish' | 'irrelevant', edits?: Edits) => Promise<boolean>; onRecheck: (id: string) => void
 }) {
-  const initialVerdict: Final = c.verdict === 'pending' ? 'inconclusive' : c.verdict
+  useEscape(onClose)
+  // while the card animates out, it keeps showing what was decided on (the live claim turns "published"
+  // under it, which would swap the buttons mid-animation)
+  const [frozen, setFrozen] = useState<Claim | null>(null)
+  const c = frozen ?? live
+  const draft = statusOf(c) === 'draft'
+  const pending = c.verdict === 'pending'
+  const initialVerdict: Final = pending ? 'inconclusive' : c.verdict as Final
+  const initialQuote = c.quote || c.text // what the site shows: the speaker's own words
   const [verdict, setVerdict] = useState<Final>(initialVerdict)
-  const [text, setText] = useState(c.text)
+  const [quote, setQuote] = useState(initialQuote)
   const [speaker, setSpeaker] = useState(c.speaker ?? '')
   const [explanation, setExplanation] = useState(c.explanation)
   const [sources, setSources] = useState<Source[]>(c.sources)
-  const [saving, setSaving] = useState(false)
-  const cleanSources = sources.filter((s) => s.url.trim()).map((s) => ({ title: s.title.trim(), url: s.url.trim() }))
-  const dirty = verdict !== initialVerdict || explanation !== c.explanation || text.trim() !== c.text || speaker.trim() !== (c.speaker ?? '')
-    || JSON.stringify(cleanSources) !== JSON.stringify(c.sources)
-  async function submit(e: FormEvent) {
-    e.preventDefault()
-    if (!dirty) return
-    setSaving(true)
-    try { await onSave(c, verdict, explanation, cleanSources, text.trim() || c.text, speaker.trim()) } catch (err) { notify((err as Error).message) } finally { setSaving(false) }
+  const [busy, setBusy] = useState<'publish' | 'irrelevant' | 'skip' | null>(null)
+  const [titling, setTitling] = useState<number | null>(null) // source row whose page title is being fetched
+  // pasting a link fills an empty title with the page's own (the server reads it: browsers can't cross-origin)
+  async function titleFor(i: number, url: string) {
+    setTitling(i)
+    try {
+      const { title } = await api<{ title: string }>(`/admin/page-title?url=${encodeURIComponent(url)}`)
+      if (title) setSources((ss) => ss.map((x, j) => (j === i && !x.title.trim() && x.url.trim() === url ? { ...x, title } : x)))
+    } catch { /* no title: the person types one, or leaves it empty */ } finally { setTitling((t) => (t === i ? null : t)) }
   }
-  const formId = `claim-${c.id}`
+  const cleanSources = sources.filter((s) => s.url.trim()).map((s) => ({ title: s.title.trim(), url: s.url.trim() }))
+  const dirty = verdict !== initialVerdict || explanation !== c.explanation || quote.trim() !== initialQuote || speaker.trim() !== (c.speaker ?? '')
+    || JSON.stringify(cleanSources) !== JSON.stringify(c.sources)
+  const excerpt = transcript.filter((s) => s.start >= c.start - 24 && s.start <= c.end + 8).sort((a, b) => a.start - b.start)
+  // the card animates out while the request runs (no added wait); the next card animates in when it arrives
+  async function act(action: 'publish' | 'irrelevant' | 'skip') {
+    setFrozen(live)
+    setBusy(action)
+    const ok = action === 'skip' ? await onSkip() : await onDecide(c, action, action === 'publish'
+      ? { verdict, explanation, sources: cleanSources, quote: quote.trim() || initialQuote, speaker: speaker.trim() } : undefined)
+    if (!ok) { setBusy(null); setFrozen(null) } // failed (e.g. someone else changed it): the card comes back
+  }
+  const canPublish = !busy && !(pending && verdict === initialVerdict && !dirty) && (draft || statusOf(c) === 'irrelevant' || dirty)
+  const publishLabel = draft ? 'Publicar' : statusOf(c) === 'irrelevant' ? 'Publicar no site' : 'Salvar correção'
   return (
-    <Panel title="Checagem" meta={<>{fmt(c.start)}{c.method && ` · ${METHOD_PT[c.method] ?? c.method}`}{c.verdict !== 'pending' && ` · ${Math.round(c.confidence * 100)}%`}</>} onClose={onClose}
-      actions={<button type="submit" form={formId} className="btn" disabled={!dirty || saving}>{saving ? 'Salvando…' : 'Publicar'}</button>}
-      footer={
-        <>
-          {c.verdict !== 'pending' && !c.deep_pending
-            ? <button type="button" className="link" onClick={() => onRecheck(c.id)}>Rechecar com IA</button>
-            : <span className="muted">{c.deep_pending ? 'Checagem profunda em andamento…' : 'Verificando…'}</span>}
-          <button type="button" className="link link--danger" onClick={() => { if (confirm('Excluir esta afirmação para todos os espectadores?')) onDelete(c).catch((e) => notify(e.message)) }}>Excluir</button>
-        </>
-      }>
-      <form id={formId} className="form" onSubmit={submit} onKeyDown={cmdEnter}>
-        <Field label="Quem falou" hint="Aparece antes da fala para o público. Corrigir só o nome não altera o veredito.">
-          <input value={speaker} onChange={(e) => setSpeaker(e.target.value)} placeholder="Ex.: Lula, Flávio Bolsonaro" />
-        </Field>
-        <Field label="Afirmação" hint="O que foi dito, com quem fez/recebeu o quê. Corrija se a extração trocou o sujeito.">
-          <textarea className={`quote claim--${c.verdict}`} value={text} onChange={(e) => setText(e.target.value)} rows={Math.min(6, Math.max(2, Math.ceil(text.length / 44)))} />
-        </Field>
-        <Field label="Veredito"><Segmented value={verdict} options={FINALS} onChange={setVerdict} /></Field>
-        <Field label="Explicação" hint="É o texto que o público lê embaixo da afirmação.">
-          <textarea value={explanation} onChange={(e) => setExplanation(e.target.value)} rows={Math.min(16, Math.max(5, Math.ceil(explanation.length / 44)))} />
-        </Field>
-        <div className="field">
-          <span className="field__label">Fontes</span>
-          <div className="list-edit">
-            {sources.map((s, i) => (
-              <div key={i} className="list-edit__row list-edit__row--source">
-                <input value={s.title} onChange={(e) => setSources(sources.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} placeholder="Título" />
-                <input type="url" value={s.url} onChange={(e) => setSources(sources.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} placeholder="https://…" />
-                <button type="button" className="icon-btn" aria-label="Remover fonte" onClick={() => setSources(sources.filter((_, j) => j !== i))}>×</button>
-              </div>
-            ))}
-            <button type="button" className="link" onClick={() => setSources([...sources, { title: '', url: '' }])}>+ Adicionar fonte</button>
+    <div className="dialog__backdrop dialog__backdrop--review" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className={`dialog dialog--review claim--${verdict}${busy ? ` review--out-${busy}` : ''}`} role="dialog" aria-label="Revisar análise">
+        <header className="dialog__header review__header">
+          <span className="muted review__meta">
+            {fmt(c.start)}
+            {c.method && ` · máquina: ${METHOD_PT[c.method] ?? c.method}`}
+            {!pending && ` · ${VERDICT_LABEL[c.verdict]} ${Math.round(c.confidence * 100)}%`}
+            {` · ${STATUS_PT[statusOf(c)]}`}{c.reviewed_by && ` por ${c.reviewed_by}`}
+          </span>
+          <span className="spacer" />
+          {draft && queue > 1 && <span className="muted review__queue">{queue - 1} na fila</span>}
+          <button type="button" className="icon-btn" onClick={onClose} title="Fechar (Esc)" aria-label="Fechar">×</button>
+        </header>
+        <form id={`review-${c.id}`} className="form review__body" onSubmit={(e) => { e.preventDefault(); if (canPublish) act('publish') }} onKeyDown={cmdEnter}>
+          {pending && <p className="review__notice">A máquina ainda está verificando esta afirmação. Você pode esperar, decidir o veredito você mesmo ou marcar como irrelevante.</p>}
+          {c.deep_pending && <p className="review__notice">Checagem profunda em andamento — o veredito pode mudar.</p>}
+          <div className="field">
+            <div className="review__said-box">
+              <input className="review__speaker" value={speaker} onChange={(e) => setSpeaker(e.target.value)} placeholder="Quem falou" aria-label="Quem falou"
+                size={Math.max(8, speaker.length + 1)} />
+              <textarea className="review__quote" value={quote} onChange={(e) => setQuote(e.target.value)} aria-label="Frase como aparece no site"
+                rows={Math.min(5, Math.max(2, Math.ceil(quote.length / 60)))} />
+            </div>
           </div>
-        </div>
-        {dirty && <p className="kbd-hint">⌘↵ publica para todos os espectadores</p>}
-      </form>
-    </Panel>
+          <div className="field">
+            <div className="review__verdict" aria-label="Veredito"><Segmented value={verdict} options={FINALS} onChange={setVerdict} /></div>
+          </div>
+          <Field label="Explicação">
+            <textarea value={explanation} onChange={(e) => setExplanation(e.target.value)} rows={Math.min(12, Math.max(3, Math.ceil(explanation.length / 70)))} />
+          </Field>
+          {excerpt.length > 0 && (
+            <details className="review__details">
+              <summary className="field__label">Trecho da transcrição</summary>
+              <div className="review__excerpt">
+                {excerpt.map((s) => <p key={s.id} className={s.start <= c.start && c.start < s.end ? 'review__said' : ''}><span className="transcript__time">{fmt(s.start)}</span>{s.text}</p>)}
+              </div>
+            </details>
+          )}
+          <div className="field">
+            <span className="field__label">Fontes</span>
+            <div className="list-edit">
+              {sources.map((s, i) => (
+                <div key={i} className="list-edit__row list-edit__row--source">
+                  <input type="url" value={s.url} onChange={(e) => setSources(sources.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} placeholder="https://…"
+                    onPaste={(e) => { const url = e.clipboardData.getData('text').trim(); if (/^https?:\/\/\S+$/.test(url) && !s.title.trim()) titleFor(i, url) }} />
+                  <input value={s.title} onChange={(e) => setSources(sources.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))}
+                    placeholder={titling === i ? 'Buscando título…' : 'Título (opcional)'} />
+                  <button type="button" className="icon-btn" aria-label="Remover fonte" onClick={() => setSources(sources.filter((_, j) => j !== i))}>×</button>
+                </div>
+              ))}
+              <button type="button" className="link" onClick={() => setSources([...sources, { title: '', url: '' }])}>+ Adicionar fonte</button>
+            </div>
+          </div>
+        </form>
+        <footer className="review__footer">
+          {draft && !pending && !c.deep_pending && <button type="button" className="link" onClick={() => onRecheck(c.id)}>Rechecar com IA</button>}
+          <span className="spacer" />
+          {draft && <button type="button" className={`btn btn--stop${busy === 'skip' ? ' btn--pressed' : ''}`} onClick={() => act('skip')} disabled={!!busy} title="Não aparece mais para você em Revisar; continua na fila dos outros">Pular</button>}
+          {statusOf(c) !== 'irrelevant' && (
+            <button type="button" className={`btn btn--stop${busy === 'irrelevant' ? ' btn--pressed' : ''}`} onClick={() => act('irrelevant')} disabled={!!busy} title={draft ? 'Não vai para o site' : 'Tira do site'}>
+              {busy === 'irrelevant' ? 'Salvando…' : draft ? 'Irrelevante' : 'Tirar do site'}
+            </button>
+          )}
+          <button type="submit" form={`review-${c.id}`} className={`btn${busy === 'publish' ? ' btn--pressed btn--published' : ''}`} disabled={!canPublish}>{busy === 'publish' ? 'Publicando…' : publishLabel}</button>
+        </footer>
+      </div>
+    </div>
   )
 }
 

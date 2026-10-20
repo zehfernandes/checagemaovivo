@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     # Only fact-check what candidates / interviewees say; drop claims the extractor attributes to moderators,
     # presenters or journalists (e.g. the premise of a question). Turn off for news broadcasts.
     candidates_only: bool = True
+    # Newsroom review: machine analyses wait as drafts until a person publishes them in /admin (off = publish at once)
+    human_review: bool = True
     # Verdict model for the web-search pass; gpt-5 models take a reasoning effort instead of temperature.
     verdict_model: str = "gpt-5-mini"
     verdict_effort: str = "low"

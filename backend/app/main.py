@@ -307,8 +307,9 @@ async def ws_endpoint(ws: WebSocket) -> None:
                     await ws.send_json({"type": "status", "state": "error", "code": "resolve_failed",
                                         "message": f"Não foi possível abrir o vídeo: {e}"})
                     continue
-                queue = channel.subscribe()
-                for ev in channel.snapshot():
+                newsroom = admin and req.review
+                queue = channel.subscribe(newsroom)
+                for ev in channel.snapshot(newsroom):
                     await ws.send_json(ev)
                 sender = asyncio.create_task(pump(queue))
                 if not admin or req.watch:

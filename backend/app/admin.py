@@ -2,21 +2,27 @@
 cache (edit/delete claims with live fan-out) and the news DB (browse/add/delete articles)."""
 from __future__ import annotations
 
+import asyncio
+import html
+import ipaddress
 import logging
+import re
 import shutil
+import socket
 import sqlite3
 import tempfile
 import time
 from pathlib import Path
 
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from . import audio
-from .channels import ChannelManager
+from .channels import ChannelManager, ReviewConflict
 from .config import settings
-from .news import NewsStore
+from .news import UA, NewsStore
 from .rooms import RoomStore
 
 log = logging.getLogger(__name__)
@@ -41,11 +47,68 @@ class RoomStart(BaseModel):
     start_seconds: float | None = None
 
 
+class ReviewIn(BaseModel):
+    url: str
+    reviewer: str
+    skip: list[str] = []  # next: claims this reviewer already passed on
+    after: str | None = None  # next: the claim just reviewed, so the queue continues from there
+
+
+class DecisionIn(BaseModel):
+    url: str
+    reviewer: str
+    action: str  # "publish" | "irrelevant"
+    rev: int | None = None  # the claim version the reviewer loaded (stale -> 409)
+    verdict: str | None = None
+    explanation: str | None = None
+    sources: list[dict] | None = None
+    text: str | None = None
+    speaker: str | None = None
+    quote: str | None = None  # the sentence as shown on the site ("Nós criamos…")
+
+
 class DocIn(BaseModel):
     url: str = ""
     title: str = ""
     text: str = ""
     source: str = "admin"
+
+
+_OG_TITLE = re.compile(r"""<meta[^>]+(?:property|name)=["'](?:og:title|twitter:title)["'][^>]*>""", re.I)
+_CONTENT = re.compile(r"""content=["']([^"']*)["']""", re.I)
+_TITLE = re.compile(r"<title[^>]*>(.*?)</title>", re.I | re.S)
+
+
+async def _public_host(url: str) -> bool:
+    """Only fetch pages on the public internet (no localhost / private network from the server)."""
+    host = httpx.URL(url).host
+    try:
+        infos = await asyncio.to_thread(socket.getaddrinfo, host, None)
+    except OSError:
+        return False
+    return all(ipaddress.ip_address(i[4][0]).is_global for i in infos)
+
+
+async def page_title(url: str) -> str:
+    """og:title, else <title>, read from the first ~400 KB of the page."""
+    async with httpx.AsyncClient(headers={"User-Agent": UA}, timeout=8, follow_redirects=True) as http:
+        async with http.stream("GET", url) as r:
+            if not await _public_host(str(r.url)):
+                return ""
+            r.raise_for_status()
+            chunks, size = [], 0
+            async for chunk in r.aiter_bytes():
+                chunks.append(chunk)
+                size += len(chunk)
+                if size > 400_000 or b"</head>" in chunk.lower():
+                    break
+            page = b"".join(chunks).decode(r.encoding or "utf-8", errors="ignore")
+    for tag in _OG_TITLE.findall(page):
+        m = _CONTENT.search(tag)
+        if m and m.group(1).strip():
+            return html.unescape(m.group(1)).strip()
+    m = _TITLE.search(page)
+    return html.unescape(re.sub(r"\s+", " ", m.group(1))).strip() if m else ""
 
 
 def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomStore, require_admin) -> APIRouter:
@@ -185,6 +248,81 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
         if not ok:
             raise HTTPException(404, "Afirmação não encontrada")
         return {"ok": True}
+
+    # ---- newsroom review: drafts wait for a person; one reviewer per claim at a time ------------
+    async def review_channel(url: str):
+        vid = audio.extract_video_id(url) or url
+        try:
+            return channels.channels.get(vid) or await channels.get(url)
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(502, f"Não foi possível abrir o vídeo: {e}")
+
+    def reviewer_of(name: str) -> str:
+        name = name.strip()[:60]
+        if not name:
+            raise HTTPException(400, "Informe seu nome para revisar")
+        return name
+
+    @r.post("/admin/review/next", dependencies=guard)
+    async def review_next(body: ReviewIn):
+        ch = await review_channel(body.url)
+        return {"claim": ch.next_for_review(reviewer_of(body.reviewer), set(body.skip), body.after)}
+
+    @r.post("/admin/review/{claim_id}/lease", dependencies=guard)
+    async def review_lease(claim_id: str, body: ReviewIn):
+        ch = await review_channel(body.url)
+        try:
+            return {"claim": ch.lease(claim_id, reviewer_of(body.reviewer))}
+        except KeyError:
+            raise HTTPException(404, "Afirmação não encontrada")
+        except ReviewConflict as e:
+            raise HTTPException(409, str(e))
+
+    @r.post("/admin/review/{claim_id}/release", dependencies=guard)
+    async def review_release(claim_id: str, body: ReviewIn):
+        (await review_channel(body.url)).release(claim_id, reviewer_of(body.reviewer))
+        return {"ok": True}
+
+    @r.post("/admin/review/{claim_id}/skip", dependencies=guard)
+    async def review_skip(claim_id: str, body: ReviewIn):
+        try:
+            (await review_channel(body.url)).skip(claim_id, reviewer_of(body.reviewer))
+        except KeyError:
+            raise HTTPException(404, "Afirmação não encontrada")
+        return {"ok": True}
+
+    @r.post("/admin/review/{claim_id}/decide", dependencies=guard)
+    async def review_decide(claim_id: str, body: DecisionIn):
+        if body.action not in ("publish", "irrelevant"):
+            raise HTTPException(400, "Ação inválida")
+        if body.verdict is not None and body.verdict not in ("fake", "valid", "inconclusive"):
+            raise HTTPException(400, "Veredito inválido")
+        ch = await review_channel(body.url)
+        try:
+            c = ch.decide(claim_id, reviewer_of(body.reviewer), body.action, body.rev, body.verdict, body.explanation,
+                          body.sources, body.text, body.speaker, quote=body.quote)
+        except KeyError:
+            raise HTTPException(404, "Afirmação não encontrada")
+        except ReviewConflict as e:
+            raise HTTPException(409, str(e))
+        if store and body.action == "publish" and c.get("method") == "human":  # a person's verdict: reuse it across videos
+            try:
+                vec = (await store.embed([c["text"]]))[0]
+                store.remember_verdict(c["text"], vec, c["verdict"], 1.0, c["explanation"], c.get("sources") or [], "human")
+            except Exception:  # noqa: BLE001
+                log.exception("verdict memory write failed")
+        return {"claim": c}
+
+    @r.get("/admin/page-title", dependencies=guard)
+    async def admin_page_title(url: str):
+        """Title of a pasted source link (the browser cannot read other sites itself)."""
+        if not re.match(r"https?://", url) or not await _public_host(url):
+            raise HTTPException(400, "Link inválido")
+        try:
+            return {"title": await page_title(url)}
+        except Exception:  # noqa: BLE001 — a slow or blocked site just leaves the title for the person to type
+            log.info("page title failed: %s", url, exc_info=True)
+            return {"title": ""}
 
     # ---- news DB -------------------------------------------------------------------------
     def need_store() -> NewsStore:

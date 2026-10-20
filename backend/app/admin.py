@@ -126,6 +126,15 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
         rooms.delete(room_id)
         return {"ok": True}
 
+    @r.get("/admin/rooms/{room_id}/activity", dependencies=guard)
+    async def room_activity(room_id: str):
+        """What the backend is doing for this room: transcription mode, work in flight and the run's log."""
+        room = rooms.get(room_id)
+        if not room:
+            raise HTTPException(404, "Sala não encontrada")
+        ch = channels.channels.get(room["video_id"])
+        return ch.pipeline.snapshot() if ch and ch.pipeline else {"mode": "", "in_flight": 0, "verifying": 0, "activity": []}
+
     @r.post("/admin/rooms/{room_id}/start", dependencies=guard)
     async def start_room(room_id: str, body: RoomStart):
         room = rooms.get(room_id)

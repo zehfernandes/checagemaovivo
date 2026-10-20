@@ -55,6 +55,11 @@ class Settings(BaseSettings):
                 out[vid] = (float(a), float(b))
         return out
     chunk_seconds: int = 8
+    # "chunks": transcribe every CHUNK_SECONDS over HTTP. "realtime": stream to an OpenAI Realtime
+    # transcription session; segments end at pauses, text ~1 s after the speaker stops (paced runs only).
+    transcribe_mode: str = "chunks"
+    realtime_silence_ms: int = 500  # pause that ends a realtime segment; lower = faster, more mid-sentence cuts
+    realtime_max_segment_s: float = 8  # no pause by then (music bed, nonstop speaker): cut anyway
     language: str = ""
     cors_origins: str = "http://localhost:5173"
     # When set, HTTP requests for any other public host (old fly.dev URL, apex domain) 301 to this host.

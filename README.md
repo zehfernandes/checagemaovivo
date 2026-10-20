@@ -67,6 +67,9 @@ The viewer UI has no admin controls; everything operational lives at `/admin` (p
 - **Salas** — rooms are YouTube URLs (debate, live interview…) stored in the cache DB. Create, rename,
   hide/publish (`active`), delete; **Iniciar/Parar** the shared processing (optionally in save mode);
   viewer count, claim count and progress per room. Only published rooms appear in the viewer's room picker.
+  The room panel also shows the backend's own log for the run (`GET /admin/rooms/{id}/activity`): transcription
+  mode, work in flight, every transcript with its lag, extraction/gate/dedup drops, each verification with
+  method and time, errors and realtime reconnects.
   Endpoints: `GET /rooms` (public, active only), `GET/POST /admin/rooms`, `PATCH/DELETE /admin/rooms/{id}`,
   `POST /admin/rooms/{id}/start|stop`.
 - **Checagens** — the fact-check cache of a room, live: filter by verdict, search, change the verdict,
@@ -121,6 +124,9 @@ no Fly account or production secrets required. Production secrets (`OPENAI_API_K
 | `CLAIM_GATE_MIN` | `0.35` | with Jev: drop candidate claims whose "checkable" probability is below this |
 | `TRANSCRIBE_GLOSSARY` | debate names | names/terms passed to the speech model so they are spelled correctly (Vorcaro, Galípolo…) |
 | `CHUNK_SECONDS` | `8` | audio chunk size; smaller = lower latency, more API calls |
+| `TRANSCRIBE_MODE` | `chunks` | `realtime`: stream audio to an OpenAI Realtime transcription session (same `TRANSCRIBE_MODEL`); segments end at pauses instead of every `CHUNK_SECONDS`, text ~1 s after the speaker stops. Paced runs only (`VOD_FULL_SPEED` keeps chunks); talks to api.openai.com over WebSocket |
+| `REALTIME_SILENCE_MS` | `500` | pause that ends a realtime segment; lower = faster, more mid-sentence cuts |
+| `REALTIME_MAX_SEGMENT_S` | `8` | cut a realtime segment anyway after this long (TV audio with a music bed or a speaker who never pauses keeps VAD "speaking"); higher = fewer mid-sentence cuts, more latency |
 | `LANGUAGE` | `pt` | transcription language hint (ISO-639-1), empty for auto |
 | `CORS_ORIGINS` | `http://localhost:5173` | allowed frontend origins |
 | `CANONICAL_HOST` | | if set, HTTP requests for other hosts 301 to it (prod: `www.checagemaovivo.org`) |

@@ -12,6 +12,8 @@ interface Room extends PublicRoom {
 }
 interface Doc { id: number; url: string; source: string; title: string; published: number | null; kind: string; added: number; chunks: number; excerpt: string }
 interface Fix { from: string; to: string }
+interface ActivityLine { t: number; level: string; src: string; msg: string }
+interface Activity { mode: string; in_flight: number; verifying: number; activity: ActivityLine[] }
 
 const TABS: [Tab, string][] = [['rooms', 'Salas'], ['claims', 'Checagens'], ['news', 'Base de notícias'], ['glossary', 'Glossário']]
 const KINDS: [string, string][] = [['debate', 'Debate'], ['entrevista', 'Entrevista'], ['outro', 'Outro']]
@@ -346,11 +348,19 @@ function RoomPanel({ room: r, busy, run, onClose, openClaims }: {
         {!r.processing && !r.complete && (
           <Switch label="Modo econômico" hint="Menos chamadas de IA: sem checagem profunda automática, no máximo 6 afirmações/min." checked={save} onChange={setSave} />
         )}
+        {r.usage && (
+          <dl className="facts">
+            <div><dt>Chamadas IA</dt><dd>{r.usage.calls}</dd></div>
+            <div><dt>Buscas web</dt><dd>{r.usage.searches}</dd></div>
+            <div><dt>Áudio</dt><dd>{fmt(r.usage.audio_seconds)}</dd></div>
+          </dl>
+        )}
         <div className="panel__links">
           <button type="button" className="link" onClick={openClaims}>Abrir checagens →</button>
           <a className="link" href={`/?room=${r.id}`} target="_blank" rel="noreferrer">Ver como espectador ↗</a>
         </div>
       </section>
+      <ActivitySection roomId={r.id} live={r.processing} />
       <form className="panel__section form" onSubmit={(e) => { e.preventDefault(); patch({ name, url, kind }) }} onKeyDown={cmdEnter}>
         <Field label="Nome"><input value={name} onChange={(e) => setName(e.target.value)} required /></Field>
         <Field label="Link da transmissão"><input type="url" value={url} onChange={(e) => setUrl(e.target.value)} required /></Field>
@@ -363,6 +373,44 @@ function RoomPanel({ room: r, busy, run, onClose, openClaims }: {
         )}
       </form>
     </Panel>
+  )
+}
+
+const SRC_PT: Record<string, string> = { pipeline: 'pipeline', transcribe: 'áudio', factcheck: 'checagem', decider: 'decisor', news: 'base' }
+
+// The backend's own log for this room's run (not what viewers received): transcripts with their lag,
+// extraction/gate/dedup drops, each verification with method and time, errors and reconnects.
+function ActivitySection({ roomId, live }: { roomId: string; live: boolean }) {
+  const [a, setA] = useState<Activity | null>(null)
+  const [errorsOnly, setErrorsOnly] = useState(false)
+  useEffect(() => {
+    let alive = true
+    const load = () => api<Activity>(`/admin/rooms/${roomId}/activity`).then((v) => { if (alive) setA(v) }).catch(() => {})
+    load()
+    const t = live ? setInterval(load, 2000) : undefined
+    return () => { alive = false; clearInterval(t) }
+  }, [roomId, live])
+  if (!a || (!a.mode && a.activity.length === 0)) return null
+  const lines = a.activity.filter((l) => !errorsOnly || l.level !== 'INFO').reverse()
+  return (
+    <section className="panel__section">
+      <dl className="facts">
+        <div><dt>Transcrição</dt><dd>{a.mode === 'realtime' ? 'tempo real' : 'blocos'}</dd></div>
+        <div><dt>Em extração</dt><dd>{a.in_flight}</dd></div>
+        <div><dt>Verificando</dt><dd>{a.verifying}</dd></div>
+      </dl>
+      <Switch label="Só avisos e erros" checked={errorsOnly} onChange={setErrorsOnly} />
+      <ol className="activity">
+        {lines.length === 0 && <li className="muted">Nada ainda.</li>}
+        {lines.map((l, i) => (
+          <li key={`${l.t}-${i}`} className={`activity__line activity__line--${l.level.toLowerCase()}`}>
+            <time>{new Date(l.t * 1000).toLocaleTimeString('pt-BR')}</time>
+            <span className="activity__src">{SRC_PT[l.src] ?? l.src}</span>
+            <span className="activity__msg">{l.msg}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
   )
 }
 

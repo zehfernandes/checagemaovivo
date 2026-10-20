@@ -39,6 +39,20 @@ class VerifyResult:
     corrected_claim: str = ""  # set when the claim misrepresented the transcript; the verdict is about this text
 
 
+class ExtractedClaim(str):
+    """The checkable claim (third person, self-contained: what gets verified, embedded and cached) that also
+    carries who said it and the same claim from the speaker's point of view ("Eu…"), which is what viewers see.
+    A str subclass, so callers that only need the text keep working."""
+    speaker: str = ""
+    quote: str = ""
+
+    def __new__(cls, text: str, speaker: str = "", quote: str = ""):
+        obj = super().__new__(cls, text)
+        obj.speaker = speaker
+        obj.quote = quote
+        return obj
+
+
 class FactChecker(Protocol):
     async def extract_claims(self, context: str, latest: str, recent_claims: list[str], strict: bool = False,
                              entities: list[str] | None = None) -> list[str]: ...
@@ -58,6 +72,18 @@ _GENERIC_SUBJECT = re.compile(
 _NAMED = re.compile(r"[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]{2,}")  # the role must be followed by a proper name
 # pronouns / placeholders the model failed to resolve, and "X afirma que…" meta-claims (we check facts, not quotes)
 _UNRESOLVED = re.compile(r"\b(speaker|addressee|orador|oradora|interlocutor|interlocutora|falante|oponente|adversári[oa]|você|vocês|o senhor|a senhora|eu|nós|meu|minha|meus|minhas|nosso|nossa|seu pai|seu partido|seu governo)\b", re.I)
+_ROLE_ONLY = re.compile(r"^((o|a)\s+)?(candidat[oa]|orador[a]?|falante|speaker|presidente|senador[a]?|mediador[a]?|"
+                        r"apresentador[a]?|jornalista|unknown|desconhecid[oa])$", re.I)
+_ROLE_PREFIX = re.compile(r"^((o|a)\s+)?(candidat[oa]|presidente|ex-presidente|senador[a]?|governador[a]?|ministr[oa])\s+", re.I)
+
+
+def clean_speaker(name: str) -> str:
+    """'Candidato Flávio Bolsonaro' -> 'Flávio Bolsonaro'; a bare role ('Candidato') -> '' (a card shows no name)."""
+    name = _ROLE_PREFIX.sub("", name.strip()).strip()
+    return "" if not name or _ROLE_ONLY.match(name) else name
+
+
+_ADDRESSEE = re.compile(r"\b(você|vocês|o senhor|a senhora|seu governo|seu partido|seu pai)\b", re.I)
 _META = re.compile(r"^(\S+\s+){0,4}(afirma|afirmou|disse|diz|alega|alegou|declarou|declara|mencionou|menciona|sugeriu|sugere|acusou|acusa|perguntou|pergunta|questionou)\s+(que|se|a|o|sobre)\b"
                    r"|\b(de acordo com|segundo) (a|o) (declaração|fala|candidato|orador|falante)\b", re.I)
 
@@ -66,8 +92,11 @@ You receive a rolling transcript. From the LATEST segment only, extract factual 
 world that can be verified against public evidence: statistics, numbers, dates, past events, laws,
 what someone did or did not do, comparisons, cause-effect statements.
 
-Do NOT extract: promises or intentions about the future ("vou fazer", "vamos acabar com"), opinions,
-values, insults, questions, greetings, procedural talk, hypotheticals, or anything already in RECENT CLAIMS.
+Do NOT extract: promises, plans or predictions about the future ("vou fazer", "vamos acabar com", "vou construir
+meio milhão de vagas", "vão ficar 80 anos presos", "no meu governo não vai ter…") — anything in the future tense is a
+promise, not a checkable fact; opinions, values, insults, questions, greetings, procedural talk, hypotheticals,
+anecdotes without a checkable fact ("veja o vídeo de uma mulher…"), or anything already in RECENT CLAIMS.
+LANGUAGE: every "text" and "quote" is written in Brazilian Portuguese, like the transcript — NEVER in English.
 If several sentences make the same point, merge them into ONE claim. Return at most 2 claims; usually 0 or 1.
 
 FIRST decide WHO IS SPEAKING in the latest segment and WHOM they address ("speaker"/"addressee": a name from the
@@ -90,6 +119,18 @@ polls and analysis presented by the channel. A candidate speaks in the FIRST PER
 "no meu governo", "você/o senhor"). A segment can contain a moderator's hand-off followed by a candidate's answer:
 tag each claim by who said that sentence.
 Never extract claims about the broadcast itself or its logistics (schedules, arrivals, who is in the studio, accredited press).
+SPEAKER OF THE PREVIOUS SEGMENT tells who held the floor a moment ago: a debate turn lasts minutes, so that person keeps
+speaking until a hand-off ("Candidato X, dois minutos", "Obrigada, candidato", "sua réplica") or a clear cue (the
+speaker now names that person in the third person, or talks about "meu governo" of the other side). Being named or
+criticised by the speaker is not a hand-off. Also give "speaker_at_end": the candidate who holds the floor at the END of
+the latest segment, after any hand-off in it (a segment ending in "Candidato Lula, dois minutos" -> "Lula"); "" if unclear.
+For every claim also give "speaker" (the NAME of the person who said that sentence, e.g. "Lula", "Flávio Bolsonaro";
+"" if unknown) and "quote": the speaker's OWN WORDS for that fact, copied from the LATEST segment (first person stays
+first person: "Eu poderia ter votado…", "No governo do meu pai…"). Copy, do not rephrase: never change whose government,
+family or action it is ("do meu pai" stays "do meu pai", never "meu governo"). Only two edits are allowed: cut the words
+that are not part of the checked fact, and replace "você"/"o senhor"/"a senhora"/"seu governo" with the opponent's NAME
+("o senhor deixou o país com 14 milhões de desempregados" -> "Lula deixou o país com 14 milhões de desempregados").
+Fix obvious transcription slips in names. "text" stays third person with names.
 Write each claim as a short declarative sentence stating the fact itself (never "the speaker says that…"),
 in the SAME LANGUAGE as the transcript (e.g. Portuguese stays Portuguese).
 Every claim must be SELF-CONTAINED: resolve pronouns and vague references ("ele", "esse governo",
@@ -113,7 +154,8 @@ If the transcript garbled a name, use the context/known names to write it correc
 A claim that merely restates, narrows or extends one in RECENT CLAIMS (same fact, different wording,
 "part of", "more than") is a duplicate — skip it. Only extract a second claim when it is about a
 genuinely different fact.
-Respond with JSON: {"speaker": "...", "addressee": "...", "claims": [{"text": "...", "said_by": "candidate"}]}"""
+Respond with JSON: {"speaker": "...", "addressee": "...", "speaker_at_end": "...",
+"claims": [{"text": "...", "said_by": "candidate", "speaker": "...", "quote": "..."}]}"""
 
 VERIFY_SYSTEM = """You are a rigorous, neutral fact-checker working live during a political debate.
 Verify whether the CLAIM is TRUE ABOUT THE REAL WORLD using web search.
@@ -220,17 +262,20 @@ CLAIMS_SCHEMA = {
         "properties": {
             "speaker": {"type": "string"},
             "addressee": {"type": "string"},
+            "speaker_at_end": {"type": "string"},
             "claims": {"type": "array", "items": {
                 "type": "object",
                 "properties": {
                     "text": {"type": "string"},
                     "said_by": {"type": "string", "enum": ["candidate", "moderator", "unknown"]},
+                    "speaker": {"type": "string"},
+                    "quote": {"type": "string"},
                 },
-                "required": ["text", "said_by"],
+                "required": ["text", "said_by", "speaker", "quote"],
                 "additionalProperties": False,
             }},
         },
-        "required": ["speaker", "addressee", "claims"],
+        "required": ["speaker", "addressee", "speaker_at_end", "claims"],
         "additionalProperties": False,
     },
 }
@@ -311,6 +356,7 @@ class OpenAIFactChecker:
         self._bg: set[asyncio.Task] = set()
         self._recent_vecs: deque[np.ndarray] = deque(maxlen=RECENT_VEC_WINDOW)
         self._vec_cache: dict[str, np.ndarray] = {}  # claim text -> embedding, computed once in dedup and reused by verify
+        self._last_speaker = ""  # one checker per pipeline: who held the floor in the previous segment
 
     async def extract_claims(self, context: str, latest: str, recent_claims: list[str], strict: bool = False,
                              entities: list[str] | None = None) -> list[str]:
@@ -321,6 +367,7 @@ class OpenAIFactChecker:
             f"CONTEXT (previous segments):\n{context or '(none)'}\n\n"
             f"PEOPLE / ENTITIES MENTIONED IN THE LAST MINUTE (use them to resolve ele/ela/o cara/você/esse governo):\n"
             f"{', '.join(entities) if entities else '(none)'}\n\n"
+            f"SPEAKER OF THE PREVIOUS SEGMENT: {self._last_speaker or '(unknown)'}\n\n"
             f"LATEST SEGMENT:\n{latest}\n\n"
             f"RECENT CLAIMS (already extracted):\n" + ("\n".join(f"- {c}" for c in recent_claims) or "(none)")
         )
@@ -335,6 +382,9 @@ class OpenAIFactChecker:
         data = _parse_json(res.output_text)
         if data.get("speaker") or data.get("addressee"):
             log.info("extract: speaker=%r addressee=%r", data.get("speaker"), data.get("addressee"))
+        top = clean_speaker(str(data.get("speaker_at_end") or data.get("speaker") or ""))
+        if top:
+            self._last_speaker = top  # a turn outlives the 3-segment context window ("Candidato Lula, dois minutos")
         claims = []
         for c in data.get("claims", []):
             text = (c.get("text") if isinstance(c, dict) else c) or ""
@@ -343,7 +393,13 @@ class OpenAIFactChecker:
             if settings.candidates_only and isinstance(c, dict) and c.get("said_by") != "candidate":
                 log.info("extract: dropped %s claim: %s", c.get("said_by") or "unattributed", text[:80])
                 continue
-            claims.append(text.strip())
+            meta = c if isinstance(c, dict) else {}
+            quote = str(meta.get("quote") or "").strip()
+            if _ADDRESSEE.search(quote):  # "o senhor deixou…" is unreadable on a card: show the named text instead
+                quote = ""
+            quote = quote[:1].upper() + quote[1:]  # an excerpt may start mid-sentence ("o Bolsa Família…")
+            speaker = clean_speaker(str(meta.get("speaker") or ""))
+            claims.append(ExtractedClaim(text.strip(), speaker, quote))
         kept = []
         for c in claims:
             m = _GENERIC_SUBJECT.match(c)

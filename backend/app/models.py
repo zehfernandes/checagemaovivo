@@ -26,6 +26,7 @@ class Claim(BaseModel):
     start: float
     end: float
     speaker: str | None = None
+    quote: str | None = None  # the claim as the speaker said it ("Eu…"), shown to viewers; `text` is what gets checked
     method: Literal["cache", "db", "web", "deep", "human"] | None = None
     deep_pending: bool = False
     original_text: str | None = None  # what the extractor wrote before the verifier corrected the wording

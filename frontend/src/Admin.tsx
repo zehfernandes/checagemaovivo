@@ -393,9 +393,9 @@ function ClaimsPage({ rooms, room, onPick, reload, notify }: { rooms: Room[]; ro
   }, [session.claims])
   const claim = session.claims.find((c) => c.id === selected)
 
-  async function save(c: Claim, verdict: Final, explanation: string, sources: Source[], text: string) {
+  async function save(c: Claim, verdict: Final, explanation: string, sources: Source[], text: string, speaker: string) {
     if (!url) return
-    await api('/admin/claim', { method: 'POST', body: JSON.stringify({ url, claim_id: c.id, verdict, explanation, sources, text }) })
+    await api('/admin/claim', { method: 'POST', body: JSON.stringify({ url, claim_id: c.id, verdict, explanation, sources, text, speaker }) })
   }
   async function remove(c: Claim) {
     if (!room) return
@@ -443,7 +443,7 @@ function ClaimsPage({ rooms, room, onPick, reload, notify }: { rooms: Room[]; ro
           {visible.map((c) => (
             <button key={c.id} type="button" className={`row row--claim claim--${c.verdict}${selected === c.id ? ' active' : ''}`} onClick={() => setSelected(c.id)}>
               <span className="claim__badge">{c.verdict === 'pending' && <span className="spinner" aria-hidden />}{VERDICT_LABEL[c.verdict]}</span>
-              <span className="row__main"><span className="row__title row__title--normal">{c.text}</span></span>
+              <span className="row__main"><span className="row__title row__title--normal">{c.speaker && <strong>{c.speaker}: </strong>}{c.text}</span></span>
               {c.method === 'human' && <span className="chip">editada</span>}
               <span className="row__meta">{c.verdict !== 'pending' && `${Math.round(c.confidence * 100)}% · `}{fmt(c.start)}</span>
               <span className="row__chevron">›</span>
@@ -457,22 +457,24 @@ function ClaimsPage({ rooms, room, onPick, reload, notify }: { rooms: Room[]; ro
 }
 
 function ClaimPanel({ claim: c, onClose, onSave, onDelete, onRecheck, notify }: {
-  claim: Claim; onClose: () => void; onSave: (c: Claim, v: Final, e: string, s: Source[], t: string) => Promise<void>; onDelete: (c: Claim) => Promise<void>
+  claim: Claim; onClose: () => void; onSave: (c: Claim, v: Final, e: string, s: Source[], t: string, sp: string) => Promise<void>; onDelete: (c: Claim) => Promise<void>
   onRecheck: (id: string) => void; notify: (m: string) => void
 }) {
   const initialVerdict: Final = c.verdict === 'pending' ? 'inconclusive' : c.verdict
   const [verdict, setVerdict] = useState<Final>(initialVerdict)
   const [text, setText] = useState(c.text)
+  const [speaker, setSpeaker] = useState(c.speaker ?? '')
   const [explanation, setExplanation] = useState(c.explanation)
   const [sources, setSources] = useState<Source[]>(c.sources)
   const [saving, setSaving] = useState(false)
   const cleanSources = sources.filter((s) => s.url.trim()).map((s) => ({ title: s.title.trim(), url: s.url.trim() }))
-  const dirty = verdict !== initialVerdict || explanation !== c.explanation || text.trim() !== c.text || JSON.stringify(cleanSources) !== JSON.stringify(c.sources)
+  const dirty = verdict !== initialVerdict || explanation !== c.explanation || text.trim() !== c.text || speaker.trim() !== (c.speaker ?? '')
+    || JSON.stringify(cleanSources) !== JSON.stringify(c.sources)
   async function submit(e: FormEvent) {
     e.preventDefault()
     if (!dirty) return
     setSaving(true)
-    try { await onSave(c, verdict, explanation, cleanSources, text.trim() || c.text) } catch (err) { notify((err as Error).message) } finally { setSaving(false) }
+    try { await onSave(c, verdict, explanation, cleanSources, text.trim() || c.text, speaker.trim()) } catch (err) { notify((err as Error).message) } finally { setSaving(false) }
   }
   const formId = `claim-${c.id}`
   return (
@@ -487,6 +489,9 @@ function ClaimPanel({ claim: c, onClose, onSave, onDelete, onRecheck, notify }: 
         </>
       }>
       <form id={formId} className="form" onSubmit={submit} onKeyDown={cmdEnter}>
+        <Field label="Quem falou" hint="Aparece antes da fala para o público. Corrigir só o nome não altera o veredito.">
+          <input value={speaker} onChange={(e) => setSpeaker(e.target.value)} placeholder="Ex.: Lula, Flávio Bolsonaro" />
+        </Field>
         <Field label="Afirmação" hint="O que foi dito, com quem fez/recebeu o quê. Corrija se a extração trocou o sujeito.">
           <textarea className={`quote claim--${c.verdict}`} value={text} onChange={(e) => setText(e.target.value)} rows={Math.min(6, Math.max(2, Math.ceil(text.length / 44)))} />
         </Field>

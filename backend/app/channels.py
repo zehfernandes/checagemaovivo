@@ -298,17 +298,26 @@ class Channel:
             self.manager.private_channels.discard(self)
 
     async def override(self, claim_id: str, verdict: str, explanation: str, sources: list[dict] | None = None,
-                       text: str | None = None) -> dict | None:
-        """Human correction by an admin: replaces the verdict for every viewer (live fan-out) and in the cache."""
+                       text: str | None = None, speaker: str | None = None) -> dict | None:
+        """Human correction by an admin: replaces the verdict for every viewer (live fan-out) and in the cache.
+        Fixing only who said it keeps the verdict, its confidence and where it came from."""
         entry = self.claims.get(claim_id)
         if not entry:
             return None
-        c = {**entry["claim"], "verdict": verdict, "explanation": explanation, "method": "human",
-             "confidence": 1.0, "deep_pending": False}
-        if sources is not None:
-            c["sources"] = sources
-        if text and text.strip():
-            c["text"] = text.strip()
+        old = entry["claim"]
+        new_text = text.strip() if text and text.strip() and text.strip() != old["text"] else None
+        verdict_edited = (verdict != old["verdict"] or explanation != old.get("explanation", "") or new_text is not None
+                          or (sources is not None and sources != old.get("sources", [])))
+        c = {**old}
+        if verdict_edited:
+            c.update(verdict=verdict, explanation=explanation, method="human", confidence=1.0, deep_pending=False)
+            if sources is not None:
+                c["sources"] = sources
+        if new_text:
+            c["text"] = new_text
+            c["quote"] = None  # viewers see the quote first; an admin rewrite must show instead
+        if speaker is not None:
+            c["speaker"] = speaker.strip() or None
         await self.emit({**entry, "claim": c})
         return c
 

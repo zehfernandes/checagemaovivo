@@ -152,7 +152,9 @@ class Pipeline:
             self.recent_claims.append(claim_text)
             claim = Claim(
                 id=uuid.uuid4().hex[:10],
-                text=claim_text,
+                text=str(claim_text),
+                speaker=getattr(claim_text, "speaker", "") or None,
+                quote=getattr(claim_text, "quote", "") or None,
                 verdict=Verdict.PENDING,
                 confidence=0,
                 start=timing.locate(claim_text, text, chunk.start, chunk.end),
@@ -211,6 +213,7 @@ class Pipeline:
             log.info("claim corrected by verifier: %r -> %r", claim.text, r.corrected_claim)
             claim.original_text = claim.original_text or claim.text
             claim.text = r.corrected_claim
+            claim.quote = None  # the first-person quote was written from the misrepresented text
 
     async def stop(self, keep_verifications: bool = False) -> None:
         """Stop ingestion. With keep_verifications, in-flight verdicts still get

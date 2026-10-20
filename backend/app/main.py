@@ -117,6 +117,7 @@ class OverrideRequest(BaseModel):
     explanation: str = ""
     sources: list[dict] | None = None
     text: str | None = None  # admin rewrote the claim itself (bad extraction)
+    speaker: str | None = None  # who said it; None = unchanged, "" = unknown
 
 
 @app.post("/admin/claim", dependencies=[Depends(require_admin)])
@@ -124,10 +125,10 @@ async def admin_claim(req: OverrideRequest):
     """Human fact-check: overrides a claim's verdict for everyone watching and in the cache + verdict memory."""
     vid = audio.extract_video_id(req.url) or req.url
     channel = channels.channels.get(vid) or await channels.get(req.url)
-    c = await channel.override(req.claim_id, req.verdict, req.explanation, req.sources, req.text)
+    c = await channel.override(req.claim_id, req.verdict, req.explanation, req.sources, req.text, req.speaker)
     if c is None:
         raise HTTPException(404, "Afirmação não encontrada")
-    if store:
+    if store and c.get("method") == "human":  # a speaker-only fix is not a verdict
         try:
             vec = (await store.embed([c["text"]]))[0]
             store.remember_verdict(c["text"], vec, c["verdict"], 1.0, c["explanation"], c.get("sources") or [], "human")

@@ -8,6 +8,8 @@ export interface Source {
 export interface Claim {
   id: string
   text: string
+  speaker?: string | null
+  quote?: string | null // the claim as the speaker said it ("Eu…"); `text` is the third-person version that was checked
   verdict: Verdict
   confidence: number
   explanation: string
@@ -63,6 +65,10 @@ export const VERDICT_LABEL: Record<Verdict, string> = {
   valid: 'Verdadeiro',
   inconclusive: 'Inconclusivo',
 }
+
+// how a speaker is called on the viewer (cards, tabs)
+const SHORT_NAME: Record<string, string> = { 'Flávio Bolsonaro': 'Flávio' }
+export const speakerLabel = (name: string) => SHORT_NAME[name] ?? name
 
 export interface UsageSummary {
   tokens_in: number

@@ -116,7 +116,8 @@ claim into what you believe is true (that belongs in the verdict and explanation
 there to disambiguate the claim; the fact that someone said it is NOT evidence. Never answer "valid"
 merely because the transcript contains the statement.
 Prefer primary sources (official statistics, government, courts, academic work, established fact-checkers
-and major news outlets). Classify as:
+and major news outlets). Never use or cite partisan, campaign or activist sites (e.g. {blocked}); if a search
+returns one, ignore it and find an independent source. Classify as:
 - "fake": the claim is false or substantially misleading according to reliable evidence.
 - "valid": the claim is accurate or essentially accurate according to reliable evidence.
 - "inconclusive": evidence is insufficient, contradictory, outdated, the claim is a promise/opinion,
@@ -150,7 +151,8 @@ that a fast first pass left inconclusive. Work carefully:
    fact-checkers and official sources (lupa.uol.com.br, aosfatos.org, g1.globo.com/fato-ou-fake,
    projetocomprova.com.br, gov.br, ibge.gov.br, tse.jus.br, camara.leg.br, senado.leg.br, stf.jus.br,
    bcb.gov.br); (c) alternative wording, synonyms or the underlying statistic.
-3. Weigh the results. Answer "fake" or "valid" only with at least two independent reliable sources that
+3. Weigh the results. Never use or cite partisan, campaign or activist sites (e.g. {blocked}); if a search
+   returns one, ignore it. Answer "fake" or "valid" only with at least two independent reliable sources that
    address the specific fact; otherwise "inconclusive" and say in the explanation exactly what evidence
    would settle it (e.g. which official series or document).
 4. A figure that matches a different but legitimate official series or definition (e.g. Dívida Pública
@@ -165,6 +167,11 @@ Interpret relative time expressions against TODAY. "explanation" is 2-3 plain se
 LANGUAGE as the claim, no links or citations (sources go in the array). Respond ONLY with JSON:
 {"verdict": "fake|valid|inconclusive", "confidence": 0.0-1.0, "explanation": "...", "corrected_claim": "",
  "sources": [{"title": "...", "url": "https://..."}]}"""
+
+
+_BLOCKED = settings.blocked_domain_list
+VERIFY_SYSTEM = VERIFY_SYSTEM.replace("{blocked}", ", ".join(_BLOCKED) or "campaign websites")
+DEEP_SYSTEM = DEEP_SYSTEM.replace("{blocked}", ", ".join(_BLOCKED) or "campaign websites")
 
 
 VERIFY_DB_SYSTEM = """You are a rigorous, neutral fact-checker working live during a political debate.
@@ -217,8 +224,13 @@ def _clean_explanation(text: str) -> str:
     return re.sub(r"\s{2,}", " ", text).strip()
 
 
+def _blocked(url: str) -> bool:
+    host = (urlparse(url).hostname or "").lower().removeprefix("www.")
+    return any(host == h or host.endswith("." + h) for h in _BLOCKED)
+
+
 def _add_source(sources: list[Source], title: str, url: str, limit: int = 4) -> None:
-    if not url.startswith(("http://", "https://")) or len(sources) >= limit:
+    if not url.startswith(("http://", "https://")) or len(sources) >= limit or _blocked(url):
         return
     key = url.split("?utm_source=")[0].rstrip("/")
     if any(src.url.split("?utm_source=")[0].rstrip("/") == key for src in sources):

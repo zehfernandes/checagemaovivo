@@ -78,12 +78,15 @@ async def main() -> None:
     ap.add_argument("--model", default="gpt-5-mini")
     ap.add_argument("--effort", default="low", help="reasoning effort for gpt-5 models; '' to send temperature=0 instead")
     ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--citing", default="", help="only claims whose current sources cite this host (e.g. flaviomentiu.com.br)")
     ap.add_argument("--concurrency", type=int, default=6)
     ap.add_argument("--out", default="")
     args = ap.parse_args()
     global OUT
     OUT = Path(args.out) if args.out else Path(settings.news_db_file).parent / f"recheck_{args.model}_{args.effort or 't0'}.json"
     claims, segs = load(args.video)
+    if args.citing:
+        claims = [c for c in claims if any(args.citing in (s.get("url") or "") for s in c.get("sources") or [])]
     if args.limit:
         claims = claims[: args.limit]
     done: dict[str, dict] = {}

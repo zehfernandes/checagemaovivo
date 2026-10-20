@@ -13,6 +13,7 @@ import sqlite3
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlparse
 
 import feedparser
 import html
@@ -24,6 +25,7 @@ from datetime import datetime
 from openai import AsyncOpenAI
 
 from . import usage
+from .config import settings
 
 log = logging.getLogger(__name__)
 logging.getLogger("trafilatura").setLevel(logging.CRITICAL)
@@ -39,9 +41,12 @@ DEFAULT_FEEDS: dict[str, str] = {
     "CNN Brasil": "https://www.cnnbrasil.com.br/feed/",
     "E-Farsas": "https://www.e-farsas.com/feed",
     "Boatos.org": "https://www.boatos.org/feed",
-    # sitemap source (no RSS): fact-check per statement of the Band debate, by the Lula Memes volunteer front
-    "flaviomentiu.com.br (Lula Memes)": "https://flaviomentiu.com.br/sitemap.xml",
 }
+
+def _blocked_host(url: str, hosts: list[str]) -> bool:
+    host = (urlparse(url).hostname or "").lower().removeprefix("www.")
+    return any(host == h or host.endswith("." + h) for h in hosts)
+
 
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
 CHUNK_CHARS = 900
@@ -140,8 +145,28 @@ class NewsStore:
         self._rows: list[tuple] = []  # doc_id, url, source, title, published, text, kind
         self._vmat = np.zeros((0, 1), dtype=np.float32)  # verdict memory: settled claims + their verdicts
         self._vrows: list[dict] = []
+        self.purge_blocked(settings.blocked_domain_list)
         self._load()
         self._load_verdicts()
+
+    def purge_blocked(self, hosts: list[str]) -> int:
+        """Drop indexed articles from blocked (partisan) hosts and the remembered verdicts that cite them."""
+        if not hosts:
+            return 0
+        removed = 0
+        with self.db:
+            for doc_id, url in self.db.execute("SELECT id, url FROM docs").fetchall():
+                if _blocked_host(url, hosts):
+                    self.db.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_id,))
+                    self.db.execute("DELETE FROM docs WHERE id = ?", (doc_id,))
+                    removed += 1
+            for vid, sources in self.db.execute("SELECT id, sources FROM verdicts").fetchall():
+                if any(_blocked_host(src.get("url", ""), hosts) for src in json.loads(sources or "[]")):
+                    self.db.execute("DELETE FROM verdicts WHERE id = ?", (vid,))
+                    removed += 1
+        if removed:
+            log.info("purged %d docs/verdicts from blocked hosts %s", removed, hosts)
+        return removed
 
     # ---------- storage ----------
     def _load(self) -> None:

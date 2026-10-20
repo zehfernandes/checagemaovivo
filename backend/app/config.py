@@ -74,11 +74,17 @@ class Settings(BaseSettings):
     news_max_age_days: int = 14
     news_refresh_minutes: int = 30  # 0 disables the background refresh
     news_feeds: str = ""  # optional override: "Name=https://feed,Name2=https://feed2"
+    # partisan/campaign sites: never indexed in the news base, never shown as a source (comma-separated hosts)
+    blocked_domains: str = "flaviomentiu.com.br"
 
     @property
     def news_db_file(self) -> Path:
         p = Path(self.news_db_path)
         return p if p.is_absolute() else BACKEND_DIR / p
+
+    @property
+    def blocked_domain_list(self) -> list[str]:
+        return [h.strip().lower().removeprefix("www.") for h in self.blocked_domains.split(",") if h.strip()]
 
     @property
     def news_feed_map(self) -> dict[str, str] | None:

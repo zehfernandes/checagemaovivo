@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { adminHeaders, adminPassword } from './admin'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { adminHeaders, clearAdminToken, loadGoogle, setAdminToken, type AdminUser, type AuthMode } from './admin'
 import { useSession } from './useSession'
 import type { Claim, NewsStats, Room as PublicRoom, Source, UsageSummary, Verdict } from './types'
 import { VERDICT_LABEL } from './types'
 
 type Final = Exclude<Verdict, 'pending'>
-type Tab = 'rooms' | 'claims' | 'news' | 'glossary'
+type Tab = 'rooms' | 'claims' | 'news' | 'glossary' | 'users'
 
 interface Room extends PublicRoom {
   created: number; viewers: number; processed_to: number; state: string; message: string; usage: UsageSummary | null
@@ -15,7 +15,8 @@ interface Fix { from: string; to: string }
 interface ActivityLine { t: number; level: string; src: string; msg: string }
 interface Activity { mode: string; in_flight: number; verifying: number; activity: ActivityLine[] }
 
-const TABS: [Tab, string][] = [['rooms', 'Salas'], ['claims', 'Checagens'], ['news', 'Base de notícias'], ['glossary', 'Glossário']]
+const TABS: [Tab, string][] = [['rooms', 'Salas'], ['claims', 'Checagens'], ['news', 'Base de notícias'], ['glossary', 'Glossário'], ['users', 'Usuários']]
+const CHECKER_TABS: Tab[] = ['claims', 'news', 'glossary'] // checkers: no rooms (create/start/stop) and no users
 const KINDS: [string, string][] = [['debate', 'Debate'], ['entrevista', 'Entrevista'], ['outro', 'Outro']]
 const KIND_LABEL = Object.fromEntries(KINDS)
 const METHOD_PT: Record<string, string> = { cache: 'memória', db: 'base', web: 'web', deep: 'profunda', human: 'humano' }
@@ -127,40 +128,83 @@ function Empty({ children }: { children: ReactNode }) {
 
 // ---- shell ------------------------------------------------------------------------------------
 export function Admin() {
-  const [auth, setAuth] = useState<'checking' | 'in' | 'out'>('checking')
+  const [me, setMe] = useState<AdminUser | null>(null)
+  const [auth, setAuth] = useState<{ mode: AuthMode; google_client_id: string | null } | null>(null)
+  const [checking, setChecking] = useState(true)
   useEffect(() => {
-    fetch('/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: adminPassword() }) })
-      .then((r) => r.json()).then((d) => setAuth(d.ok ? 'in' : 'out')).catch(() => setAuth('out'))
+    fetch('/admin/me', { headers: adminHeaders() })
+      .then(async (r) => {
+        if (r.ok) { setMe(await r.json()); return }
+        setAuth(await (await fetch('/admin/auth')).json())
+      })
+      .catch(() => setAuth({ mode: 'password', google_client_id: null }))
+      .finally(() => setChecking(false))
   }, [])
-  if (auth === 'checking') return <div className="admin admin--center muted">Carregando…</div>
-  if (auth === 'out') return <Login onOk={() => setAuth('in')} />
-  return <Shell onLogout={() => { localStorage.removeItem('admin'); setAuth('out') }} />
+  function logout() {
+    clearAdminToken()
+    window.google?.accounts.id.disableAutoSelect() // don't sign straight back in with the same Google account
+    location.reload()
+  }
+  if (checking) return <div className="admin admin--center muted">Carregando…</div>
+  if (!me) return <Login auth={auth} onOk={(token, user) => { setAdminToken(token); setMe(user) }} />
+  return <Shell me={me} onLogout={logout} />
 }
 
-function Login({ onOk }: { onOk: () => void }) {
+function Login({ auth, onOk }: { auth: { mode: AuthMode; google_client_id: string | null } | null; onOk: (token: string, user: AdminUser) => void }) {
   const [pwd, setPwd] = useState('')
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const button = useRef<HTMLDivElement>(null)
+  const google = auth?.mode === 'google' && auth.google_client_id
+  useEffect(() => {
+    if (!google || !button.current) return
+    const el = button.current
+    loadGoogle().then((gid) => {
+      gid.initialize({
+        client_id: auth!.google_client_id!,
+        callback: async ({ credential }) => {
+          const r = await fetch('/admin/login/google', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ credential }) })
+          const d = await r.json().catch(() => ({}))
+          if (r.ok) onOk(d.token, d.user)
+          else setError(d.detail || 'Não foi possível entrar')
+        },
+      })
+      gid.renderButton(el, { theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with', locale: 'pt-BR', width: 280 })
+    }).catch((e) => setError((e as Error).message))
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- render the Google button once
+  }, [google])
   async function submit(e: FormEvent) {
     e.preventDefault()
     const r = await fetch('/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: pwd }) })
     const d = await r.json()
-    if (d.ok) { localStorage.setItem('admin', pwd); onOk() } else setError(true)
+    if (d.ok) onOk(d.token, d.user); else setError('Senha inválida')
   }
   return (
     <div className="admin admin--center">
-      <form className="admin__login" onSubmit={submit}>
+      <div className="admin__login">
         <h1><span className="logo">●</span> Administração</h1>
-        <input type="password" autoFocus value={pwd} onChange={(e) => { setPwd(e.target.value); setError(false) }} placeholder="Senha" className={error ? 'error' : ''} />
-        {error && <p className="admin__error">Senha inválida</p>}
-        <button type="submit" className="btn" disabled={!pwd}>Entrar</button>
-      </form>
+        {google ? (
+          <>
+            <p className="muted admin__login-hint">Entre com a conta Google cadastrada pela coordenação.</p>
+            <div ref={button} className="admin__google" />
+          </>
+        ) : (
+          <form className="admin__login-form" onSubmit={submit}>
+            <input type="password" autoFocus value={pwd} onChange={(e) => { setPwd(e.target.value); setError(null) }} placeholder="Senha" className={error ? 'error' : ''} />
+            <button type="submit" className="btn" disabled={!pwd}>Entrar</button>
+          </form>
+        )}
+        {error && <p className="admin__error">{error}</p>}
+      </div>
     </div>
   )
 }
 
-function Shell({ onLogout }: { onLogout: () => void }) {
+function Shell({ me, onLogout }: { me: AdminUser; onLogout: () => void }) {
   const params = new URLSearchParams(location.search)
-  const [tab, setTab] = useState<Tab>((params.get('tab') as Tab) || 'rooms')
+  const owner = me.role === 'owner'
+  const tabs = TABS.filter(([t]) => owner || CHECKER_TABS.includes(t))
+  const asked = params.get('tab') as Tab
+  const [tab, setTab] = useState<Tab>(tabs.some(([t]) => t === asked) ? asked : tabs[0][0])
   const [rooms, setRooms] = useState<Room[]>([])
   const [roomId, setRoomId] = useState<string>(params.get('room') || '')
   const [toast, setToast] = useState<string | null>(null)
@@ -190,7 +234,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
       <nav className="sidebar">
         <div className="sidebar__brand"><span className="logo">●</span> Checagem ao vivo</div>
         <div className="sidebar__nav">
-          {TABS.map(([t, label]) => (
+          {tabs.map(([t, label]) => (
             <button key={t} className={`sidebar__item${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
               {label}
               {t === 'rooms' && live > 0 && <span className="sidebar__count sidebar__count--live">{live} ao vivo</span>}
@@ -201,14 +245,19 @@ function Shell({ onLogout }: { onLogout: () => void }) {
         <div className="sidebar__foot">
           <a className="sidebar__item" href="/" target="_blank" rel="noreferrer">Ver como espectador ↗</a>
           <a className="sidebar__item" href="/#review">Revisão offline</a>
+          <div className="sidebar__user" title={me.email}>
+            {me.picture ? <img src={me.picture} alt="" referrerPolicy="no-referrer" /> : <span className="sidebar__avatar">{(me.name || me.email)[0]?.toUpperCase()}</span>}
+            <span className="sidebar__who"><span>{me.name || me.email}</span><span className="muted">{owner ? 'Owner' : 'Checador'}</span></span>
+          </div>
           <button type="button" className="sidebar__item" onClick={onLogout}>Sair</button>
         </div>
       </nav>
       <main className="shell__main">
         {tab === 'rooms' && <RoomsPage rooms={rooms} reload={loadRooms} notify={notify} openClaims={(id) => { setRoomId(id); setTab('claims') }} />}
-        {tab === 'claims' && <ClaimsPage rooms={rooms} room={room} onPick={setRoomId} reload={loadRooms} notify={notify} />}
+        {tab === 'claims' && <ClaimsPage rooms={rooms} room={room} onPick={setRoomId} reload={loadRooms} notify={notify} owner={owner} />}
         {tab === 'news' && <NewsPage notify={notify} />}
         {tab === 'glossary' && <GlossaryPage notify={notify} />}
+        {tab === 'users' && owner && <UsersPage me={me} notify={notify} />}
       </main>
       {toast && <div className="toast" onClick={() => setToast(null)}>{toast}</div>}
     </div>
@@ -415,7 +464,7 @@ function ActivitySection({ roomId, live }: { roomId: string; live: boolean }) {
 }
 
 // ---- Checagens --------------------------------------------------------------------------------
-function ClaimsPage({ rooms, room, onPick, reload, notify }: { rooms: Room[]; room: Room | undefined; onPick: (id: string) => void; reload: () => Promise<void>; notify: (m: string) => void }) {
+function ClaimsPage({ rooms, room, onPick, reload, notify, owner }: { rooms: Room[]; room: Room | undefined; onPick: (id: string) => void; reload: () => Promise<void>; notify: (m: string) => void; owner: boolean }) {
   const session = useSession()
   const [filter, setFilter] = useState<'all' | Verdict>('all')
   const [q, setQ] = useState('')
@@ -469,7 +518,7 @@ function ClaimsPage({ rooms, room, onPick, reload, notify }: { rooms: Room[]; ro
             </select>
           ) : room?.name ?? 'Checagens'}
           meta={st && <span className={`state state--${st.cls}`}><span className="state__dot" />{st.word}</span>}>
-          {room && !room.complete && (
+          {owner && room && !room.complete && (
             <button type="button" className={room.processing ? 'btn btn--stop' : 'btn'} onClick={toggle}>{room.processing ? 'Parar' : 'Iniciar checagem'}</button>
           )}
         </PageHeader>
@@ -499,13 +548,13 @@ function ClaimsPage({ rooms, room, onPick, reload, notify }: { rooms: Room[]; ro
           ))}
         </div>
       </div>
-      {claim && <ClaimPanel key={claim.id} claim={claim} onClose={() => setSelected(null)} onSave={save} onDelete={remove} onRecheck={session.recheck} notify={notify} />}
+      {claim && <ClaimPanel key={claim.id} claim={claim} onClose={() => setSelected(null)} onSave={save} onDelete={owner ? remove : undefined} onRecheck={session.recheck} notify={notify} />}
     </div>
   )
 }
 
 function ClaimPanel({ claim: c, onClose, onSave, onDelete, onRecheck, notify }: {
-  claim: Claim; onClose: () => void; onSave: (c: Claim, v: Final, e: string, s: Source[], t: string, sp: string) => Promise<void>; onDelete: (c: Claim) => Promise<void>
+  claim: Claim; onClose: () => void; onSave: (c: Claim, v: Final, e: string, s: Source[], t: string, sp: string) => Promise<void>; onDelete?: (c: Claim) => Promise<void>
   onRecheck: (id: string) => void; notify: (m: string) => void
 }) {
   const initialVerdict: Final = c.verdict === 'pending' ? 'inconclusive' : c.verdict
@@ -533,7 +582,7 @@ function ClaimPanel({ claim: c, onClose, onSave, onDelete, onRecheck, notify }: 
           {c.verdict !== 'pending' && !c.deep_pending
             ? <button type="button" className="link" onClick={() => onRecheck(c.id)}>Rechecar com IA</button>
             : <span className="muted">{c.deep_pending ? 'Checagem profunda em andamento…' : 'Verificando…'}</span>}
-          <button type="button" className="link link--danger" onClick={() => { if (confirm('Excluir esta afirmação para todos os espectadores?')) onDelete(c).catch((e) => notify(e.message)) }}>Excluir</button>
+          {onDelete && <button type="button" className="link link--danger" onClick={() => { if (confirm('Excluir esta afirmação para todos os espectadores?')) onDelete(c).catch((e) => notify(e.message)) }}>Excluir</button>}
         </>
       }>
       <form id={formId} className="form" onSubmit={submit} onKeyDown={cmdEnter}>
@@ -563,6 +612,59 @@ function ClaimPanel({ claim: c, onClose, onSave, onDelete, onRecheck, notify }: 
         {dirty && <p className="kbd-hint">⌘↵ publica para todos os espectadores</p>}
       </form>
     </Panel>
+  )
+}
+
+// ---- Usuários (owners only) ----------------------------------------------------------------------
+interface ListedUser { email: string; role: 'owner' | 'checker'; name?: string | null; picture?: string | null; added_by?: string | null; added_at?: number | null; last_login?: number | null; fixed: boolean }
+
+function UsersPage({ me, notify }: { me: AdminUser; notify: (m: string) => void }) {
+  const [list, setList] = useState<ListedUser[] | null>(null)
+  const [email, setEmail] = useState('')
+  const [saving, setSaving] = useState(false)
+  const load = useCallback(() => api<ListedUser[]>('/admin/users').then(setList).catch((e) => notify((e as Error).message)), [notify])
+  // oxlint-disable-next-line react-hooks/set-state-in-effect -- initial load
+  useEffect(() => { load() }, [load])
+  async function add(e: FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      await api('/admin/users', { method: 'POST', body: JSON.stringify({ email: email.trim() }) })
+      setEmail('')
+      await load()
+    } catch (err) { notify((err as Error).message) } finally { setSaving(false) }
+  }
+  async function remove(u: ListedUser) {
+    if (!confirm(`Remover o acesso de ${u.email}? A pessoa sai do admin na hora.`)) return
+    try { await api(`/admin/users/${encodeURIComponent(u.email)}`, { method: 'DELETE' }); await load() } catch (err) { notify((err as Error).message) }
+  }
+  const checkers = list?.filter((u) => !u.fixed).length ?? 0
+  return (
+    <div className="page">
+      <div className="page__content">
+        <PageHeader title="Usuários" meta={list && `${list.length - checkers} owner${list.length - checkers === 1 ? '' : 's'} · ${checkers} checador${checkers === 1 ? '' : 'es'}`} />
+        <form className="toolbar users__add" onSubmit={add}>
+          <input className="search" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e-mail do Google do checador" required />
+          <button type="submit" className="btn" disabled={saving || !email.trim()}>{saving ? 'Adicionando…' : 'Adicionar checador'}</button>
+          <span className="muted users__hint">Checadores revisam checagens e cuidam da base de notícias e do glossário. Não criam nem iniciam salas, nem gerenciam usuários.</span>
+        </form>
+        {list && list.length === 0 && <Empty><p className="muted">Ninguém cadastrado.</p></Empty>}
+        <div className="rows">
+          {list?.map((u) => (
+            <div key={u.email} className="row row--static">
+              {u.picture ? <img className="users__avatar" src={u.picture} alt="" referrerPolicy="no-referrer" /> : <span className="users__avatar users__avatar--empty">{(u.name || u.email)[0]?.toUpperCase()}</span>}
+              <span className="row__main">
+                <span className="row__title">{u.name || u.email}{u.email === me.email && <span className="muted"> · você</span>}</span>
+                <span className="row__sub">{u.name ? u.email : u.last_login ? '' : 'ainda não entrou'}</span>
+              </span>
+              <span className={`chip${u.role === 'owner' ? ' chip--owner' : ''}`}>{u.role === 'owner' ? 'Owner' : 'Checador'}</span>
+              <span className="row__meta">{u.fixed ? 'definido no servidor' : u.last_login ? `entrou ${ago(u.last_login)}` : u.added_by ? `por ${u.added_by}` : ''}</span>
+              {u.fixed ? <span className="users__remove" /> : <button type="button" className="link link--danger users__remove" onClick={() => remove(u)}>Remover</button>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   )
 }
 

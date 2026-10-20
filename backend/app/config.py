@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     # Empty = everyone is admin (dev). Set it in production: only admins can start processing,
     # re-check, refresh the news DB or edit verdicts; visitors only watch cached/ongoing runs.
     admin_password: str = ""
+    # Google sign-in for /admin (OAuth "Web application" client id). When set, the shared password stops working
+    # and only listed e-mails get in: OWNER_EMAILS (comma-separated, full access) + checkers added in /admin.
+    google_client_id: str = ""
+    owner_emails: str = ""
+    session_secret: str = ""  # signs admin sessions; set it in production or sessions end on every restart
     # First room created on an empty DB (viewers pick rooms instead of pasting URLs); empty = none
     default_room_url: str = "https://www.youtube.com/watch?v=Amwukq3hviM"
     default_room_name: str = "Debate Band — 2º turno"

@@ -48,9 +48,10 @@ class DocIn(BaseModel):
     source: str = "admin"
 
 
-def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomStore, require_admin) -> APIRouter:
+def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomStore, require_user, require_owner) -> APIRouter:
     r = APIRouter()
-    guard = [Depends(require_admin)]
+    guard = [Depends(require_owner)]  # rooms and data exports: owners only
+    checker = [Depends(require_user)]  # fact-checks, news DB, glossary: checkers too
 
     def room_view(room: dict) -> dict:
         vid = room["video_id"]
@@ -94,7 +95,7 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
     async def public_rooms():
         return [room_view(x) for x in rooms.list(active_only=True)]
 
-    @r.get("/admin/rooms", dependencies=guard)
+    @r.get("/admin/rooms", dependencies=checker)
     async def admin_rooms():
         return [room_view(x) for x in rooms.list()]
 
@@ -126,7 +127,7 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
         rooms.delete(room_id)
         return {"ok": True}
 
-    @r.get("/admin/rooms/{room_id}/activity", dependencies=guard)
+    @r.get("/admin/rooms/{room_id}/activity", dependencies=checker)
     async def room_activity(room_id: str):
         """What the backend is doing for this room: transcription mode, work in flight and the run's log."""
         room = rooms.get(room_id)
@@ -159,7 +160,7 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
         return room_view(room)
 
     # ---- fact-check cache ----------------------------------------------------------------
-    @r.get("/admin/claims", dependencies=guard)
+    @r.get("/admin/claims", dependencies=checker)
     async def list_claims(url: str, verdict: str | None = None, q: str = ""):
         vid = audio.extract_video_id(url) or url
         ch = channels.channels.get(vid)
@@ -192,13 +193,13 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
             raise HTTPException(503, "Base de notícias desativada (PROVIDER=mock ou sem chave da OpenAI)")
         return store
 
-    @r.get("/admin/news/docs", dependencies=guard)
+    @r.get("/admin/news/docs", dependencies=checker)
     async def news_docs(q: str = "", limit: int = 100, offset: int = 0):
         if not store:
             return {"total": 0, "docs": [], "disabled": True}
         return store.list_docs(q, min(limit, 500), offset)
 
-    @r.post("/admin/news/docs", dependencies=guard)
+    @r.post("/admin/news/docs", dependencies=checker)
     async def news_add(body: DocIn):
         s = need_store()
         url, text = body.url.strip(), body.text.strip()
@@ -218,7 +219,7 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
                 raise HTTPException(422, "Nada foi indexado")
         return {"ok": True, "seconds": round(time.time() - t0, 1), **s.stats()}
 
-    @r.delete("/admin/news/docs/{doc_id}", dependencies=guard)
+    @r.delete("/admin/news/docs/{doc_id}", dependencies=checker)
     async def news_delete(doc_id: int):
         if not need_store().delete_doc(doc_id):
             raise HTTPException(404, "Artigo não encontrado")

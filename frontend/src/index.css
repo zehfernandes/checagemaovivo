@@ -411,3 +411,19 @@ a.row__title:hover { text-decoration: underline; text-underline-offset: 3px; }
   background: var(--text); color: var(--bg); font-size: 13px; font-weight: 600; text-decoration: none;
 }
 .stage-notice__link:hover { opacity: .9; }
+
+/* ---- access: Google sign-in, who is signed in, users ---- */
+.admin__login-hint { margin: 0; font-size: 13px; text-align: center; }
+.admin__google { display: flex; justify-content: center; min-height: 44px; }
+.admin__login-form { display: contents; }
+.sidebar__user { display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 12px; min-width: 0; }
+.sidebar__user img, .sidebar__avatar { width: 26px; height: 26px; border-radius: 50%; flex: none; }
+.sidebar__avatar, .users__avatar--empty { display: grid; place-items: center; background: var(--panel-2); color: var(--text-2); font-weight: 600; font-size: 12px; }
+.sidebar__who { display: flex; flex-direction: column; min-width: 0; }
+.sidebar__who > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.users__add { flex-wrap: wrap; }
+.users__add .search { max-width: 320px; margin-left: 0; }
+.users__hint { font-size: 12px; }
+.users__avatar { width: 28px; height: 28px; border-radius: 50%; flex: none; }
+.users__remove { width: 64px; text-align: right; flex: none; }
+.chip--owner { color: var(--text); }

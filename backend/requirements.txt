@@ -10,3 +10,5 @@ feedparser>=6.0
 trafilatura>=1.12
 lxml_html_clean>=0.4
 numpy>=1.26
+google-auth>=2.30
+requests>=2.31

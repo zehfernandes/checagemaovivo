@@ -10,13 +10,14 @@ import time
 import uuid
 from collections import deque
 from collections.abc import Awaitable, Callable
+from contextvars import ContextVar
 
 from . import audio, timing, usage
 from .config import settings
 from .glossary import glossary as _glossary
 from .factcheck import FactChecker, VerifyResult
 from .models import Claim, StreamInfo, TranscriptSegment, Verdict
-from .transcribe import Transcriber
+from .transcribe import RT_FRAME_SECONDS, RT_RATE, RealtimeTranscriber, Transcriber
 
 log = logging.getLogger(__name__)
 
@@ -29,6 +30,27 @@ SAVE_MIN_WORDS = 12  # save mode: don't run extraction on chunks shorter than th
 MAX_CONCURRENT_TRANSCRIPTIONS = 6
 RECENT_CLAIMS = 12
 ENTITY_SEGMENTS = 8  # ~64 s of transcript used to resolve 'ele', 'o cara', 'você'
+ACTIVITY_LINES = 300
+
+_running: ContextVar["Pipeline | None"] = ContextVar("pipeline", default=None)
+
+
+class _ActivityLog(logging.Handler):
+    """Copies every app.* log line emitted inside a pipeline run (its tasks inherit the context) into
+    that run's activity buffer, so /admin shows what the backend is actually doing."""
+
+    def emit(self, record: logging.LogRecord) -> None:
+        p = _running.get()
+        if p is None:
+            return
+        msg = record.getMessage()
+        if record.exc_info and record.exc_info[1]:
+            msg += f" — {record.exc_info[1]!r}"
+        p.activity.append({"t": record.created, "level": record.levelname, "src": record.name.removeprefix("app."),
+                           "msg": msg[:400]})
+
+
+logging.getLogger("app").addHandler(_ActivityLog(logging.INFO))
 
 
 _NAME = re.compile(r"\b(?:[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\wáéíóúâêôãõç]+)(?:\s+(?:d[aeo]s?\s+)?[A-ZÁÉÍÓÚÂÊÔÃÕÇ][\wáéíóúâêôãõç]+)*")
@@ -74,6 +96,8 @@ class Pipeline:
         self._stopped = False
         self.run_id = uuid.uuid4().hex[:6]
         self.claims: dict[str, tuple[Claim, str]] = {}
+        self.activity: deque[dict] = deque(maxlen=ACTIVITY_LINES)
+        self.mode = ""
 
     def _spawn(self, coro, *, verification: bool = False) -> None:
         t = asyncio.create_task(coro)
@@ -83,6 +107,7 @@ class Pipeline:
 
     async def run(self, url: str, language: str | None, start_seconds: float, realtime: bool = True) -> None:
         usage.current.set(self.usage)  # child tasks inherit the context -> all calls of this run are metered
+        _running.set(self)
         await self.emit({"type": "status", "state": "resolving", "message": "Abrindo o vídeo…"})
         if settings.provider == "mock" and not url.strip():
             info = StreamInfo(video_id="", title="Mock stream", is_live=True)
@@ -91,8 +116,20 @@ class Pipeline:
         await self.emit({"type": "info", "info": info.model_dump()})
         await self.emit({"type": "status", "state": "listening", "message": "Ouvindo…"})
 
+        rt = realtime and isinstance(self.transcriber, RealtimeTranscriber)
+        self.mode = "realtime" if rt else "chunks"
+        log.info("run %s: %s from %.0fs, transcription=%s", self.run_id, info.title or url, start_seconds,
+                 "realtime (cuts at pauses)" if rt else f"{settings.chunk_seconds}s chunks")
         if settings.provider == "mock" and not url.strip():
             chunks = self._mock_chunks()
+        elif rt:
+            frames = audio.iter_chunks(media_url, RT_FRAME_SECONDS, info.is_live, start_seconds, realtime, RT_RATE)
+            async for chunk, text in self.transcriber.segments(frames, language):
+                if self._stopped:
+                    break
+                self._spawn(self._on_text(chunk, text))
+            await self.emit({"type": "status", "state": "ended", "message": "Transmissão encerrada"})
+            return
         else:
             chunks = audio.iter_chunks(media_url, settings.chunk_seconds, info.is_live, start_seconds, realtime)
 
@@ -121,11 +158,14 @@ class Pipeline:
             return
         finally:
             self.transcribe_sem.release()
-        if not text:
-            return
+        if text:
+            await self._on_text(chunk, text)
+
+    async def _on_text(self, chunk: audio.AudioChunk, text: str) -> None:
         seg = TranscriptSegment(id=f"seg-{self.run_id}-{chunk.index}", text=text, start=chunk.start, end=chunk.end,
                                 captured_at=chunk.captured_at or None, transcribed_at=time.time())
-        log.info("transcript[%s] %.0fs: %s", self.run_id, chunk.start, text)
+        log.info("transcript[%s] %.0f-%.0fs (+%.1fs after the audio): %s", self.run_id, chunk.start, chunk.end,
+                 time.time() - chunk.captured_at if chunk.captured_at else 0, text)
         await self.emit({"type": "transcript", "segment": seg.model_dump()})
 
         context = " ".join(self.context)
@@ -211,6 +251,10 @@ class Pipeline:
             log.info("claim corrected by verifier: %r -> %r", claim.text, r.corrected_claim)
             claim.original_text = claim.original_text or claim.text
             claim.text = r.corrected_claim
+
+    def snapshot(self) -> dict:
+        return {"mode": self.mode, "in_flight": len(self.tasks), "verifying": len(self.verify_tasks),
+                "activity": list(self.activity)[-150:]}
 
     async def stop(self, keep_verifications: bool = False) -> None:
         """Stop ingestion. With keep_verifications, in-flight verdicts still get

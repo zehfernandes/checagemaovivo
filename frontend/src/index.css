@@ -331,6 +331,13 @@ a.row__title:hover { text-decoration: underline; text-underline-offset: 3px; }
 .facts div { display: flex; flex-direction: column; gap: 2px; }
 .facts dt { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .facts dd { margin: 0; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.activity { list-style: none; margin: 0; padding: 0; max-height: 420px; overflow-y: auto; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.activity__line { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--border); color: var(--text-2); }
+.activity__line time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.activity__src { color: var(--muted); }
+.activity__msg { overflow-wrap: anywhere; }
+.activity__line--warning .activity__msg { color: var(--inconclusive); }
+.activity__line--error .activity__msg { color: var(--fake); }
 .quote { margin: 0; padding: 10px 14px; border-left: 2px solid var(--pending); background: var(--panel); border-radius: 0 8px 8px 0; font-size: 14px; line-height: 1.45; font-weight: 500; }
 .quote.claim--fake { border-color: var(--fake); }
 .quote.claim--valid { border-color: var(--valid); }

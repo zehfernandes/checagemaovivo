@@ -204,7 +204,8 @@ def extract_video_id(url: str) -> str | None:
 
 
 async def iter_chunks(
-    media_url: str, chunk_seconds: int, is_live: bool, start_seconds: float = 0, realtime: bool = True
+    media_url: str, chunk_seconds: float, is_live: bool, start_seconds: float = 0, realtime: bool = True,
+    sample_rate: int = SAMPLE_RATE,
 ) -> AsyncIterator[AudioChunk]:
     """Decode with ffmpeg to raw PCM and yield one chunk every `chunk_seconds`.
 
@@ -222,14 +223,18 @@ async def iter_chunks(
             cmd += ["-ss", str(start_seconds)]
     cmd += [
         "-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "5",
+        # a network drop can leave ffmpeg blocked on a read forever (no audio, no exit); erroring out
+        # after 20 s ends the stream so the channel's "Áudio caiu — reconectando" retry takes over
+        "-rw_timeout", "20000000",
         "-i", media_url,
-        "-vn", "-ac", "1", "-ar", str(SAMPLE_RATE), "-f", "s16le", "pipe:1",
+        "-vn", "-ac", "1", "-ar", str(sample_rate), "-f", "s16le", "pipe:1",
     ]
     proc = await asyncio.create_subprocess_exec(
         *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
     )
     assert proc.stdout
-    chunk_bytes = SAMPLE_RATE * BYTES_PER_SAMPLE * chunk_seconds
+    bytes_per_second = sample_rate * BYTES_PER_SAMPLE
+    chunk_bytes = int(bytes_per_second * chunk_seconds)
     index = 0
     try:
         while True:
@@ -237,9 +242,9 @@ async def iter_chunks(
                 pcm = await proc.stdout.readexactly(chunk_bytes)
             except asyncio.IncompleteReadError as e:
                 pcm = e.partial
-                if len(pcm) > SAMPLE_RATE * BYTES_PER_SAMPLE:  # keep tail if > 1s
+                if len(pcm) > min(bytes_per_second, chunk_bytes // 2):  # keep tail if > 1s (or half a short frame)
                     start = start_seconds + index * chunk_seconds
-                    yield AudioChunk(index, start, start + len(pcm) / (SAMPLE_RATE * BYTES_PER_SAMPLE), pcm, time.time())
+                    yield AudioChunk(index, start, start + len(pcm) / bytes_per_second, pcm, time.time())
                 break
             start = start_seconds + index * chunk_seconds
             yield AudioChunk(index, start, start + chunk_seconds, pcm, time.time())

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import type { Claim } from '../types'
 import { VERDICT_LABEL } from '../types'
 
@@ -18,7 +18,7 @@ const METHOD_TITLE = {
   human: 'Veredito corrigido por um revisor humano',
 } as const
 
-export function ClaimCard({ claim, compact, onRecheck, onOverride }: Props) {
+export const ClaimCard = memo(function ClaimCard({ claim, compact, onRecheck, onOverride }: Props) {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [verdict, setVerdict] = useState<'fake' | 'valid' | 'inconclusive'>(claim.verdict === 'pending' ? 'inconclusive' : claim.verdict)
@@ -108,7 +108,7 @@ export function ClaimCard({ claim, compact, onRecheck, onOverride }: Props) {
       )}
     </article>
   )
-}
+})
 
 function fmt(s: number) {
   const m = Math.floor(s / 60)

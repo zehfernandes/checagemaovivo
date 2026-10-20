@@ -64,10 +64,29 @@ export function useSession() {
     }
   }, [])
 
+  // A new viewer gets the whole history (1000+ messages) in one burst; applying them one render
+  // at a time froze the page, so messages are queued and flushed together once per frame.
+  const inbox = useRef<ServerMessage[]>([])
+  const flushTimer = useRef<number | null>(null)
+  const flush = useCallback(() => {
+    flushTimer.current = null
+    const batch = inbox.current
+    inbox.current = []
+    for (const msg of batch) handle(msg)
+  }, [handle])
+  const enqueue = useCallback(
+    (msg: ServerMessage) => {
+      inbox.current.push(msg)
+      if (flushTimer.current !== null) return
+      flushTimer.current = document.hidden ? window.setTimeout(flush, 200) : window.requestAnimationFrame(flush)
+    },
+    [flush],
+  )
+
   const connect = useCallback(() => {
     if (ws.current && ws.current.readyState <= WebSocket.OPEN) return ws.current
     const socket = new WebSocket(wsUrl())
-    socket.onmessage = (e) => handle(JSON.parse(e.data))
+    socket.onmessage = (e) => enqueue(JSON.parse(e.data))
     socket.onclose = () => {
       ws.current = null
       setState((s) => {
@@ -81,13 +100,14 @@ export function useSession() {
     }
     ws.current = socket
     return socket
-  }, [handle])
+  }, [enqueue])
 
   const start = useCallback(
     (url: string, language: string, startSeconds = 0, keep = false, fresh = false, save = false, watch = false) => {
       setError(null)
       setLost(false)
       if (!keep) {
+        inbox.current = []
         setInfo(null)
         setTranscript([])
         setClaims([])

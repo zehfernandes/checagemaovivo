@@ -1,4 +1,4 @@
-import { useRef, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useRef, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { ClaimCard } from './components/ClaimCard'
 import { Danmu } from './components/Danmu'
 import { Player } from './components/Player'
@@ -110,6 +110,17 @@ export default function App() {
   const pageUrl = session.info?.page_url || url
   const label = sourceLabel(session.info?.source, pageUrl)
   const isLive = session.info?.is_live ?? true
+  // The player reports its position twice a second; on a live only reconnects need it, so it stays
+  // in a ref instead of re-rendering the whole page every tick.
+  const timeRef = useRef(0)
+  const liveRef = useRef(isLive)
+  useEffect(() => {
+    liveRef.current = isLive
+  }, [isLive])
+  const onTime = useCallback((t: number) => {
+    timeRef.current = t
+    if (!liveRef.current) setCurrentTime(t)
+  }, [])
   // broadcast delay: only once the server confirmed a live stream; kept after Stop so buffered
   // claims don't flush at once (the player stays behind the edge too)
   const delayed = session.info?.is_live === true && delay > 0
@@ -128,15 +139,19 @@ export default function App() {
 
   // Processing is shared per video and cached server-side; for a recording we only reveal
   // what has been said up to the player position; for a delayed live, what the viewer heard.
+  // Reveal times are stamped once per claim list (not per tick) so card objects keep their identity
+  // and the memoized <ClaimCard>s don't re-render twice a second.
+  const scheduledClaims = useMemo(
+    () => (delayed ? session.claims.map((c) => ({ ...c, revealAt: revealAt(c.captured_at) })) : session.claims),
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- revealAt is derived from delay/nudge/clockOffset listed below
+    [session.claims, delayed, delay, nudge, session.clockOffset],
+  )
   const visibleClaims = useMemo(() => {
     if (!isLive && noPlayer) return session.claims // nothing to sync to: list everything
     if (!isLive) return session.claims.filter((c) => c.start >= baseline - 1 && c.start + REVEAL_LAG_S <= currentTime)
-    if (!delayed) return session.claims
-    return session.claims
-      .map((c) => ({ ...c, revealAt: revealAt(c.captured_at) }))
-      .filter((c) => c.revealAt <= now)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- revealAt is derived from delay/nudge/clockOffset listed below
-  }, [session.claims, currentTime, isLive, noPlayer, delayed, now, delay, nudge, session.clockOffset, baseline])
+    if (!delayed) return scheduledClaims
+    return scheduledClaims.filter((c) => (c.revealAt ?? 0) <= now)
+  }, [session.claims, scheduledClaims, currentTime, isLive, noPlayer, delayed, now, baseline])
 
   // last 3 minutes of the video (stream time), newest first
   const recentClaims = useMemo(() => {
@@ -144,6 +159,9 @@ export default function App() {
     const ref = isLive || noPlayer ? visibleClaims.reduce((m, c) => Math.max(m, c.start), 0) : currentTime
     return visibleClaims.filter((c) => c.start >= ref - RECENT_S)
   }, [visibleClaims, isLive, noPlayer, currentTime])
+
+  // newest first
+  const listedClaims = useMemo(() => (tab === 'recent' ? recentClaims : visibleClaims).slice().reverse(), [tab, recentClaims, visibleClaims])
 
   const counts = useMemo(() => {
     const c: Record<Verdict, number> = { pending: 0, fake: 0, valid: 0, inconclusive: 0 }
@@ -155,7 +173,7 @@ export default function App() {
   function begin() {
     const u = url.trim()
     const isNew = u !== startedFor.current
-    const from = isNew ? 0 : currentTime // a new video starts from the top; retries resume
+    const from = isNew ? 0 : timeRef.current // a new video starts from the top; retries resume
     startedFor.current = u
     if (isNew) setBaseline(0) // a reconnect must not hide what was already listed
     session.start(u, language, from, false, false, false, true)
@@ -234,7 +252,7 @@ export default function App() {
             <StageNotice kicker="Aguardando" title="A checagem ainda não começou"
               text="Esta página atualiza sozinha quando a redação iniciar a checagem." href={pageUrl} cta={`Assistir no ${label}`} />
           ) : videoId && playerError === null ? (
-            <Player videoId={videoId} onTime={setCurrentTime} liveDelay={delayed ? delay : 0} clip={clip} onError={setPlayerError} />
+            <Player videoId={videoId} onTime={onTime} liveDelay={delayed ? delay : 0} clip={clip} onError={setPlayerError} />
           ) : external ? (
             <StageNotice tone={isLive ? 'live' : undefined} kicker={isLive ? `Ao vivo no ${label}` : `Transmissão no ${label}`}
               title={session.info?.title || room?.name || 'Checagem ao vivo'}
@@ -267,10 +285,10 @@ export default function App() {
             </button>
           </nav>
           <div className="claims-list">
-              {(tab === 'recent' ? recentClaims : visibleClaims).length === 0 && (
+              {listedClaims.length === 0 && (
                 <p className="muted empty">{tab === 'recent' ? 'Nada nos últimos 3 minutos.' : 'As afirmações verificadas aparecem aqui.'}</p>
               )}
-              {[...(tab === 'recent' ? recentClaims : visibleClaims)].reverse().map((c) => (
+              {listedClaims.map((c) => (
                 <ClaimCard key={c.id} claim={c} />
               ))}
           </div>

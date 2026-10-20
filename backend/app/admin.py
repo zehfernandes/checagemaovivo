@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from . import audio
+from .auth import User
 from .channels import ChannelManager, ReviewConflict
 from .config import settings
 from .news import UA, NewsStore
@@ -49,14 +50,14 @@ class RoomStart(BaseModel):
 
 class ReviewIn(BaseModel):
     url: str
-    reviewer: str
+    reviewer: str = ""  # typed name; only used without Google sign-in (the signed-in person wins)
     skip: list[str] = []  # next: claims this reviewer already passed on
     after: str | None = None  # next: the claim just reviewed, so the queue continues from there
 
 
 class DecisionIn(BaseModel):
     url: str
-    reviewer: str
+    reviewer: str = ""
     action: str  # "publish" | "irrelevant"
     rev: int | None = None  # the claim version the reviewer loaded (stale -> 409)
     verdict: str | None = None
@@ -111,9 +112,10 @@ async def page_title(url: str) -> str:
     return html.unescape(re.sub(r"\s+", " ", m.group(1))).strip() if m else ""
 
 
-def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomStore, require_admin) -> APIRouter:
+def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomStore, require_user, require_owner) -> APIRouter:
     r = APIRouter()
-    guard = [Depends(require_admin)]
+    guard = [Depends(require_owner)]  # rooms and data exports: owners only
+    checker = [Depends(require_user)]  # fact-checks, news DB, glossary: checkers too
 
     def room_view(room: dict) -> dict:
         vid = room["video_id"]
@@ -157,7 +159,7 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
     async def public_rooms():
         return [room_view(x) for x in rooms.list(active_only=True)]
 
-    @r.get("/admin/rooms", dependencies=guard)
+    @r.get("/admin/rooms", dependencies=checker)
     async def admin_rooms():
         return [room_view(x) for x in rooms.list()]
 
@@ -189,7 +191,7 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
         rooms.delete(room_id)
         return {"ok": True}
 
-    @r.get("/admin/rooms/{room_id}/activity", dependencies=guard)
+    @r.get("/admin/rooms/{room_id}/activity", dependencies=checker)
     async def room_activity(room_id: str):
         """What the backend is doing for this room: transcription mode, work in flight and the run's log."""
         room = rooms.get(room_id)
@@ -222,7 +224,7 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
         return room_view(room)
 
     # ---- fact-check cache ----------------------------------------------------------------
-    @r.get("/admin/claims", dependencies=guard)
+    @r.get("/admin/claims", dependencies=checker)
     async def list_claims(url: str, verdict: str | None = None, q: str = ""):
         vid = audio.extract_video_id(url) or url
         ch = channels.channels.get(vid)
@@ -257,49 +259,51 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
         except Exception as e:  # noqa: BLE001
             raise HTTPException(502, f"Não foi possível abrir o vídeo: {e}")
 
-    def reviewer_of(name: str) -> str:
+    def reviewer_of(user: User, typed: str) -> str:
+        """With Google sign-in the reviewer is the signed-in person; otherwise (password/open) the typed name."""
+        name = (user.name or user.email) if settings.google_client_id else typed
         name = name.strip()[:60]
         if not name:
             raise HTTPException(400, "Informe seu nome para revisar")
         return name
 
-    @r.post("/admin/review/next", dependencies=guard)
-    async def review_next(body: ReviewIn):
+    @r.post("/admin/review/next")
+    async def review_next(body: ReviewIn, user: User = Depends(require_user)):
         ch = await review_channel(body.url)
-        return {"claim": ch.next_for_review(reviewer_of(body.reviewer), set(body.skip), body.after)}
+        return {"claim": ch.next_for_review(reviewer_of(user, body.reviewer), set(body.skip), body.after)}
 
-    @r.post("/admin/review/{claim_id}/lease", dependencies=guard)
-    async def review_lease(claim_id: str, body: ReviewIn):
+    @r.post("/admin/review/{claim_id}/lease")
+    async def review_lease(claim_id: str, body: ReviewIn, user: User = Depends(require_user)):
         ch = await review_channel(body.url)
         try:
-            return {"claim": ch.lease(claim_id, reviewer_of(body.reviewer))}
+            return {"claim": ch.lease(claim_id, reviewer_of(user, body.reviewer))}
         except KeyError:
             raise HTTPException(404, "Afirmação não encontrada")
         except ReviewConflict as e:
             raise HTTPException(409, str(e))
 
-    @r.post("/admin/review/{claim_id}/release", dependencies=guard)
-    async def review_release(claim_id: str, body: ReviewIn):
-        (await review_channel(body.url)).release(claim_id, reviewer_of(body.reviewer))
+    @r.post("/admin/review/{claim_id}/release")
+    async def review_release(claim_id: str, body: ReviewIn, user: User = Depends(require_user)):
+        (await review_channel(body.url)).release(claim_id, reviewer_of(user, body.reviewer))
         return {"ok": True}
 
-    @r.post("/admin/review/{claim_id}/skip", dependencies=guard)
-    async def review_skip(claim_id: str, body: ReviewIn):
+    @r.post("/admin/review/{claim_id}/skip")
+    async def review_skip(claim_id: str, body: ReviewIn, user: User = Depends(require_user)):
         try:
-            (await review_channel(body.url)).skip(claim_id, reviewer_of(body.reviewer))
+            (await review_channel(body.url)).skip(claim_id, reviewer_of(user, body.reviewer))
         except KeyError:
             raise HTTPException(404, "Afirmação não encontrada")
         return {"ok": True}
 
-    @r.post("/admin/review/{claim_id}/decide", dependencies=guard)
-    async def review_decide(claim_id: str, body: DecisionIn):
+    @r.post("/admin/review/{claim_id}/decide")
+    async def review_decide(claim_id: str, body: DecisionIn, user: User = Depends(require_user)):
         if body.action not in ("publish", "irrelevant"):
             raise HTTPException(400, "Ação inválida")
         if body.verdict is not None and body.verdict not in ("fake", "valid", "inconclusive"):
             raise HTTPException(400, "Veredito inválido")
         ch = await review_channel(body.url)
         try:
-            c = ch.decide(claim_id, reviewer_of(body.reviewer), body.action, body.rev, body.verdict, body.explanation,
+            c = ch.decide(claim_id, reviewer_of(user, body.reviewer), body.action, body.rev, body.verdict, body.explanation,
                           body.sources, body.text, body.speaker, quote=body.quote)
         except KeyError:
             raise HTTPException(404, "Afirmação não encontrada")
@@ -313,7 +317,7 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
                 log.exception("verdict memory write failed")
         return {"claim": c}
 
-    @r.get("/admin/page-title", dependencies=guard)
+    @r.get("/admin/page-title", dependencies=checker)
     async def admin_page_title(url: str):
         """Title of a pasted source link (the browser cannot read other sites itself)."""
         if not re.match(r"https?://", url) or not await _public_host(url):
@@ -330,13 +334,13 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
             raise HTTPException(503, "Base de notícias desativada (PROVIDER=mock ou sem chave da OpenAI)")
         return store
 
-    @r.get("/admin/news/docs", dependencies=guard)
+    @r.get("/admin/news/docs", dependencies=checker)
     async def news_docs(q: str = "", limit: int = 100, offset: int = 0):
         if not store:
             return {"total": 0, "docs": [], "disabled": True}
         return store.list_docs(q, min(limit, 500), offset)
 
-    @r.post("/admin/news/docs", dependencies=guard)
+    @r.post("/admin/news/docs", dependencies=checker)
     async def news_add(body: DocIn):
         s = need_store()
         url, text = body.url.strip(), body.text.strip()
@@ -356,7 +360,7 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
                 raise HTTPException(422, "Nada foi indexado")
         return {"ok": True, "seconds": round(time.time() - t0, 1), **s.stats()}
 
-    @r.delete("/admin/news/docs/{doc_id}", dependencies=guard)
+    @r.delete("/admin/news/docs/{doc_id}", dependencies=checker)
     async def news_delete(doc_id: int):
         if not need_store().delete_doc(doc_id):
             raise HTTPException(404, "Artigo não encontrado")

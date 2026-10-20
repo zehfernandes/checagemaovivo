@@ -40,12 +40,15 @@ export interface StreamInfo {
   title: string
   is_live: boolean
   duration: number | null
+  /** 'youtube' (embedded player) or the site hosting the page: g1, globoplay, … (no player) */
+  source?: string
+  page_url?: string | null
 }
 
 export type SessionState = 'idle' | 'connecting' | 'resolving' | 'listening' | 'ended' | 'error'
 
 export type ServerMessage =
-  | { type: 'status'; state: SessionState; message: string }
+  | { type: 'status'; state: SessionState; message: string; code?: 'not_started' | 'resolve_failed' }
   | { type: 'info'; info: StreamInfo }
   | { type: 'transcript'; segment: TranscriptSegment }
   | { type: 'claim'; claim: Omit<Claim, 'receivedAt' | 'settledAt'> }

@@ -62,8 +62,9 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
                "viewers": len(ch.subscribers) if ch else 0,
                "complete": ch.complete if ch else bool(row and row["status"] == "complete"),
                "processed_to": ch.processed_to if ch else float((row or {}).get("processed_to") or 0),
-               "state": ch.status["state"] if ch else ("cached" if row else "new"),
-               "message": ch.status["message"] if ch else "",
+               "state": ch.status["state"] if ch else ("error" if vid in channels.failures else "cached" if row else "new"),
+               "message": ch.status["message"] if ch else channels.failures.get(vid, ""),
+               "source": audio.source_of(room["url"]),
                "claims": len(ch.claims) if ch else channels.cache.claim_count(vid),
                "usage": ch.pipeline.usage.summary() if ch and ch.pipeline else None}
         return out
@@ -99,16 +100,16 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
 
     @r.post("/admin/rooms", dependencies=guard)
     async def create_room(body: RoomIn):
-        if not audio.extract_video_id(body.url):
-            raise HTTPException(400, "Informe um link válido do YouTube")
+        if not audio.is_supported_url(body.url):
+            raise HTTPException(400, "Informe um link válido (YouTube, g1/Globo…)")
         if not body.name.strip():
             raise HTTPException(400, "Dê um nome à sala")
         return room_view(rooms.create(body.name, body.url, body.kind))
 
     @r.patch("/admin/rooms/{room_id}", dependencies=guard)
     async def patch_room(room_id: str, body: RoomPatch):
-        if body.url is not None and not audio.extract_video_id(body.url):
-            raise HTTPException(400, "Informe um link válido do YouTube")
+        if body.url is not None and not audio.is_supported_url(body.url):
+            raise HTTPException(400, "Informe um link válido (YouTube, g1/Globo…)")
         room = rooms.update(room_id, **body.model_dump())
         if not room:
             raise HTTPException(404, "Sala não encontrada")

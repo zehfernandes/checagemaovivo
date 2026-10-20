@@ -20,11 +20,35 @@ const REVEAL_LAG_S = 4
 function extractVideoId(url: string): string | null {
   try {
     const u = new URL(url)
+    if (!/(^|\.)(youtube\.com|youtu\.be)$/.test(u.hostname)) return null
     if (u.hostname === 'youtu.be') return u.pathname.slice(1) || null
     if (u.pathname.startsWith('/live/')) return u.pathname.split('/')[2] || null
     return u.searchParams.get('v')
   } catch {
     return null
+  }
+}
+
+function isHttpUrl(url: string): boolean {
+  try {
+    const u = new URL(url)
+    return (u.protocol === 'https:' || u.protocol === 'http:') && u.hostname.includes('.')
+  } catch {
+    return false
+  }
+}
+
+const SOURCE_LABEL: Record<string, string> = { youtube: 'YouTube', g1: 'g1', globoplay: 'Globoplay', ge: 'ge' }
+function sourceLabel(source: string | undefined, url: string): string {
+  if (source && SOURCE_LABEL[source]) return SOURCE_LABEL[source]
+  if (source && source !== 'other') return source
+  try {
+    const host = new URL(url).hostname.replace(/^www\./, '')
+    if (/(^|\.)(youtube\.com|youtu\.be)$/.test(host)) return 'YouTube'
+    if (host.endsWith('.globo.com')) return SOURCE_LABEL[host.split('.')[0]] ?? host.split('.')[0]
+    return host
+  } catch {
+    return 'site original'
   }
 }
 
@@ -72,7 +96,19 @@ export default function App() {
   }
 
   const typedId = extractVideoId(url)
-  const videoId = session.info?.video_id || (typedId && typedId.length === 11 ? typedId : null)
+  // Only YouTube has an embedded player. g1/Globo (and anything else yt-dlp reads) is checked from
+  // the audio alone: the viewer gets the claims and a link to watch on the original site.
+  const external = !!session.info && (session.info.source ?? 'youtube') !== 'youtube'
+  const videoId = external ? null : session.info?.video_id || (typedId && typedId.length === 11 ? typedId : null)
+  // the owner can disable embedding (101/150): keep checking, drop the player
+  const [playerError, setPlayerError] = useState<number | null>(null)
+  // oxlint-disable-next-line react-hooks/set-state-in-effect -- a new video gets a fresh player
+  useEffect(() => setPlayerError(null), [videoId])
+  const noPlayer = external || playerError !== null
+  const failed = session.state === 'error' && !session.lost && session.statusCode === 'resolve_failed'
+  const waiting = session.state === 'error' && !session.lost && session.statusCode === 'not_started'
+  const pageUrl = session.info?.page_url || url
+  const label = sourceLabel(session.info?.source, pageUrl)
   const isLive = session.info?.is_live ?? true
   // broadcast delay: only once the server confirmed a live stream; kept after Stop so buffered
   // claims don't flush at once (the player stays behind the edge too)
@@ -93,20 +129,21 @@ export default function App() {
   // Processing is shared per video and cached server-side; for a recording we only reveal
   // what has been said up to the player position; for a delayed live, what the viewer heard.
   const visibleClaims = useMemo(() => {
+    if (!isLive && noPlayer) return session.claims // nothing to sync to: list everything
     if (!isLive) return session.claims.filter((c) => c.start >= baseline - 1 && c.start + REVEAL_LAG_S <= currentTime)
     if (!delayed) return session.claims
     return session.claims
       .map((c) => ({ ...c, revealAt: revealAt(c.captured_at) }))
       .filter((c) => c.revealAt <= now)
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- revealAt is derived from delay/nudge/clockOffset listed below
-  }, [session.claims, currentTime, isLive, delayed, now, delay, nudge, session.clockOffset, baseline])
+  }, [session.claims, currentTime, isLive, noPlayer, delayed, now, delay, nudge, session.clockOffset, baseline])
 
   // last 3 minutes of the video (stream time), newest first
   const recentClaims = useMemo(() => {
-    // recordings: relative to the player position; live: relative to the newest claim
-    const ref = isLive ? visibleClaims.reduce((m, c) => Math.max(m, c.start), 0) : currentTime
+    // recordings: relative to the player position; live or no player: relative to the newest claim
+    const ref = isLive || noPlayer ? visibleClaims.reduce((m, c) => Math.max(m, c.start), 0) : currentTime
     return visibleClaims.filter((c) => c.start >= ref - RECENT_S)
-  }, [visibleClaims, isLive, currentTime])
+  }, [visibleClaims, isLive, noPlayer, currentTime])
 
   const counts = useMemo(() => {
     const c: Record<Verdict, number> = { pending: 0, fake: 0, valid: 0, inconclusive: 0 }
@@ -130,12 +167,14 @@ export default function App() {
   // if the connection drops (e.g. server restart). A room whose checking hasn't started is retried quietly.
   useEffect(() => {
     const u = url.trim()
-    if (!u || (!roomUrl && !(typedId && typedId.length === 11))) return
+    const youtube = !!typedId && typedId.length === 11
+    if (!u || (!roomUrl && !youtube && !isHttpUrl(u))) return
     const isNew = u !== startedFor.current
     const lost = session.state === 'error' && session.lost
     const waiting = session.state === 'error' && !lost && !!roomUrl
     if (!isNew && !lost && !waiting) return
-    const t = setTimeout(begin, isNew ? 0 : lost ? 2000 : 15000)
+    // a pasted non-YouTube link is only known to be complete once typing pauses
+    const t = setTimeout(begin, isNew ? (roomUrl || youtube ? 0 : 800) : lost ? 2000 : 15000)
     return () => clearTimeout(t)
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [session.state, session.lost, url, roomUrl, typedId])
@@ -159,7 +198,7 @@ export default function App() {
               type="url"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="Cole a URL de um vídeo ou live do YouTube"
+              placeholder="Cole o link de um vídeo ou live (YouTube, g1…)"
               required
             />
           )}
@@ -168,7 +207,7 @@ export default function App() {
           {(session.state === 'listening' || session.state === 'resolving') && <span className="dot" />}
           {session.state === 'listening' && <span>Escutando</span>}
           {session.state === 'resolving' && <span>Conectando</span>}
-          {session.state === 'error' && <span>Erro</span>}
+          {session.state === 'error' && <span>{waiting ? 'Aguardando' : 'Erro'}</span>}
           {session.state === 'listening' && session.info?.is_live && <span className="live-tag">AO VIVO</span>}
         </span>
       </header>
@@ -188,12 +227,27 @@ export default function App() {
             {sideOpen ? '›' : '‹'}
             {!sideOpen && visibleClaims.length > 0 && <span className="side-toggle__count">{visibleClaims.length}</span>}
           </button>
-          {videoId ? (
-            <Player videoId={videoId} onTime={setCurrentTime} liveDelay={delayed ? delay : 0} clip={clip} />
+          {failed ? (
+            <StageNotice tone="error" kicker="Link indisponível" title="Não foi possível abrir este link"
+              text={session.statusText.replace(/^Não foi possível abrir o vídeo: /, '')} href={pageUrl} cta={`Abrir no ${label}`} />
+          ) : waiting ? (
+            <StageNotice kicker="Aguardando" title="A checagem ainda não começou"
+              text="Esta página atualiza sozinha quando a redação iniciar a checagem." href={pageUrl} cta={`Assistir no ${label}`} />
+          ) : videoId && playerError === null ? (
+            <Player videoId={videoId} onTime={setCurrentTime} liveDelay={delayed ? delay : 0} clip={clip} onError={setPlayerError} />
+          ) : external ? (
+            <StageNotice tone={isLive ? 'live' : undefined} kicker={isLive ? `Ao vivo no ${label}` : `Transmissão no ${label}`}
+              title={session.info?.title || room?.name || 'Checagem ao vivo'}
+              text={`O vídeo fica no ${label}; aqui o áudio é checado direto da fonte e as afirmações aparecem conforme são ditas.`}
+              href={pageUrl} cta={`Assistir no ${label}`} />
+          ) : playerError !== null ? (
+            <StageNotice kicker="Sem player" title="O YouTube não permite exibir este vídeo aqui"
+              text="A checagem continua normalmente: as afirmações aparecem ao lado enquanto você assiste no YouTube."
+              href={videoId ? `https://www.youtube.com/watch?v=${videoId}` : pageUrl} cta="Assistir no YouTube" />
           ) : (
-            <div className="player player--empty">Cole uma URL do YouTube para começar</div>
+            <div className="player player--empty">Cole o link de um vídeo ou live para começar</div>
           )}
-          <Danmu claims={visibleClaims} isLive={isLive} currentTime={currentTime} enabled={danmu} />
+          <Danmu claims={visibleClaims} isLive={isLive || noPlayer} currentTime={currentTime} enabled={danmu && !(noPlayer && !isLive)} />
           <div className="scoreboard">
             <Score label="falsas" n={counts.fake} kind="fake" />
             <Score label="verdadeiras" n={counts.valid} kind="valid" />
@@ -223,6 +277,23 @@ export default function App() {
         </aside>
         )}
       </main>
+    </div>
+  )
+}
+
+function StageNotice({ kicker, title, text, href, cta, tone }: {
+  kicker: string; title: string; text?: string; href?: string; cta?: string; tone?: 'live' | 'error'
+}) {
+  return (
+    <div className={`player stage-notice${tone ? ` stage-notice--${tone}` : ''}`}>
+      <div className="stage-notice__box">
+        <span className="stage-notice__kicker">{kicker}</span>
+        <h2>{title}</h2>
+        {text && <p>{text}</p>}
+        {href && cta && (
+          <a className="stage-notice__link" href={href} target="_blank" rel="noreferrer">{cta} ↗</a>
+        )}
+      </div>
     </div>
   )
 }

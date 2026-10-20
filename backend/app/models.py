@@ -51,6 +51,8 @@ class StreamInfo(BaseModel):
     duration: float | None = None
     clip_start: float | None = None  # recordings limited to a slice (VIDEO_CLIPS)
     clip_end: float | None = None
+    source: str = "youtube"  # "youtube" or the site hosting the page (g1, globoplay, ...); only YouTube has an embedded player
+    page_url: str | None = None
 
 
 class StartRequest(BaseModel):

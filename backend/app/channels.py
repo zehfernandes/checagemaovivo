@@ -280,7 +280,7 @@ class Channel:
                 raise
             except Exception as e:  # noqa: BLE001
                 log.exception("channel %s: pipeline failed", self.video_id)
-                await self.emit({"type": "status", "state": "error", "message": f"Processing failed: {e}"})
+                await self.emit({"type": "status", "state": "error", "message": f"Falha no processamento: {e}"})
             finally:
                 self._save("complete" if self.complete else "stopped")
 
@@ -342,6 +342,7 @@ class ChannelManager:
         self.cache = Cache(cache_path)
         self.channels: dict[str, Channel] = {}
         self.private_channels: set[Channel] = set()
+        self.failures: dict[str, str] = {}  # video_id -> last resolve error (no channel exists for it)
         self._locks: dict[str, asyncio.Lock] = {}
 
     async def get(self, url: str, save: bool = False) -> Channel:
@@ -353,9 +354,15 @@ class ChannelManager:
                 return ch
             row = self.cache.video(vid)
             if row and row["status"] == "complete" and not row["is_live"]:
-                info = StreamInfo(video_id=vid, title=row["title"], is_live=False, duration=row["duration"])
+                info = StreamInfo(video_id=vid, title=row["title"], is_live=False, duration=row["duration"],
+                                  source=audio.source_of(url), page_url=url)
             else:
-                info, _media = await audio.resolve_stream(url)
+                try:
+                    info, _media = await audio.resolve_stream(url)
+                except Exception as e:  # noqa: BLE001
+                    self.failures[vid] = str(e)  # shown on the room until the link opens
+                    raise
+            self.failures.pop(vid, None)
             ch = Channel(self, info.video_id or vid, url, info, save=save)
             self.channels[ch.video_id] = ch
             if ch.video_id != vid:

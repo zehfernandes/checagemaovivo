@@ -240,7 +240,7 @@ function RoomsPage({ rooms, reload, notify, openClaims }: { rooms: Room[]; reloa
         {rooms.length === 0 ? (
           <Empty>
             <p>Nenhuma sala ainda.</p>
-            <p className="muted">Uma sala liga um vídeo ou live do YouTube à checagem que todos os espectadores veem.</p>
+            <p className="muted">Uma sala liga um vídeo ou live (YouTube, g1/Globo) à checagem que todos os espectadores veem.</p>
             <button type="button" className="btn" onClick={() => setCreating(true)}>Criar a primeira sala</button>
           </Empty>
         ) : (
@@ -286,8 +286,8 @@ function NewRoomDialog({ onClose, onCreated, run }: { onClose: () => void; onCre
   return (
     <Dialog title="Nova sala" onClose={onClose}>
       <form className="form" onSubmit={submit} onKeyDown={cmdEnter}>
-        <Field label="Link do YouTube" hint="Vídeo gravado ou transmissão ao vivo.">
-          <input type="url" autoFocus value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=…" required />
+        <Field label="Link da transmissão" hint="YouTube ou g1/Globo, gravação ou ao vivo. Fora do YouTube o espectador vê só as checagens, sem player.">
+          <input type="url" autoFocus value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=… ou https://g1.globo.com/…" required />
         </Field>
         <Field label="Nome">
           <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Debate Band — 2º turno" required />
@@ -353,7 +353,7 @@ function RoomPanel({ room: r, busy, run, onClose, openClaims }: {
       </section>
       <form className="panel__section form" onSubmit={(e) => { e.preventDefault(); patch({ name, url, kind }) }} onKeyDown={cmdEnter}>
         <Field label="Nome"><input value={name} onChange={(e) => setName(e.target.value)} required /></Field>
-        <Field label="Link do YouTube"><input type="url" value={url} onChange={(e) => setUrl(e.target.value)} required /></Field>
+        <Field label="Link da transmissão"><input type="url" value={url} onChange={(e) => setUrl(e.target.value)} required /></Field>
         <Field label="Tipo"><Segmented value={kind} options={KINDS} onChange={setKind} /></Field>
         {dirty && (
           <footer className="form__actions">

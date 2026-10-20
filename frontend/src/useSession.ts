@@ -14,6 +14,7 @@ export function useSession() {
   const [state, setState] = useState<SessionState>('idle')
   const [lost, setLost] = useState(false)
   const [statusText, setStatusText] = useState('')
+  const [statusCode, setStatusCode] = useState<string | null>(null)
   const [info, setInfo] = useState<StreamInfo | null>(null)
   const [transcript, setTranscript] = useState<TranscriptSegment[]>([])
   const [claims, setClaims] = useState<Claim[]>([])
@@ -27,6 +28,7 @@ export function useSession() {
       case 'status':
         setState(msg.state)
         setStatusText(msg.message)
+        setStatusCode(msg.code ?? null)
         break
       case 'info':
         setInfo(msg.info)
@@ -93,6 +95,7 @@ export function useSession() {
       }
       setState('connecting')
       setStatusText(keep ? 'Ressincronizando…' : 'Conectando…')
+      setStatusCode(null)
       const socket = connect()
       const payload = JSON.stringify({ type: 'start', url, language: language || null, start_seconds: startSeconds, fresh, save, watch, admin: adminPassword() })
       if (socket.readyState === WebSocket.OPEN) socket.send(payload)
@@ -112,5 +115,5 @@ export function useSession() {
 
   useEffect(() => () => ws.current?.close(), [])
 
-  return { state, lost, statusText, info, transcript, claims, error, progress, clockOffset, start, stop, recheck }
+  return { state, lost, statusText, statusCode, info, transcript, claims, error, progress, clockOffset, start, stop, recheck }
 }

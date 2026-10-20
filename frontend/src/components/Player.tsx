@@ -28,11 +28,19 @@ interface Props {
   onDelay?: (behindLive: number) => void
   /** recordings limited to [start, end] seconds: the player opens at start and is kept inside */
   clip?: [number, number]
+  /** YouTube player error code: 101/150 = the owner disabled embedding, 100 = not found, 2/5 = bad id */
+  onError?: (code: number) => void
 }
 
-export function Player({ videoId, onTime, liveDelay = 0, onDelay, clip }: Props) {
+export function Player({ videoId, onTime, liveDelay = 0, onDelay, clip, onError }: Props) {
   const clipRef = useRef(clip)
-  clipRef.current = clip
+  useEffect(() => {
+    clipRef.current = clip
+  }, [clip])
+  const onErrorRef = useRef(onError)
+  useEffect(() => {
+    onErrorRef.current = onError
+  }, [onError])
   const host = useRef<HTMLDivElement>(null)
   const player = useRef<YT.Player | null>(null)
   const onTimeRef = useRef(onTime)
@@ -112,6 +120,7 @@ export function Player({ videoId, onTime, liveDelay = 0, onDelay, clip }: Props)
             if (c && e.target.getCurrentTime() < c[0]) e.target.seekTo(c[0], true)
             e.target.playVideo()
           },
+          onError: (e: YT.OnErrorEvent) => onErrorRef.current?.(e.data),
         },
       })
       timer = window.setInterval(() => {

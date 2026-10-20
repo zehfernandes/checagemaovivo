@@ -5,6 +5,7 @@ import io
 import json
 import logging
 import os
+import re
 import shlex
 import shutil
 import time
@@ -64,7 +65,7 @@ async def resolve_stream(url: str, attempts: int = 3) -> tuple[StreamInfo, str]:
             return await _resolve_once(url, FORMATS[fmt])
         except RuntimeError as e:
             last = e
-            msg = str(e)
+            msg = e.raw if isinstance(e, StreamError) else str(e)
             if "not a bot" in msg or "Private video" in msg or "unavailable" in msg.lower():
                 raise
             log.warning("resolve_stream attempt %d (format %r) failed: %s", i + 1, FORMATS[fmt], msg[-160:])
@@ -92,27 +93,95 @@ async def _resolve_once(url: str, fmt: str | None = FORMATS[0]) -> tuple[StreamI
     )
     out, err = await proc.communicate()
     if proc.returncode != 0:
-        raise RuntimeError(f"yt-dlp failed: {err.decode(errors='ignore')[-500:]}")
+        raw = err.decode(errors="ignore").strip()[-500:]
+        raise StreamError(f"yt-dlp failed: {raw}", friendly_error(raw))
     info = json.loads(out)
     media_url = info.get("url") or info.get("manifest_url")
     if not media_url and info.get("requested_formats"):
         media_url = info["requested_formats"][0].get("url")
     if not media_url:
-        raise RuntimeError("yt-dlp returned no media URL")
+        raise StreamError("yt-dlp returned no media URL", "Este link não tem um áudio que consigamos ler.")
     live_status = info.get("live_status")
     if str(info.get("protocol", "")).startswith("http_dash_segments") and "m3u8" not in media_url:
         # ffmpeg can't read a segmented-DASH URL directly (yields a single ~2s segment). Typical
         # for a live that just ended: YouTube hasn't finished turning it into a normal recording.
         hint = "this live stream just ended and YouTube is still processing the recording — try again later" \
             if live_status == "post_live" else "YouTube only offers segmented DASH audio for this video"
-        raise RuntimeError(f"No directly readable audio stream: {hint}")
+        friendly = ("A live acabou de terminar e o YouTube ainda está processando a gravação. Tente mais tarde."
+                    if live_status == "post_live" else "O YouTube só oferece este vídeo em um formato de áudio que não conseguimos ler.")
+        raise StreamError(f"No directly readable audio stream: {hint}", friendly)
     meta = StreamInfo(
         video_id=info.get("id", ""),
         title=info.get("title", ""),
         is_live=bool(info.get("is_live")) or live_status == "is_live",
         duration=info.get("duration"),
+        source=source_of(url),
+        page_url=url,
     )
     return meta, media_url
+
+
+class StreamError(RuntimeError):
+    """yt-dlp could not open the URL. `raw` keeps yt-dlp's words for logs/retry logic; str() is the
+    pt-BR message shown in the newsroom and to viewers."""
+
+    def __init__(self, raw: str, friendly: str):
+        super().__init__(friendly)
+        self.raw = raw
+        self.friendly = friendly
+
+
+# yt-dlp stderr fragment -> what the newsroom/viewer should read (first match wins)
+_FRIENDLY: list[tuple[str, str]] = [
+    ("is not a valid URL", "Link inválido."),
+    ("Unsupported URL", "Este link não é de um vídeo suportado (YouTube, g1/Globo…)."),
+    ("DRM", "Este vídeo tem proteção DRM (Widevine): não é possível ler o áudio."),
+    ("Private video", "Vídeo privado."),
+    ("members-only", "Vídeo exclusivo para membros."),
+    ("Sign in to confirm", "O YouTube bloqueou o servidor (verificação anti-bot)."),
+    ("Sign in", "Este vídeo exige login."),
+    ("401", "Este vídeo exige login ou assinatura."),
+    ("403", "Acesso ao vídeo negado (login, assinatura ou região)."),
+    ("404", "Vídeo não encontrado neste link."),
+    ("will begin in", "A live ainda não começou."),
+    ("Premieres in", "A live ainda não começou."),
+    ("not available in your country", "Vídeo indisponível na região do servidor."),
+    ("This video has been removed", "Vídeo removido."),
+    ("Video unavailable", "Vídeo indisponível."),
+    ("Requested format is not available", "Este vídeo não tem uma faixa de áudio que consigamos ler."),
+]
+
+
+def friendly_error(stderr: str) -> str:
+    low = stderr.lower()
+    for needle, text in _FRIENDLY:
+        if needle.lower() in low:
+            return text
+    return "Não conseguimos ler o áudio deste link."
+
+
+def source_of(url: str) -> str:
+    """'youtube' or a short name for the site hosting the page (g1, globoplay, ge, <hostname>)."""
+    from urllib.parse import urlparse
+    try:
+        host = (urlparse(url).hostname or "").lower()
+    except ValueError:
+        return "other"
+    if host.endswith(("youtube.com", "youtu.be")):
+        return "youtube"
+    host = host.removeprefix("www.")
+    if host.endswith(".globo.com"):
+        return host.split(".")[0]
+    return host or "other"
+
+
+def is_supported_url(url: str) -> bool:
+    from urllib.parse import urlparse
+    try:
+        u = urlparse(url.strip())
+    except ValueError:
+        return False
+    return u.scheme in ("http", "https") and bool(u.hostname and "." in u.hostname)
 
 
 def extract_video_id(url: str) -> str | None:
@@ -123,6 +192,11 @@ def extract_video_id(url: str) -> str | None:
         return None
     if u.hostname and u.hostname.endswith("youtu.be"):
         return u.path.strip("/").split("/")[0] or None
+    if u.hostname and u.hostname.endswith("globo.com"):
+        # g1/globoplay pages end in the Globo video id (…-14963827.ghtml, /v/14963827/), which is
+        # also the id yt-dlp reports, so cache rows, rooms and channels line up
+        found = re.findall(r"(\d{7,})", u.path)
+        return found[-1] if found else None
     if u.path.startswith("/live/") or u.path.startswith("/shorts/"):
         parts = u.path.split("/")
         return parts[2] if len(parts) > 2 and parts[2] else None

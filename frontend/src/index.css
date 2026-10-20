@@ -391,3 +391,17 @@ a.row__title:hover { text-decoration: underline; text-underline-offset: 3px; }
   .search { width: 160px; }
   .state { width: auto; }
 }
+
+/* ---- stage without a player: external source (g1…), embed blocked or link that failed ---- */
+.stage-notice { display: grid; place-items: center; padding: 24px; }
+.stage-notice__box { max-width: 460px; display: grid; gap: 10px; justify-items: center; text-align: center; }
+.stage-notice__kicker { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.stage-notice--live .stage-notice__kicker { color: var(--fake); }
+.stage-notice--error .stage-notice__kicker { color: var(--fake); }
+.stage-notice h2 { margin: 0; font-size: 18px; font-weight: 600; line-height: 1.3; color: var(--text); }
+.stage-notice p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--text-2); }
+.stage-notice__link {
+  margin-top: 6px; display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 8px;
+  background: var(--text); color: var(--bg); font-size: 13px; font-weight: 600; text-decoration: none;
+}
+.stage-notice__link:hover { opacity: .9; }

@@ -289,8 +289,13 @@ async def ws_endpoint(ws: WebSocket) -> None:
                     req.fresh = False
                     req.save = False
                     if not channels.cached(req.url):
-                        await ws.send_json({"type": "status", "state": "error",
-                                            "message": "A checagem desta transmissão ainda não começou. Volte em instantes."})
+                        failure = channels.failures.get(audio.extract_video_id(req.url) or req.url)
+                        if failure:  # the newsroom tried and the link did not open: say so instead of "wait"
+                            await ws.send_json({"type": "status", "state": "error", "code": "resolve_failed",
+                                                "message": f"Não foi possível abrir o vídeo: {failure}"})
+                        else:
+                            await ws.send_json({"type": "status", "state": "error", "code": "not_started",
+                                                "message": "A checagem desta transmissão ainda não começou. Volte em instantes."})
                         continue
                 await leave()
                 await ws.send_json({"type": "status", "state": "resolving", "message": "Abrindo o vídeo…"})
@@ -298,7 +303,8 @@ async def ws_endpoint(ws: WebSocket) -> None:
                     channel = await channels.private(req.url, req.save) if req.fresh else await channels.get(req.url, req.save)
                 except Exception as e:  # noqa: BLE001
                     log.exception("resolve failed")
-                    await ws.send_json({"type": "status", "state": "error", "message": f"Não foi possível abrir o vídeo: {e}"})
+                    await ws.send_json({"type": "status", "state": "error", "code": "resolve_failed",
+                                        "message": f"Não foi possível abrir o vídeo: {e}"})
                     continue
                 queue = channel.subscribe()
                 for ev in channel.snapshot():

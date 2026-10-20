@@ -19,6 +19,7 @@ from pathlib import Path
 from . import audio
 from .config import settings
 from .models import StreamInfo
+from .news import _blocked_host
 from .pipeline import Pipeline
 
 log = logging.getLogger(__name__)
@@ -49,6 +50,27 @@ class Cache:
         self.conn = sqlite3.connect(path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        self.strip_blocked_sources(settings.blocked_domain_list)
+
+    def strip_blocked_sources(self, hosts: list[str]) -> int:
+        """Remove links to blocked (partisan) hosts from cached claims; verdicts are left untouched."""
+        if not hosts:
+            return 0
+        changed = 0
+        rows = self.conn.execute("SELECT video_id, key, json FROM events WHERE kind = 'claim'").fetchall()
+        for r in rows:
+            ev = json.loads(r["json"])
+            sources = ev.get("claim", {}).get("sources") or []
+            kept = [s for s in sources if not _blocked_host(s.get("url", ""), hosts)]
+            if len(kept) != len(sources):
+                ev["claim"]["sources"] = kept
+                self.conn.execute("UPDATE events SET json = ? WHERE video_id = ? AND kind = 'claim' AND key = ?",
+                                  (json.dumps(ev, ensure_ascii=False), r["video_id"], r["key"]))
+                changed += 1
+        self.conn.commit()
+        if changed:
+            log.info("stripped blocked-host sources from %d cached claims (%s)", changed, hosts)
+        return changed
 
     def video(self, video_id: str) -> dict | None:
         r = self.conn.execute("SELECT * FROM videos WHERE video_id = ?", (video_id,)).fetchone()

@@ -75,7 +75,9 @@ class Settings(BaseSettings):
     news_refresh_minutes: int = 30  # 0 disables the background refresh
     news_feeds: str = ""  # optional override: "Name=https://feed,Name2=https://feed2"
     # partisan/campaign sites: never indexed in the news base, never shown as a source (comma-separated hosts)
-    blocked_domains: str = "flaviomentiu.com.br"
+    blocked_domains: str = (
+        "flaviomentiu.com.br,atlasdamentira.com,lula.com.br,pt.org.br,lulaouflavio.com,segundoturnoeleicoes.com.br"
+    )
 
     @property
     def news_db_file(self) -> Path:

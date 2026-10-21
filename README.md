@@ -41,9 +41,9 @@ cd frontend && npm install && npm run dev
 - Nothing happens until an admin presses **Iniciar** on a room in `/admin` → *Salas*.
 
 `PROVIDER=mock` runs the whole UI without any API key (synthetic transcript and random
-verdicts); the news DB is disabled in mock mode. With `PROVIDER=openai` the first start ingests
-the Brazilian feeds into `backend/data/news.db` (~1–2 min, a few cents of embeddings) and refreshes
-every `NEWS_REFRESH_MINUTES`. `backend/data/` is gitignored — every clone starts with empty DBs.
+verdicts); the news DB is disabled in mock mode. With `PROVIDER=openai` the news DB
+(`backend/data/news.db`) is curated by editors in `/admin` → *Base de notícias*; nothing is ingested
+automatically from feeds. `backend/data/` is gitignored — every clone starts with empty DBs.
 
 ### Checklist for a new contributor
 
@@ -100,8 +100,8 @@ The viewer UI has no admin controls; everything operational lives at `/admin` (p
   `POST /admin/claim` (direct correction, publishes), `DELETE /admin/claims/{video_id}/{claim_id}`;
   the admin WebSocket sends `"review": true` on `start` to also receive drafts.
 - **Base de notícias** — browse/search the evidence DB, add an article by URL (extracted + embedded) or by
-  pasted text, delete documents, refresh the feeds. Endpoints: `GET/POST /admin/news/docs`,
-  `DELETE /admin/news/docs/{id}`, `POST /news/refresh`.
+  pasted text, delete documents (deleted URLs are never re-ingested). Endpoints: `GET/POST /admin/news/docs`,
+  `DELETE /admin/news/docs/{id}`.
 
 ## Deploy (Fly.io)
 
@@ -134,9 +134,6 @@ no Fly account or production secrets required. Production secrets (`OPENAI_API_K
 | `CACHE_DB_PATH` | `data/cache.db` | per-video transcript/claim cache shared by all viewers |
 | `VOD_FULL_SPEED` | `false` | process recordings at full speed once instead of pacing with playback |
 | `NEWS_MIN_SIMILARITY` | `0.55` | min cosine similarity for a DB hit to count as evidence |
-| `NEWS_MAX_AGE_DAYS` | `14` | ignore feed items older than this |
-| `NEWS_REFRESH_MINUTES` | `30` | background feed refresh interval (0 = off) |
-| `NEWS_FEEDS` | built-in list | override feeds: `Name=url,Name2=url2` |
 | `TRANSCRIBE_MODEL` | `gpt-4o-mini-transcribe` | speech-to-text model |
 | `FACTCHECK_MODEL` | `gpt-4.1-mini` | model for claim extraction and verification |
 | `DEEP_MODEL` | `gpt-5-mini` | reasoning model for the deep check (third level / Rechecar in `/admin`); `reasoning.effort=low`, no `temperature` |
@@ -172,9 +169,8 @@ Verification ladder (fastest first):
    (0.9) similar to one settled in the last `VERDICT_CACHE_DAYS` (7) reuses it instantly — no AI
    calls, **Cache** badge. Debates repeat talking points, and the same claim across videos is free.
    The claim embedding is computed once (in the duplicate filter) and reused here and in step 1.
-1. **News DB** – `backend/app/news.py` ingests RSS from Brazilian fact-checkers and outlets
-   (Lupa, g1 Fato ou Fake, g1 Política, Agência Brasil, Folha Poder, CNN Brasil, Poder360,
-   E-Farsas, Boatos.org), extracts article text, embeds it (`text-embedding-3-small`) and stores
+1. **News DB** – `backend/app/news.py` holds articles curated by editors in `/admin` (by URL or
+   pasted text): it extracts article text, embeds it (`text-embedding-3-small`) and stores
    it in SQLite. At verify time the claim is embedded and matched by cosine similarity (in memory,
    ~ms); if the best matches are above `NEWS_MIN_SIMILARITY` the model decides from that evidence
    only (no tools, ~1–2 s). Cards answered this way show a **DB** badge.
@@ -190,12 +186,10 @@ Verification ladder (fastest first):
    sufficient, the claim goes to OpenAI web search (~4–6 s, **Web** badge). Pages cited by the
    search are written back into the DB so the next similar claim is a DB hit.
 
-The DB refreshes on backend start and every `NEWS_REFRESH_MINUTES`; `/admin` → *Base de notícias* shows the
-article count and an **Atualizar feeds** button (`POST /news/refresh`). CLI:
+Editors add and delete articles in `/admin` → *Base de notícias*. CLI:
 
 ```bash
 cd backend
-python -m app.news refresh 14          # ingest the last 14 days
 python -m app.news search "maioridade penal PT"
 python -m app.news stats
 ```

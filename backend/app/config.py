@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     claim_gate_min_save: float = 0.5  # save mode: stricter gate -> fewer verifications
     save_max_claims_per_min: int = 6
     # Empty = everyone is admin (dev). Set it in production: only admins can start processing,
-    # re-check, refresh the news DB or edit verdicts; visitors only watch cached/ongoing runs.
+    # re-check, curate the news DB or edit verdicts; visitors only watch cached/ongoing runs.
     admin_password: str = ""
     # Google sign-in for /admin (OAuth "Web application" client id). When set, the shared password stops working
     # and only listed e-mails get in: OWNER_EMAILS (comma-separated, full access) + checkers added in /admin.
@@ -86,9 +86,6 @@ class Settings(BaseSettings):
     verdict_cache_similarity: float = 0.9
     verdict_cache_days: float = 7
     verdict_cache_min_confidence: float = 0.8  # don't replay shaky verdicts across videos
-    news_max_age_days: int = 14
-    news_refresh_minutes: int = 30  # 0 disables the background refresh
-    news_feeds: str = ""  # optional override: "Name=https://feed,Name2=https://feed2"
     # partisan/campaign sites: never indexed in the news base, never shown as a source (comma-separated hosts)
     blocked_domains: str = (
         "flaviomentiu.com.br,atlasdamentira.com,lula.com.br,pt.org.br,lulaouflavio.com,segundoturnoeleicoes.com.br"
@@ -102,12 +99,6 @@ class Settings(BaseSettings):
     @property
     def blocked_domain_list(self) -> list[str]:
         return [h.strip().lower().removeprefix("www.") for h in self.blocked_domains.split(",") if h.strip()]
-
-    @property
-    def news_feed_map(self) -> dict[str, str] | None:
-        if not self.news_feeds.strip():
-            return None
-        return dict(item.split("=", 1) for item in self.news_feeds.split(",") if "=" in item)
 
     @property
     def cors_origin_list(self) -> list[str]:

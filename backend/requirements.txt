@@ -6,7 +6,6 @@ pydantic-settings>=2.3
 python-dotenv>=1.0
 yt-dlp>=2025.1.1
 httpx>=0.27
-feedparser>=6.0
 trafilatura>=1.12
 lxml_html_clean>=0.4
 numpy>=1.26

@@ -43,7 +43,10 @@ def is_public(c: dict) -> bool:
 
 
 def public_view(ev: dict) -> dict:
-    return {**ev, "claim": {k: v for k, v in ev["claim"].items() if k not in REVIEW_FIELDS}}
+    # who reviewed stays in the newsroom; the site only learns that a person did ("Revisão humana")
+    c = ev["claim"]
+    reviewed = bool(c.get("reviewed_by")) and c.get("status") == "published" and not c.get("awaiting_review")
+    return {**ev, "claim": {**{k: v for k, v in c.items() if k not in REVIEW_FIELDS}, "human_reviewed": reviewed}}
 
 
 def _held_by_other(c: dict, reviewer: str) -> bool:

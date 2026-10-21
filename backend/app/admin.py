@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import html
 import ipaddress
+import json
 import logging
 import re
 import shutil
@@ -17,7 +18,7 @@ from pathlib import Path
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import audio
 from .auth import User
@@ -35,11 +36,19 @@ class RoomIn(BaseModel):
     kind: str = "debate"
 
 
+class Speaker(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    # a small square photo as a data: URL (the admin resizes it before sending), or none
+    photo: str | None = Field(default=None, max_length=300_000, pattern=r"^data:image/(jpeg|png|webp);base64,")
+
+
 class RoomPatch(BaseModel):
     name: str | None = None
     url: str | None = None
     kind: str | None = None
     active: bool | None = None
+    # who speaks in this broadcast: when set, the site only shows (and counts) what these people said
+    speakers: list[Speaker] | None = Field(default=None, max_length=20)
 
 
 class RoomStart(BaseModel):
@@ -121,7 +130,7 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
         vid = room["video_id"]
         ch = channels.channels.get(vid)
         row = channels.cache.video(vid)
-        out = {**room, "active": bool(room["active"]), "title": (ch.info.title if ch else (row or {}).get("title")),
+        out = {**room, "active": bool(room["active"]), "speakers": json.loads(room.get("speakers") or "[]"), "title": (ch.info.title if ch else (row or {}).get("title")),
                "is_live": (ch.info.is_live if ch else bool((row or {}).get("is_live"))),
                "processing": bool(ch and ch.run_task and not ch.run_task.done()),
                "viewers": len(ch.subscribers) if ch else 0,

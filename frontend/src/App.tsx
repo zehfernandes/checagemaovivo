@@ -1,11 +1,11 @@
 import { useCallback, useRef, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { ClaimCard } from './components/ClaimCard'
 import { Danmu } from './components/Danmu'
+import { ClaimSheet, CountBar, FeedCard, FilterSheet, LiveChip, ScoreBars } from './components/Feed'
+import { NO_FILTER, PhotosContext, UNNAMED, applyFilters, applyRoster, photoMap, roomTitle, scoreRows, totalOf, useSharedClaim, type Filters } from './components/feedData'
 import { FitSelect } from './components/FitSelect'
 import { Player } from './components/Player'
 import { useSession } from './useSession'
-import type { Room, Verdict } from './types'
-import { speakerLabel } from './types'
+import type { Claim, Room, Verdict } from './types'
 
 const DEFAULT_URL = 'https://www.youtube.com/watch?v=Amwukq3hviM'
 // A chunk's audio spans [captured_at - 8, captured_at] on the server clock. Measured on YouTube live:
@@ -13,7 +13,6 @@ const DEFAULT_URL = 'https://www.youtube.com/watch?v=Amwukq3hviM'
 // behind the player edge starts hearing that chunk at about captured_at + delay + 8.
 const PLAYER_EDGE_LAG_S = 8
 const LIVE_DELAY_S = 20 // lives: player sits this far behind the edge so verdicts are ready when the viewer hears the sentence
-const RECENT_S = 180
 // Recordings: a claim is stamped where its sentence ends inside an 8 s chunk (interpolated, ±3-4 s),
 // so reveal it a few seconds later rather than while the sentence is still being spoken.
 const REVEAL_LAG_S = 4
@@ -40,6 +39,26 @@ function isHttpUrl(url: string): boolean {
   }
 }
 
+// a phone gets the single feed (score, "N checagens" + filters) instead of the desktop's tabs
+const NARROW = '(max-width: 900px)'
+function useNarrow() {
+  const [narrow, setNarrow] = useState(() => window.matchMedia(NARROW).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW)
+    const on = () => setNarrow(mq.matches)
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+  return narrow
+}
+
+function hms(s: number) {
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = Math.floor(s % 60).toString().padStart(2, '0')
+  return h ? `${h}:${m.toString().padStart(2, '0')}:${sec}` : `${m}:${sec}`
+}
+
 const SOURCE_LABEL: Record<string, string> = { youtube: 'YouTube', g1: 'g1', globoplay: 'Globoplay', ge: 'ge' }
 function sourceLabel(source: string | undefined, url: string): string {
   if (source && SOURCE_LABEL[source]) return SOURCE_LABEL[source]
@@ -58,17 +77,19 @@ export default function App() {
   const [url, setUrl] = useState(DEFAULT_URL)
   const language = 'pt'
   const [currentTime, setCurrentTime] = useState(0)
-  // 'recent', 'all' or the name of a speaker
-  const [tab, setTab] = useState<string>('recent')
   const danmu = true
-  const [sideOpen, setSideOpen] = useState(() => localStorage.getItem('side') !== 'closed')
   // recordings: show only what is said from the position where Start was pressed (no backlog dump)
   const [baseline, setBaseline] = useState(0)
-  useEffect(() => localStorage.setItem('side', sideOpen ? 'open' : 'closed'), [sideOpen])
   const delay = LIVE_DELAY_S
   const nudge = 0
   const [now, setNow] = useState(() => Date.now())
   const session = useSession()
+  const narrow = useNarrow()
+  const [filters, setFilters] = useState<Filters>(NO_FILTER)
+  const [filtering, setFiltering] = useState(false)
+  const closeFilters = useCallback(() => setFiltering(false), [])
+  const [openId, setOpenId] = useState<string | null>(null)
+  const closeClaim = useCallback(() => setOpenId(null), [])
 
   // Rooms: broadcasts opened by the newsroom. When there are rooms, viewers pick one instead of pasting a URL.
   const [rooms, setRooms] = useState<Room[] | null>(null)
@@ -85,6 +106,10 @@ export default function App() {
   }, [])
   const room = rooms?.find((r) => r.id === roomId) ?? rooms?.[0]
   const roomUrl = room?.url
+  // the room's registered speakers decide whose claims are shown (and the photos)
+  const roster = room?.speakers
+  const rosterClaims = useMemo(() => applyRoster(session.claims, roster), [session.claims, roster])
+  const photos = useMemo(() => photoMap(roster), [roster])
   useEffect(() => {
     if (!roomUrl) return
     // oxlint-disable-next-line react-hooks/set-state-in-effect -- the room decides the URL
@@ -93,6 +118,7 @@ export default function App() {
   }, [roomUrl])
   function pickRoom(id: string) {
     setRoomId(id)
+    setFilters(NO_FILTER)
     const p = new URLSearchParams(location.search)
     p.set('room', id)
     history.replaceState(null, '', `?${p}`)
@@ -143,43 +169,31 @@ export default function App() {
   // Processing is shared per video and cached server-side; for a recording we only reveal
   // what has been said up to the player position; for a delayed live, what the viewer heard.
   // Reveal times are stamped once per claim list (not per tick) so card objects keep their identity
-  // and the memoized <ClaimCard>s don't re-render twice a second.
+  // and the memoized cards don't re-render twice a second.
   const scheduledClaims = useMemo(
-    () => (delayed ? session.claims.map((c) => ({ ...c, revealAt: revealAt(c.captured_at) })) : session.claims),
+    () => (delayed ? rosterClaims.map((c) => ({ ...c, revealAt: revealAt(c.captured_at) })) : rosterClaims),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- revealAt is derived from delay/nudge/clockOffset listed below
-    [session.claims, delayed, delay, nudge, session.clockOffset],
+    [rosterClaims, delayed, delay, nudge, session.clockOffset],
   )
   const visibleClaims = useMemo(() => {
-    if (!isLive && noPlayer) return session.claims // nothing to sync to: list everything
-    if (!isLive) return session.claims.filter((c) => c.start >= baseline - 1 && c.start + REVEAL_LAG_S <= currentTime)
+    if (!isLive && noPlayer) return rosterClaims // nothing to sync to: list everything
+    if (!isLive) return rosterClaims.filter((c) => c.start >= baseline - 1 && c.start + REVEAL_LAG_S <= currentTime)
     if (!delayed) return scheduledClaims
     return scheduledClaims.filter((c) => (c.revealAt ?? 0) <= now)
-  }, [session.claims, scheduledClaims, currentTime, isLive, noPlayer, delayed, now, baseline])
-
-  // last 3 minutes of the video (stream time), newest first
-  const recentClaims = useMemo(() => {
-    // recordings: relative to the player position; live or no player: relative to the newest claim
-    const ref = isLive || noPlayer ? visibleClaims.reduce((m, c) => Math.max(m, c.start), 0) : currentTime
-    return visibleClaims.filter((c) => c.start >= ref - RECENT_S)
-  }, [visibleClaims, isLive, noPlayer, currentTime])
-
-  // newest first
-  // one tab per person who said something, most claims first
-  const speakers = useMemo(() => {
-    const n = new Map<string, number>()
-    for (const c of visibleClaims) if (c.speaker) n.set(c.speaker, (n.get(c.speaker) ?? 0) + 1)
-    return [...n].sort((a, b) => b[1] - a[1])
-  }, [visibleClaims])
-  const listedClaims = useMemo(
-    () => (tab === 'recent' ? recentClaims : tab === 'all' ? visibleClaims : visibleClaims.filter((c) => c.speaker === tab)).slice().reverse(),
-    [tab, recentClaims, visibleClaims],
-  )
+  }, [rosterClaims, scheduledClaims, currentTime, isLive, noPlayer, delayed, now, baseline])
 
   const counts = useMemo(() => {
     const c: Record<Verdict, number> = { pending: 0, fake: 0, valid: 0, inconclusive: 0 }
     for (const cl of visibleClaims) c[cl.verdict]++
     return c
   }, [visibleClaims])
+  const rows = useMemo(() => scoreRows(visibleClaims), [visibleClaims])
+  const filterSpeakers = useMemo(() => rows.map(([name, row]) => [name, totalOf(row) + row.pending] as [string, number]), [rows])
+  // every claim so far, newest first, through the filters (same feed as /sem-video)
+  const feedClaims = useMemo(() => applyFilters(visibleClaims, filters).slice().reverse(), [visibleClaims, filters])
+  const opened = openId ? rosterClaims.find((c) => c.id === openId) ?? null : null
+  useSharedClaim(rosterClaims, setOpenId)
+  const when = (c: Claim) => (isLive ? undefined : hms(c.start))
 
   const startedFor = useRef('')
   function begin() {
@@ -215,15 +229,14 @@ export default function App() {
   }, [session.info])
 
   return (
+    <PhotosContext.Provider value={photos}>
     <div className="app">
-      <header className="topbar">
+      <header className="fhead topbar">
         <form className="controls" onSubmit={onSubmit}>
-          <span className="logo" aria-hidden>●</span>
           {rooms && rooms.length > 0 ? (<>
-            <FitSelect className="room-picker" label={room?.name ?? ''} value={room?.id ?? ''} onChange={(e) => pickRoom(e.target.value)} title="Transmissão">
-              {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            <FitSelect className="fhead__title" label={roomTitle(room?.name ?? '')} value={room?.id ?? ''} onChange={(e) => pickRoom(e.target.value)} title="Transmissão">
+              {rooms.map((r) => <option key={r.id} value={r.id}>{roomTitle(r.name)}</option>)}
             </FitSelect>
-            {room && <a className="view-swap" href={`/sem-video?room=${room.id}`}>Ver sem vídeo</a>}
           </>) : (
             <input
               type="url"
@@ -234,30 +247,20 @@ export default function App() {
             />
           )}
         </form>
-        <span className={`indicator status--${session.state}`} title={session.statusText}>
-          {(session.state === 'listening' || session.state === 'resolving') && <span className="dot" />}
-          {session.state === 'listening' && <span>Escutando</span>}
-          {session.state === 'resolving' && <span>Conectando</span>}
-          {session.state === 'error' && <span>{waiting ? 'Aguardando' : 'Erro'}</span>}
-          {session.state === 'listening' && session.info?.is_live && <span className="live-tag">AO VIVO</span>}
+        <span className="fhead__status" title={session.statusText}>
+          <LiveChip live={session.state === 'listening' && !!session.info?.is_live}
+            label={session.state === 'error' ? (waiting ? 'Aguardando' : 'Erro') : session.state === 'resolving' || session.state === 'connecting' || !session.info ? 'Conectando'
+              : session.info.is_live ? (session.state === 'listening' ? 'Ao vivo' : 'Ao vivo · pausado') : 'Gravado'} />
         </span>
+        {rooms && rooms.length > 0 && room && <a className="fhead__link" href={`/sem-video?room=${room.id}`}>Ver sem vídeo</a>}
       </header>
 
 
       {session.error && <div className="banner banner--error">{session.error}</div>}
 
-      <main className={`layout${sideOpen ? '' : ' layout--collapsed'}`}>
+      <main className="layout">
         <section className="stage">
-          <button
-            type="button"
-            className="side-toggle"
-            onClick={() => setSideOpen((o) => !o)}
-            title={sideOpen ? 'Recolher a barra lateral' : 'Mostrar afirmações e transcrição'}
-            aria-expanded={sideOpen}
-          >
-            {sideOpen ? '›' : '‹'}
-            {!sideOpen && visibleClaims.length > 0 && <span className="side-toggle__count">{visibleClaims.length}</span>}
-          </button>
+          <div className="stage__video">
           {failed ? (
             <StageNotice tone="error" kicker="Link indisponível" title="Não foi possível abrir este link"
               text={session.statusText.replace(/^Não foi possível abrir o vídeo: /, '')} href={pageUrl} cta={`Abrir no ${label}`} />
@@ -278,42 +281,29 @@ export default function App() {
           ) : (
             <div className="player player--empty">Cole o link de um vídeo ou live para começar</div>
           )}
-          <Danmu claims={visibleClaims} isLive={isLive || noPlayer} currentTime={currentTime} enabled={danmu && !(noPlayer && !isLive)} />
-          <div className="scoreboard">
-            <Score label="falsas" n={counts.fake} kind="fake" />
-            <Score label="verdadeiras" n={counts.valid} kind="valid" />
-            <Score label="inconclusivas" n={counts.inconclusive} kind="inconclusive" />
-            {counts.pending > 0 && <Score label="verificando" n={counts.pending} kind="pending" />}
+          <Danmu claims={visibleClaims} isLive={isLive || noPlayer} currentTime={currentTime} enabled={danmu && !narrow && !(noPlayer && !isLive)} />
           </div>
+          <ScoreBars rows={rows} unnamed={rows.find(([name]) => name === UNNAMED)?.[1]} reserve={roster?.length ?? 0} />
         </section>
 
-        {sideOpen && (
         <aside className="side">
-          <nav className="tabs">
-            <button className={tab === 'recent' ? 'active' : ''} onClick={() => setTab('recent')} title="Afirmações dos últimos 3 minutos">
-              Recentes {recentClaims.length > 0 && <span className="muted">{recentClaims.length}</span>}
-            </button>
-            <button className={tab === 'all' ? 'active' : ''} onClick={() => setTab('all')}>
-              Todas {visibleClaims.length > 0 && <span className="muted">{visibleClaims.length}</span>}
-            </button>
-            {speakers.map(([name, n]) => (
-              <button key={name} className={tab === name ? 'active' : ''} onClick={() => setTab(name)} title={`Afirmações de ${name}`}>
-                {speakerLabel(name)} <span className="muted">{n}</span>
-              </button>
+          {visibleClaims.length === 0 ? <p className="fwait">Aguardando checagens</p> : <>
+          <CountBar n={feedClaims.length} busy={counts.pending > 0 || (isLive && session.state === 'listening')} filters={filters} onFilter={() => setFiltering(true)} />
+          <ol className="flist claims-list">
+            {feedClaims.length === 0 && <li className="flist__none">Nada com esse filtro.</li>}
+            {feedClaims.map((c) => (
+              <li key={c.id}><FeedCard claim={c} when={when(c)} onOpen={() => setOpenId(c.id)} /></li>
             ))}
-          </nav>
-          <div className="claims-list">
-              {listedClaims.length === 0 && (
-                <p className="muted empty">{tab === 'recent' ? 'Nada nos últimos 3 minutos.' : tab === 'all' ? 'As afirmações verificadas aparecem aqui.' : `Nenhuma afirmação de ${speakerLabel(tab)} até aqui.`}</p>
-              )}
-              {listedClaims.map((c) => (
-                <ClaimCard key={c.id} claim={c} />
-              ))}
-          </div>
+          </ol>
+          </>}
         </aside>
-        )}
       </main>
+      {opened && <ClaimSheet claim={opened} when={when(opened)} onClose={closeClaim} />}
+      {filtering && (
+        <FilterSheet filters={filters} onChange={setFilters} onClose={closeFilters} counts={counts} speakers={filterSpeakers} />
+      )}
     </div>
+    </PhotosContext.Provider>
   )
 }
 
@@ -331,13 +321,5 @@ function StageNotice({ kicker, title, text, href, cta, tone }: {
         )}
       </div>
     </div>
-  )
-}
-
-function Score({ label, n, kind }: { label: string; n: number; kind: Verdict }) {
-  return (
-    <span className={`score score--${kind}`}>
-      <strong>{n}</strong> {label}
-    </span>
   )
 }

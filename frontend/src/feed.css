@@ -1,0 +1,155 @@
+/* The viewer's visual language (/ and /sem-video): black page, rounded cards, solid verdict pills,
+   speaker photos, score bars per candidate. Mobile first; desktop keeps each page's layout. */
+.app, .compact {
+  --bg: #000;
+  --card: #1c1c1e;
+  --card-2: #2c2c2e;
+  --f-muted: #8e8e93;
+  --f-valid: #00d15f;
+  --f-fake: #e0514b;
+  --f-inconclusive: #e8a94f;
+  --f-ink: #0b0b0c; /* text on a solid verdict color */
+  background: var(--bg);
+}
+
+.fspacer { flex: 1; }
+.fspin { width: 12px; height: 12px; flex: none; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; }
+.fspin--lg { width: 18px; height: 18px; border-width: 2.5px; color: var(--f-muted); }
+.ficon { display: inline-grid; place-items: center; width: 40px; height: 40px; flex: none; border: 0; border-radius: 50%; background: none; color: var(--text); cursor: pointer; }
+.ficon:hover { background: rgba(255,255,255,.06); }
+
+/* ---- speaker photo ---- */
+.favatar { width: 32px; height: 32px; flex: none; border-radius: 8px; overflow: hidden; background: var(--card-2); display: inline-grid; place-items: center; }
+.favatar img { width: 100%; height: 100%; object-fit: cover; }
+.favatar__initials { font-size: 12px; font-weight: 700; color: var(--text-2); letter-spacing: .02em; }
+
+/* ---- pills ---- */
+.fpill { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 9px; font-size: 15px; font-weight: 500;
+  color: var(--f-ink); background: var(--card-2); white-space: nowrap; }
+.fpill--valid { background: var(--f-valid); }
+.fpill--fake { background: var(--f-fake); }
+.fpill--inconclusive { background: var(--f-inconclusive); }
+.fpill--pending { color: var(--text-2); }
+.fchip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 9px; font-size: 15px;
+  color: var(--f-muted); background: var(--bg); white-space: nowrap; }
+
+/* ---- source logos ---- */
+.flogo { width: 24px; height: 24px; flex: none; border-radius: 50%; overflow: hidden; background: #fff; display: inline-grid; place-items: center; }
+.flogo img { width: 100%; height: 100%; object-fit: cover; }
+.flogo__letter { font-size: 12px; font-weight: 700; color: #111; }
+.fstack { display: inline-flex; }
+.fstack .flogo { margin-left: -8px; box-shadow: 0 0 0 2px var(--card); }
+.fstack .flogo:first-child { margin-left: 0; }
+
+/* ---- a claim card ---- */
+.fcard { background: var(--card); border-radius: 24px; padding: 16px 16px 14px; display: flex; flex-direction: column; gap: 14px; cursor: pointer;
+  transition: background-color .15s; outline-offset: 2px; }
+.fcard:hover { background: #232325; }
+.fcard__who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.fcard__name { font-size: 17px; color: var(--f-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fcard__when { margin-left: auto; font-size: 13px; color: var(--f-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fcard__quote { margin: 0; font-size: 16px; line-height: 1.5; color: var(--text); text-wrap: pretty; }
+.fcard__why { margin: 0; font-size: 15px; line-height: 1.55; color: var(--f-muted); }
+.fcard__foot { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.fcard__chev { color: var(--text); flex: none; margin-left: 6px; }
+.fcard--fresh { animation: fcard-fresh 6s ease-out; }
+@keyframes fcard-fresh { from { background: #34343a; } }
+.fcard--featured .fcard__quote { font-size: 22px; line-height: 1.35; }
+
+.flist { list-style: none; margin: 0; padding: 0 4px 24px; display: flex; flex-direction: column; gap: 8px; }
+.flist__none { padding: 24px 16px; color: var(--f-muted); }
+/* nothing checked yet: one quiet line in the middle of the space the feed will take */
+.fwait { flex: 1; display: grid; place-items: center; margin: 0; min-height: 40vh; padding: 24px 16px; color: var(--f-muted); font-size: 14px; text-align: center; }
+
+/* ---- header ---- */
+.fhead { display: flex; align-items: center; gap: 8px; padding: 12px 16px; min-height: 64px; }
+.fhead > .fhead__title:first-child { padding-left: 4px; } /* a single room: plain title */
+.fhead__title { font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* the room picker: a box like the status chip, as wide as the chosen room (FitSelect) */
+select.fhead__title { font: inherit; font-size: 16px; font-weight: 600; color: var(--text); height: 40px; border: 0; border-radius: 12px; padding: 0 34px 0 14px;
+  cursor: pointer; appearance: none; outline: none; background-color: var(--card);
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 19px) 52%, calc(100% - 14px) 52%; background-size: 5px 5px; background-repeat: no-repeat; }
+select.fhead__title:hover { background-color: var(--card-2); }
+select.fhead__title:focus-visible { box-shadow: 0 0 0 2px var(--text-2); }
+select.fhead__title option { background: var(--card); }
+.fhead__title.fit-select__sizer { font-size: 16px; padding: 0 18px 0 14px; } /* + the 22px arrow slot: a bit more than the select's padding */
+/* "Ver com/sem vídeo": a quiet text link next to the status */
+.fhead__link { margin-left: 6px; font-size: 13px; color: var(--f-muted); text-decoration: none; white-space: nowrap; flex: none; }
+.fhead__link:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
+/* phone: picker + status on the first line, "Ver com/sem vídeo" below */
+@media (max-width: 640px) {
+  .fhead { display: grid; grid-template-columns: minmax(0, max-content) 1fr auto; row-gap: 8px; }
+  .fhead > .fspacer { display: none; }
+  .fhead > .controls, .fhead > .fit-select, .fhead > .fhead__title { grid-row: 1; grid-column: 1; min-width: 0; }
+  .fhead > .flive, .fhead > .fhead__status { grid-row: 1; grid-column: 3; }
+  .fhead__link { grid-row: 2; grid-column: 1 / -1; justify-self: start; margin-left: 4px; }
+}
+.flive { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-radius: 12px; background: var(--card); font-size: 15px; white-space: nowrap; flex: none; }
+.flive__dot { width: 10px; height: 10px; border-radius: 50%; background: var(--f-muted); }
+.flive--on .flive__dot { background: var(--f-fake); animation: flive-pulse 1.4s infinite; }
+@keyframes flive-pulse { 50% { opacity: .35; } }
+
+/* ---- score bars ---- */
+.fscore { --fscore-pad: 32px; display: flex; flex-direction: column; gap: 6px; padding: 16px 20px; box-sizing: border-box; } /* --fscore-pad: its vertical padding, for the reserved height */
+.fscore__row { display: flex; align-items: center; gap: 12px; }
+.fscore__bars { display: flex; gap: 6px; min-width: 40px; }
+.fscore__seg { flex-basis: 0; min-width: 34px; height: 32px; border-radius: 8px; padding: 0 12px; display: flex; align-items: center;
+  font-size: 15px; font-weight: 600; color: var(--f-ink); font-variant-numeric: tabular-nums; }
+.fscore__seg--valid { background: var(--f-valid); }
+.fscore__seg--fake { background: var(--f-fake); }
+.fscore__seg--inconclusive { background: var(--f-inconclusive); }
+.fscore__unnamed { margin: 4px 0 0; font-size: 12px; color: var(--f-muted); }
+
+/* ---- "138 checagens" ---- */
+.fcount { display: flex; align-items: center; gap: 12px; padding: 16px 12px 16px 20px; }
+.fcount__n { font-size: 17px; font-weight: 500; }
+.fcount__filter { position: relative; }
+.fcount__filter--on::after { content: ''; position: absolute; top: 8px; right: 8px; width: 8px; height: 8px; border-radius: 50%; background: var(--f-fake); }
+
+/* ---- the details (and the filters): full screen on a phone, a dialog on bigger screens ---- */
+.fsheet { position: fixed; inset: 0; z-index: 40; background: var(--bg); overflow-y: auto; overscroll-behavior: contain; }
+.fsheet__box { min-height: 100%; padding: 12px 4px 32px; display: flex; flex-direction: column; }
+.fsheet__head { display: flex; align-items: center; gap: 10px; padding: 0 8px 0 16px; min-height: 56px; }
+.fsheet__name { font-size: 17px; color: var(--f-muted); }
+.fsheet__title { font-size: 17px; font-weight: 600; }
+.fsheet__quote { margin: 18px 16px 0; font-size: 26px; line-height: 1.3; font-weight: 400; letter-spacing: -.01em; text-wrap: pretty; }
+.fsheet__pills { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 22px 16px 0; }
+.fsheet__pills .fchip { background: var(--card); }
+.fsheet__when { margin-left: auto; font-size: 13px; color: var(--f-muted); font-variant-numeric: tabular-nums; }
+.fsheet__why { margin: 24px 16px 0; font-size: 15px; line-height: 1.75; color: var(--f-muted); }
+.fsheet__sources { list-style: none; margin: 24px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.fsource { display: flex; flex-direction: column; gap: 16px; background: var(--card); border-radius: 24px; padding: 18px 16px; text-decoration: none; }
+.fsource:hover { background: #232325; }
+.fsource__title { font-size: 15px; line-height: 1.6; color: var(--f-muted); }
+.fsource__foot { display: flex; align-items: center; gap: 10px; }
+.fsource__name { font-size: 14px; color: var(--f-muted); }
+.fsource__go { margin-left: auto; color: var(--text); }
+.fsheet__label { margin: 20px 16px 10px; font-size: 13px; font-weight: 500; color: var(--f-muted); }
+.fopts { display: flex; flex-wrap: wrap; gap: 8px; padding: 0 16px; }
+.fopt, .compact .fopt { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px 0 10px; border-radius: 12px; border: 0; background: var(--card);
+  color: var(--text); font-size: 15px; cursor: pointer; }
+.fopt .favatar { width: 26px; height: 26px; border-radius: 6px; }
+.fopt em { font-style: normal; color: var(--f-muted); font-variant-numeric: tabular-nums; }
+.fopt.fopt--on { background: var(--text); color: var(--bg); } /* beats the pages' `button { color: inherit }` */
+.fopt--on em { color: inherit; opacity: .6; }
+.fopt:not(.fopt--on) svg { color: var(--f-muted); }
+
+@media (min-width: 720px) {
+  .fsheet { display: grid; place-items: center; padding: 40px 16px; background: rgba(0,0,0,.72); backdrop-filter: blur(6px); }
+  .fsheet__box { min-height: 0; width: min(600px, 100%); background: var(--bg); border: 1px solid var(--card-2); border-radius: 28px; padding: 14px 8px 12px; }
+  .fsheet--filters .fsheet__box { width: min(480px, 100%); padding-bottom: 22px; }
+  .fsheet__sources { padding: 0 4px 4px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fspin, .flive--on .flive__dot, .fcard--fresh { animation: none; }
+}
+
+/* the overlay on the video speaks the same language: solid verdict pill, no colored outline */
+.app .danmu__item { background: rgba(0, 0, 0, .78); border-color: transparent; border-radius: 12px; padding: 6px 14px 6px 6px; }
+.app .danmu__badge { border-radius: 8px; text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 600; padding: 5px 10px; color: var(--f-ink); }
+.app .danmu__item--fake .danmu__badge { background: var(--f-fake); }
+.app .danmu__item--valid .danmu__badge { background: var(--f-valid); color: var(--f-ink); }
+.app .danmu__item--inconclusive .danmu__badge { background: var(--f-inconclusive); color: var(--f-ink); }
+

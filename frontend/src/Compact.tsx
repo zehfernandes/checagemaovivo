@@ -1,17 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './compact.css'
 import { useSession } from './useSession'
 import { FitSelect } from './components/FitSelect'
+import { ClaimSheet, CountBar, FeedCard, FilterSheet, LiveChip, ScoreBars } from './components/Feed'
+import { NO_FILTER, PhotosContext, UNNAMED, applyFilters, applyRoster, photoMap, roomTitle, scoreRows, totalOf, useSharedClaim, type Filters } from './components/feedData'
 import type { Claim, Room, Verdict } from './types'
-import { VERDICT_LABEL, speakerLabel } from './types'
 
 // /sem-video — the fact-checks without the video: what was said, by whom, and the verdict.
 // One page for three screens: a phone (single feed), a desktop (latest claim + feed) and a TV
 // (big latest claim + the last few, nothing that needs a mouse). ?tv=1 forces the TV layout.
 
-type Filter = 'all' | Exclude<Verdict, 'pending'> | `speaker:${string}`
-const FINAL: Exclude<Verdict, 'pending'>[] = ['fake', 'valid', 'inconclusive']
-const PLURAL: Record<Exclude<Verdict, 'pending'>, string> = { fake: 'falsas', valid: 'verdadeiras', inconclusive: 'inconclusivas' }
 const TV_SIDE = 6 // claims listed next to the featured one on a TV
 // Lives only: the YouTube player sits ~12 s behind the live edge the server reads, so a claim held this
 // long shows up about when an internet viewer hears it (?atraso=N overrides). Broadcast TV is ahead of
@@ -22,9 +20,6 @@ function storedWatching(): Watching {
   try { return localStorage.getItem('sem-video:assistindo') === 'tv' ? 'tv' : 'internet' } catch { return 'internet' }
 }
 const FRESH_MS = 6000 // a just-arrived claim is highlighted this long
-const UNNAMED = '' // claims with no identified speaker get their own row and filter, so every count adds up
-const nameOf = (speaker: string) => (speaker === UNNAMED ? 'Sem identificação' : speakerLabel(speaker))
-const total = (row: Record<Verdict, number>) => FINAL.reduce((n, v) => n + row[v], 0)
 
 function hms(s: number) {
   const h = Math.floor(s / 3600)
@@ -39,17 +34,15 @@ function ago(seconds: number) {
   return `há ${Math.floor(seconds / 3600)} h`
 }
 
-function hostname(url: string) {
-  try { return new URL(url).hostname.replace(/^www\./, '') } catch { return url }
-}
-
 export function Compact() {
   const params = new URLSearchParams(location.search)
   const tv = useTv(params.get('tv'))
   const session = useSession()
   const [rooms, setRooms] = useState<Room[] | null>(null)
   const [roomId, setRoomId] = useState(params.get('room') ?? '')
-  const [filter, setFilter] = useState<Filter>('all')
+  const [filters, setFilters] = useState<Filters>(NO_FILTER)
+  const [filtering, setFiltering] = useState(false)
+  const closeFilters = useCallback(() => setFiltering(false), [])
   const [openId, setOpenId] = useState<string | null>(null)
   const closeModal = useCallback(() => setOpenId(null), [])
   const [now, setNow] = useState(() => Date.now())
@@ -75,6 +68,10 @@ export function Compact() {
   }, [])
   const room = rooms?.find((r) => r.id === roomId) ?? rooms?.[0]
   const url = room?.url
+  // the room's registered speakers decide whose claims are shown (and the photos)
+  const roster = room?.speakers
+  const rosterClaims = useMemo(() => applyRoster(session.claims, roster), [session.claims, roster])
+  const photos = useMemo(() => photoMap(roster), [roster])
 
   // follow the room: subscribe, and quietly retry while its checking hasn't started or the connection dropped
   const started = useRef('')
@@ -90,7 +87,7 @@ export function Compact() {
   }, [url, session.state, session.lost])
   function pickRoom(id: string) {
     setRoomId(id)
-    setFilter('all')
+    setFilters(NO_FILTER)
     const p = new URLSearchParams(location.search)
     p.set('room', id)
     history.replaceState(null, '', `?${p}`)
@@ -110,34 +107,22 @@ export function Compact() {
   const order = (c: Claim) => (live ? c.captured_at ?? c.start : c.start)
   const revealAt = (c: Claim) => (c.captured_at ?? 0) + delay // server clock (s)
   const claims = useMemo(
-    () => session.claims.filter((c) => !delay || revealAt(c) <= serverNow).sort((a, b) => order(b) - order(a)), // newest first
+    () => rosterClaims.filter((c) => !delay || revealAt(c) <= serverNow).sort((a, b) => order(b) - order(a)), // newest first
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- order/revealAt only read live, delay and the clock listed here
-    [session.claims, live, delay, delay ? Math.floor(serverNow * 2) : 0],
+    [rosterClaims, live, delay, delay ? Math.floor(serverNow * 2) : 0],
   )
   const counts = useMemo(() => {
     const c: Record<Verdict, number> = { pending: 0, fake: 0, valid: 0, inconclusive: 0 }
     for (const cl of claims) c[cl.verdict]++
     return c
   }, [claims])
-  const bySpeaker = useMemo(() => {
-    const m = new Map<string, Record<Verdict, number>>()
-    for (const c of claims) {
-      const who = c.speaker || UNNAMED
-      const row = m.get(who) ?? { pending: 0, fake: 0, valid: 0, inconclusive: 0 }
-      row[c.verdict]++
-      m.set(who, row)
-    }
-    // most checked first; the unidentified row always last
-    return [...m].sort((a, b) => (a[0] === UNNAMED ? 1 : b[0] === UNNAMED ? -1 : total(b[1]) - total(a[1])))
-  }, [claims])
-  // the chart compares people on one absolute scale; unidentified claims are summed apart (they would dwarf everyone)
-  const named = bySpeaker.filter(([name, row]) => name !== UNNAMED && total(row) > 0)
-  const unnamed = bySpeaker.find(([name]) => name === UNNAMED)?.[1]
-  const maxChecked = Math.max(1, ...named.map(([, row]) => total(row)))
-  const shown = useMemo(() => claims.filter((c) =>
-    filter === 'all' ? true : filter.startsWith('speaker:') ? (c.speaker || UNNAMED) === filter.slice(8) : c.verdict === filter), [claims, filter])
+  const rows = useMemo(() => scoreRows(claims), [claims])
+  const unnamed = rows.find(([name]) => name === UNNAMED)?.[1]
+  const speakers = useMemo(() => rows.map(([name, row]) => [name, totalOf(row) + row.pending] as [string, number]), [rows])
+  const shown = useMemo(() => applyFilters(claims, filters), [claims, filters])
   const featured = claims[0]
-  const opened = openId ? session.claims.find((c) => c.id === openId) ?? null : null
+  const opened = openId ? rosterClaims.find((c) => c.id === openId) ?? null : null
+  useSharedClaim(rosterClaims, setOpenId)
   // highlight claims that appear while watching (arrival, or the end of their delay), not the history burst
   const shownAt = (c: Claim) => Math.max(c.receivedAt, delay && c.captured_at ? (revealAt(c) + session.clockOffset) * 1000 : 0)
   const fresh = (c: Claim) => shownAt(c) - loadedAt > 3000 && now - shownAt(c) < FRESH_MS
@@ -146,100 +131,68 @@ export function Compact() {
   // what a viewer needs to know: is this happening now? (a recording's run being paused is a newsroom detail)
   const status = session.state === 'error' ? 'Aguardando' : session.state === 'resolving' || session.state === 'connecting' ? 'Conectando'
     : live ? (session.state === 'listening' ? 'Ao vivo' : 'Ao vivo · pausado') : 'Gravado'
-  const empty = session.state === 'error' ? session.statusText || 'A checagem desta transmissão ainda não começou.'
-    : session.state === 'connecting' || session.state === 'resolving' ? 'Conectando…' : 'Aguardando as primeiras falas…'
+  const busy = counts.pending > 0 || (live && session.state === 'listening')
+  const watchingToggle = live && (
+    <div className="compact__watching" role="group" aria-label="Assistindo em">
+      <span>Assistindo em</span>
+      {(['internet', 'tv'] as const).map((w) => (
+        <button key={w} type="button" aria-pressed={watching === w} className={`fopt${watching === w ? ' fopt--on' : ''}`} onClick={() => pickWatching(w)}
+          title={w === 'internet' ? `Segura cada checagem ${internetDelay} s para chegar junto com a fala no YouTube` : 'Mostra cada checagem assim que fica pronta'}>
+          {w === 'internet' ? 'Internet' : 'TV'}
+        </button>
+      ))}
+    </div>
+  )
 
   return (
+    <PhotosContext.Provider value={photos}>
     <div className={`compact${tv ? ' compact--tv' : ''}`}>
-      <header className="compact__bar">
-        <span className="compact__brand"><span className="compact__dot" aria-hidden />Checagem ao vivo</span>
+      <header className="fhead compact__bar">
         {rooms && rooms.length > 1 ? (
-          <FitSelect className="compact__room" wrapClassName="compact__room-wrap" label={room?.name ?? ''} value={room?.id ?? ''}
+          <FitSelect className="fhead__title" label={roomTitle(room?.name ?? '')} value={room?.id ?? ''}
             onChange={(e) => pickRoom(e.target.value)} aria-label="Transmissão">
-            {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            {rooms.map((r) => <option key={r.id} value={r.id}>{roomTitle(r.name)}</option>)}
           </FitSelect>
-        ) : <span className="compact__room compact__room--static">{room?.name ?? ''}</span>}
-        <span className={`compact__state compact__state--${live && session.state === 'listening' ? 'live' : session.state}`}>{status}</span>
-        {room && !tv && <a className="compact__swap" href={`/?room=${room.id}`}>Ver com vídeo</a>}
-        {live && (
-          <div className="compact__watching" role="group" aria-label="Assistindo em">
-            <span>Assistindo em:</span>
-            {(['internet', 'tv'] as const).map((w) => (
-              <button key={w} type="button" aria-pressed={watching === w} className={watching === w ? 'active' : ''} onClick={() => pickWatching(w)}
-                title={w === 'internet' ? `Segura cada checagem ${internetDelay} s para chegar junto com a fala no YouTube` : 'Mostra cada checagem assim que fica pronta'}>
-                {w === 'internet' ? 'Internet' : 'TV'}
-              </button>
-            ))}
-          </div>
-        )}
-        <div className="compact__score" aria-label="Placar">
-          {FINAL.map((v) => (
-            <span key={v} className={`compact__count compact__count--${v}`}><strong>{counts[v]}</strong> {PLURAL[v]}</span>
-          ))}
-          {counts.pending > 0 && <span className="compact__count compact__count--pending"><strong>{counts.pending}</strong> verificando</span>}
-        </div>
+        ) : <span className="fhead__title">{roomTitle(room?.name ?? '')}</span>}
+        <LiveChip label={status} live={live && session.state === 'listening'} />
+        {room && !tv && <a className="fhead__link" href={`/?room=${room.id}`}>Ver com vídeo</a>}
+        <span className="fspacer" />
+        {!tv && <span className="compact__desk">{watchingToggle}</span>}
       </header>
 
       {claims.length === 0 ? (
-        <main className="compact__empty"><p>{empty}</p></main>
+        <main className="fwait compact__empty">Aguardando checagens</main>
       ) : (
         <main className="compact__main">
           {featured && (
             <section className="compact__now" aria-label="Última fala checada">
-              <span className="compact__label">Agora</span>
-              <ClaimView key={featured.id} claim={featured} when={when(featured)} featured fresh={fresh(featured)} />
-              {(named.length > 0 || unnamed) && (
-                <div className="compact__people">
-                  {named.map(([name, row]) => (
-                    <div key={name} className="compact__person">
-                      <span className="compact__person-name">{nameOf(name)}</span>
-                      <span className="compact__track">
-                        {/* one scale for everyone: the bar's length is how many claims were checked, not a share */}
-                        <span className="compact__bars" style={{ width: `calc((100% - 40px) * ${total(row) / maxChecked})` }}
-                          aria-label={FINAL.map((v) => `${row[v]} ${PLURAL[v]}`).join(', ')}>
-                          {FINAL.map((v) => row[v] > 0 && (
-                            <span key={v} className={`compact__seg compact__seg--${v}`} style={{ flexGrow: row[v] }}>{row[v]}</span>
-                          ))}
-                        </span>
-                        <span className="compact__person-total">{total(row)}</span>
-                      </span>
-                    </div>
-                  ))}
-                  {unnamed && total(unnamed) > 0 && (
-                    <p className="compact__unnamed">
-                      <strong>{total(unnamed)}</strong> sem identificação de quem falou:{' '}
-                      {FINAL.filter((v) => unnamed[v] > 0).map((v) => `${unnamed[v]} ${PLURAL[v]}`).join(' · ')}
-                    </p>
-                  )}
-                </div>
-              )}
+              <FeedCard key={featured.id} claim={featured} when={when(featured)} featured fresh={fresh(featured)} onOpen={() => setOpenId(featured.id)} />
+              <ScoreBars rows={rows} unnamed={unnamed} />
             </section>
           )}
           <section className="compact__feed" aria-label="Falas checadas">
-            <nav className="compact__filters" aria-label="Filtrar">
-              <Chip on={filter === 'all'} onClick={() => setFilter('all')}>Todas <em>{claims.length}</em></Chip>
-              {FINAL.map((v) => counts[v] > 0 && (
-                <Chip key={v} kind={v} on={filter === v} onClick={() => setFilter(v)}>{VERDICT_LABEL[v]} <em>{counts[v]}</em></Chip>
-              ))}
-              {bySpeaker.map(([name, row]) => (
-                <Chip key={name || '-'} on={filter === `speaker:${name}`} onClick={() => setFilter(`speaker:${name}`)}>
-                  {nameOf(name)} <em>{total(row) + row.pending}</em>
-                </Chip>
-              ))}
-            </nav>
-            <ol className="compact__list" aria-live="polite">
-              {shown.length === 0 && <li className="compact__none">Nada com esse filtro.</li>}
+            <div className="compact__phone-score"><ScoreBars rows={rows} unnamed={unnamed} /></div>
+            <CountBar n={shown.length} busy={busy} filters={filters} onFilter={() => setFiltering(true)} />
+            <ol className="flist" aria-live="polite">
+              {shown.length === 0 && <li className="flist__none">Nada com esse filtro.</li>}
               {shown.map((c, i) => (
                 <li key={c.id} className={`compact__item${i >= TV_SIDE + 1 ? ' compact__item--more' : ''}${c.id === featured?.id ? ' compact__item--featured' : ''}`}>
-                  <ClaimView claim={c} when={when(c)} fresh={fresh(c)} onOpen={() => setOpenId(c.id)} />
+                  <FeedCard claim={c} when={when(c)} fresh={fresh(c)} onOpen={() => setOpenId(c.id)} />
                 </li>
               ))}
             </ol>
           </section>
         </main>
       )}
-      {opened && <ClaimModal claim={opened} when={when(opened)} onClose={closeModal} />}
+      {opened && <ClaimSheet claim={opened} when={when(opened)} onClose={closeModal} />}
+      {filtering && (
+        <FilterSheet filters={filters} onChange={setFilters} onClose={closeFilters} counts={counts} speakers={speakers}
+          extra={<>
+            {watchingToggle && <><h3 className="fsheet__label">Assistindo em</h3><div className="fopts">{watchingToggle}</div></>}
+          </>} />
+      )}
     </div>
+    </PhotosContext.Provider>
   )
 }
 
@@ -254,60 +207,4 @@ function useTv(param: string | null): boolean {
     return () => mq.removeEventListener('change', on)
   }, [])
   return param === '1' || (param !== '0' && big)
-}
-
-function Chip({ on, kind, onClick, children }: { on: boolean; kind?: string; onClick: () => void; children: ReactNode }) {
-  return <button type="button" className={`compact__chip${kind ? ` compact__chip--${kind}` : ''}${on ? ' active' : ''}`} aria-pressed={on} onClick={onClick}>{children}</button>
-}
-
-function ClaimView({ claim: c, when, featured, fresh, detailed, onOpen }: {
-  claim: Claim; when: string; featured?: boolean; fresh?: boolean; detailed?: boolean; onOpen?: () => void
-}) {
-  const full = featured || detailed // the featured claim and the modal show the explanation and sources
-  // a list item is one big target: click/Enter opens the details
-  const open = onOpen && {
-    role: 'button', tabIndex: 0, 'aria-haspopup': 'dialog' as const, onClick: onOpen,
-    onKeyDown: (e: KeyboardEvent<HTMLElement>) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen() } },
-  }
-  return (
-    <article className={`cclaim cclaim--${c.verdict}${featured ? ' cclaim--featured' : ''}${detailed ? ' cclaim--detailed' : ''}${fresh ? ' cclaim--fresh' : ''}${onOpen ? ' cclaim--link' : ''}`} {...open}>
-      <header className="cclaim__head">
-        <span className="cclaim__verdict">{c.verdict === 'pending' && <span className="cclaim__spin" aria-hidden />}{VERDICT_LABEL[c.verdict]}</span>
-        {c.deep_pending && <span className="cclaim__deep">checagem profunda…</span>}
-        <span className="cclaim__when">{when}</span>
-      </header>
-      <p className="cclaim__quote">
-        {c.speaker && <span className="cclaim__speaker">{speakerLabel(c.speaker)}: </span>}
-        “{c.quote || c.text}”
-      </p>
-      {full && c.explanation && <p className="cclaim__why">{c.explanation}</p>}
-      {full && c.verdict === 'pending' && !c.explanation && <p className="cclaim__why">A explicação aparece assim que a checagem terminar.</p>}
-      {full && c.sources.length > 0 && (
-        <ul className="cclaim__sources">
-          {c.sources.map((s) => <li key={s.url}><a href={s.url} target="_blank" rel="noreferrer">{s.title || hostname(s.url)}</a></li>)}
-        </ul>
-      )}
-    </article>
-  )
-}
-
-function ClaimModal({ claim, when, onClose }: { claim: Claim; when: string; onClose: () => void }) {
-  const close = useRef<HTMLButtonElement>(null)
-  useEffect(() => {
-    const back = document.activeElement as HTMLElement | null // focus returns to the item that opened it
-    close.current?.focus()
-    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    const scroll = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { window.removeEventListener('keydown', onKey); document.body.style.overflow = scroll; back?.focus() }
-  }, [onClose])
-  return (
-    <div className="cmodal" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="cmodal__box" role="dialog" aria-modal="true" aria-label="Detalhes da checagem">
-        <button ref={close} type="button" className="cmodal__close" onClick={onClose} aria-label="Fechar">×</button>
-        <ClaimView claim={claim} when={when} featured detailed />
-      </div>
-    </div>
-  )
 }

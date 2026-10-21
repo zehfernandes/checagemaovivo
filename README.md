@@ -77,6 +77,9 @@ The viewer UI has no admin controls; everything operational lives at `/admin` (p
 - **Salas** — the rooms are listed in the sidebar (status dot + name); opening one shows its fact-checks (the review
   queue below) and, for owners, the room panel beside them with two tabs, *Dados* (the room's form, locked while
   checking runs) and *Logs* (usage and the run's log), plus Iniciar/Religar/Parar. Checkers only see the checks.
+  *Falantes* (in *Dados*, editable while checking runs): name + photo of who speaks. When the list is not empty, `/` and
+  `/sem-video` show (and count) only what those people said, under the registered name and photo — a name the machine
+  wrote is matched word by word ("Lula" ⊂ "Luiz Inácio Lula da Silva") — and the review card picks who said it from them.
   Rooms are YouTube URLs (debate, live interview…) stored in the cache DB. Owners create, rename,
   hide/publish (`active`), delete; **Iniciar/Parar** the shared processing (optionally in save mode);
   viewer count, claim count and progress per room. Only published rooms appear in the viewer's room picker.

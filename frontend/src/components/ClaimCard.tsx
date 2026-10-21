@@ -1,6 +1,6 @@
 import { memo, useState } from 'react'
 import type { Claim } from '../types'
-import { VERDICT_LABEL } from '../types'
+import { VERDICT_LABEL, speakerLabel } from '../types'
 
 interface Props {
   claim: Claim
@@ -9,7 +9,7 @@ interface Props {
   onOverride?: (id: string, verdict: 'fake' | 'valid' | 'inconclusive', explanation: string) => Promise<void>
 }
 
-const METHOD_LABEL = { cache: 'memória', db: 'base de notícias', web: 'busca na web', deep: 'checagem profunda', human: 'revisão humana' } as const
+const METHOD_LABEL ={ cache: 'memória', db: 'base de notícias', web: 'busca na web', deep: 'checagem profunda', human: 'revisão humana' } as const
 const METHOD_TITLE = {
   cache: 'Reaproveitou o veredito de uma afirmação idêntica já checada (sem chamadas de IA)',
   db: 'Respondida pela base de notícias',
@@ -37,7 +37,7 @@ export const ClaimCard = memo(function ClaimCard({ claim, compact, onRecheck, on
           {VERDICT_LABEL[claim.verdict]}
         </span>
         {claim.verdict !== 'pending' && <span className="claim__confidence">{Math.round(claim.confidence * 100)}%</span>}
-        {claim.method && (
+        {expanded && claim.method && (
           <span className="claim__method" title={METHOD_TITLE[claim.method]}>
             {METHOD_LABEL[claim.method]}
           </span>
@@ -49,8 +49,11 @@ export const ClaimCard = memo(function ClaimCard({ claim, compact, onRecheck, on
         )}
         <span className="claim__time">{fmt(claim.start)}</span>
       </header>
-      <p className="claim__text">“{claim.text}”</p>
-      {claim.explanation && <p className="claim__explanation">{claim.explanation}</p>}
+      <p className="claim__text">
+        {claim.speaker && <span className="claim__speaker">{speakerLabel(claim.speaker)}: </span>}
+        “{claim.quote || claim.text}”
+      </p>
+      {expanded && claim.explanation && <p className="claim__explanation">{claim.explanation}</p>}
       {expanded && !compact && claim.sources.length > 0 && (
         <ul className="claim__sources">
           {claim.sources.map((s) => (

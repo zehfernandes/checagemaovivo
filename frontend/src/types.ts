@@ -1,4 +1,5 @@
 export type Verdict = 'pending' | 'fake' | 'valid' | 'inconclusive'
+export type ReviewStatus = 'draft' | 'published' | 'irrelevant'
 
 export interface Source {
   title: string
@@ -8,6 +9,16 @@ export interface Source {
 export interface Claim {
   id: string
   text: string
+  speaker?: string | null
+  quote?: string | null // the claim as the speaker said it ("Eu…"); `text` is the third-person version that was checked
+  // newsroom only (never sent to the public site): drafts wait for a person to publish them
+  status?: ReviewStatus // missing = published (claims from before the review queue)
+  claimed_by?: string | null // who has its review card open…
+  claimed_until?: number | null // …until (server clock, s)
+  reviewed_by?: string | null
+  reviewed_at?: number | null
+  rev?: number // bumped on every decision; a stale rev is refused
+  skipped_by?: string[] // reviewers who passed on it: not offered to them again
   verdict: Verdict
   confidence: number
   explanation: string
@@ -63,6 +74,10 @@ export const VERDICT_LABEL: Record<Verdict, string> = {
   valid: 'Verdadeiro',
   inconclusive: 'Inconclusivo',
 }
+
+// how a speaker is called on the viewer (cards, tabs)
+const SHORT_NAME: Record<string, string> = { 'Flávio Bolsonaro': 'Flávio' }
+export const speakerLabel = (name: string) => SHORT_NAME[name] ?? name
 
 export interface UsageSummary {
   tokens_in: number

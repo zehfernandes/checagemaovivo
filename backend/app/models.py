@@ -26,6 +26,7 @@ class Claim(BaseModel):
     start: float
     end: float
     speaker: str | None = None
+    quote: str | None = None  # the claim as the speaker said it ("Eu…"), shown to viewers; `text` is what gets checked
     method: Literal["cache", "db", "web", "deep", "human"] | None = None
     deep_pending: bool = False
     original_text: str | None = None  # what the extractor wrote before the verifier corrected the wording
@@ -63,3 +64,4 @@ class StartRequest(BaseModel):
     fresh: bool = False  # private pipeline: ignore the shared channel and cache (latency testing)
     watch: bool = False  # admin tools: subscribe to the channel without starting processing
     save: bool = False  # save mode: same experience, fewer AI calls (no auto deep check, stricter gate, claim cap)
+    review: bool = False  # newsroom (admin only): also receive unpublished drafts and who is reviewing them

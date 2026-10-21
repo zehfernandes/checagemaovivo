@@ -4,6 +4,7 @@ import { Danmu } from './components/Danmu'
 import { Player } from './components/Player'
 import { useSession } from './useSession'
 import type { Room, Verdict } from './types'
+import { speakerLabel } from './types'
 
 const DEFAULT_URL = 'https://www.youtube.com/watch?v=Amwukq3hviM'
 // A chunk's audio spans [captured_at - 8, captured_at] on the server clock. Measured on YouTube live:
@@ -56,7 +57,8 @@ export default function App() {
   const [url, setUrl] = useState(DEFAULT_URL)
   const language = 'pt'
   const [currentTime, setCurrentTime] = useState(0)
-  const [tab, setTab] = useState<'recent' | 'all'>('recent')
+  // 'recent', 'all' or the name of a speaker
+  const [tab, setTab] = useState<string>('recent')
   const danmu = true
   const [sideOpen, setSideOpen] = useState(() => localStorage.getItem('side') !== 'closed')
   // recordings: show only what is said from the position where Start was pressed (no backlog dump)
@@ -161,7 +163,16 @@ export default function App() {
   }, [visibleClaims, isLive, noPlayer, currentTime])
 
   // newest first
-  const listedClaims = useMemo(() => (tab === 'recent' ? recentClaims : visibleClaims).slice().reverse(), [tab, recentClaims, visibleClaims])
+  // one tab per person who said something, most claims first
+  const speakers = useMemo(() => {
+    const n = new Map<string, number>()
+    for (const c of visibleClaims) if (c.speaker) n.set(c.speaker, (n.get(c.speaker) ?? 0) + 1)
+    return [...n].sort((a, b) => b[1] - a[1])
+  }, [visibleClaims])
+  const listedClaims = useMemo(
+    () => (tab === 'recent' ? recentClaims : tab === 'all' ? visibleClaims : visibleClaims.filter((c) => c.speaker === tab)).slice().reverse(),
+    [tab, recentClaims, visibleClaims],
+  )
 
   const counts = useMemo(() => {
     const c: Record<Verdict, number> = { pending: 0, fake: 0, valid: 0, inconclusive: 0 }
@@ -283,10 +294,15 @@ export default function App() {
             <button className={tab === 'all' ? 'active' : ''} onClick={() => setTab('all')}>
               Todas {visibleClaims.length > 0 && <span className="muted">{visibleClaims.length}</span>}
             </button>
+            {speakers.map(([name, n]) => (
+              <button key={name} className={tab === name ? 'active' : ''} onClick={() => setTab(name)} title={`Afirmações de ${name}`}>
+                {speakerLabel(name)} <span className="muted">{n}</span>
+              </button>
+            ))}
           </nav>
           <div className="claims-list">
               {listedClaims.length === 0 && (
-                <p className="muted empty">{tab === 'recent' ? 'Nada nos últimos 3 minutos.' : 'As afirmações verificadas aparecem aqui.'}</p>
+                <p className="muted empty">{tab === 'recent' ? 'Nada nos últimos 3 minutos.' : tab === 'all' ? 'As afirmações verificadas aparecem aqui.' : `Nenhuma afirmação de ${speakerLabel(tab)} até aqui.`}</p>
               )}
               {listedClaims.map((c) => (
                 <ClaimCard key={c.id} claim={c} />

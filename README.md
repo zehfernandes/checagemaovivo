@@ -93,10 +93,12 @@ The viewer UI has no admin controls; everything operational lives at `/admin` (p
   Several people review at once: opening a card *leases* it for 120 s (renewed every 45 s while open), so
   nobody else can open it and **Revisar** skips it; the list shows who has it ("✎ Ana"). A decision carries
   the version (`rev`) the reviewer loaded, so it is refused (409) if someone changed the claim meanwhile.
+  **Nova checagem** (next to Revisar) adds a fact no machine claim covers: written by a person, published at once
+  at the point the transmission has reached, as a human verdict.
   Late machine updates (a deep check finishing) never overwrite a claim a person decided. Reviewer names
   (asked once per browser) are newsroom-only: the public feed carries no review fields. Leases live in the
   backend process (one machine on Fly), not in the DB. Claims cached before the queue existed count as published.
-  Endpoints: `GET /admin/claims?url=`, `POST /admin/review/next`, `POST /admin/review/{claim_id}/lease|release|decide`,
+  Endpoints: `GET /admin/claims?url=`, `POST /admin/review/next`, `POST /admin/review/new`, `POST /admin/review/{claim_id}/lease|release|decide`,
   `POST /admin/claim` (direct correction, publishes), `DELETE /admin/claims/{video_id}/{claim_id}`;
   the admin WebSocket sends `"review": true` on `start` to also receive drafts.
 - **Base de notícias** — browse/search the evidence DB, add an article by URL (extracted + embedded) or by

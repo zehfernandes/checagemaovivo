@@ -74,6 +74,18 @@ _NAMED = re.compile(r"[A-ZÁÉÍÓÚÂÊÔÃÕÇ][a-záéíóúâêôãõç]{2,}
 _UNRESOLVED = re.compile(r"\b(speaker|addressee|orador|oradora|interlocutor|interlocutora|falante|oponente|adversári[oa]|você|vocês|o senhor|a senhora|eu|nós|meu|minha|meus|minhas|nosso|nossa|seu pai|seu partido|seu governo)\b", re.I)
 _ROLE_ONLY = re.compile(r"^((o|a)\s+)?(candidat[oa]|orador[a]?|falante|speaker|presidente|senador[a]?|mediador[a]?|moderador[a]?|"
                         r"apresentador[a]?|jornalista|unknown|desconhecid[oa])$", re.I)
+MODERATOR_FLOOR = "moderador (o apresentador/mediador, não um candidato)"
+MODERATOR_ESCAPE = 6  # ~48 s of the model insisting a candidate talks, with no hand-off quoted: believe it
+
+
+def _norm_text(t: str) -> str:
+    return re.sub(r"[^\w]+", " ", t.lower()).strip()
+
+
+def _named_in(name: str, text: str) -> bool:
+    """Does `text` mention `name` (any of its words of 4+ letters: "Haddad", "Fernando")?"""
+    words = " " + _norm_text(text) + " "
+    return any(f" {w} " in words for w in _norm_text(name).split() if len(w) >= 4)
 _ROLE_PREFIX = re.compile(r"^((o|a)\s+)?(candidat[oa]|presidente|ex-presidente|senador[a]?|governador[a]?|ministr[oa])\s+", re.I)
 
 
@@ -129,13 +141,20 @@ polls and analysis presented by the channel. A candidate speaks in the FIRST PER
 "no meu governo", "você/o senhor"). A segment can contain a moderator's hand-off followed by a candidate's answer:
 tag each claim by who said that sentence.
 Never extract claims about the broadcast itself or its logistics (schedules, arrivals, who is in the studio, accredited press).
-SPEAKER OF THE PREVIOUS SEGMENT tells who held the floor a moment ago: a debate turn lasts minutes, so that person keeps
-speaking until a hand-off ("Candidato X, dois minutos", "Obrigada, candidato", "sua réplica") or a clear cue (the
-speaker now names that person in the third person, or talks about "meu governo" of the other side). Being named or
-criticised by the speaker is not a hand-off. Also give "speaker_at_end": the candidate who holds the floor at the END of
-the latest segment, after any hand-off in it (a segment ending in "Candidato Lula, dois minutos" -> "Lula"); "" if unclear.
-It is always a CANDIDATE's name, never "moderador": in a moderator segment it is the candidate who was just given the
-floor, or the one who held it before if nobody was called.
+SPEAKER OF THE PREVIOUS SEGMENT tells who held the floor a moment ago — a candidate, or the moderator. A turn lasts
+minutes, so that person keeps speaking until a hand-off ("Candidato X, dois minutos", "Obrigada, candidato", "sua réplica")
+or a clear cue that someone else is talking (first person about the other side's record: "no meu governo" said of it).
+Being named, greeted, thanked or criticised is not a hand-off, and someone described in the THIRD PERSON ("o candidato
+Fernando Haddad foi ministro…", "o governador Tarcísio esteve à frente…") is being talked ABOUT, not talking. While the MODERATOR holds the floor — opening, rules,
+introductions, and above all a long QUESTION that first lays out data ("eu vou perguntar sobre educação… o IDEB…
+o Chile… então eu queria perguntar") — every sentence is "moderador" and yields no claims, until they hand over.
+The speaker is always the person TALKING, never someone only mentioned: candidates named in a greeting, their children
+or relatives ("pai do Matheus e da Letícia"), people or places cited.
+Also give "speaker_at_end": who holds the floor at the END of the latest segment, after any hand-off in it — a
+candidate's name (a segment ending in "Candidato Lula, dois minutos" -> "Lula"), "moderador" if the moderator still
+holds it, "" if unclear. And "handoff": the EXACT words, copied from the transcript (CONTEXT or LATEST SEGMENT), with
+which the floor passed to that candidate ("Candidato Tarcísio, o senhor tem dois minutos", "Obrigada, candidato.
+Candidato Lula, sua resposta"); "" if there was none.
 For every claim also give "speaker" (the NAME of the person who said that sentence, e.g. "Lula", "Flávio Bolsonaro";
 "" if unknown) and "quote": the speaker's OWN WORDS for that fact, copied from the LATEST segment (first person stays
 first person: "Eu poderia ter votado…", "No governo do meu pai…"). Copy, do not rephrase: never change whose government,
@@ -166,7 +185,7 @@ If the transcript garbled a name, use the context/known names to write it correc
 A claim that merely restates, narrows or extends one in RECENT CLAIMS (same fact, different wording,
 "part of", "more than") is a duplicate — skip it. Only extract a second claim when it is about a
 genuinely different fact.
-Respond with JSON: {"speaker": "...", "addressee": "...", "speaker_at_end": "...",
+Respond with JSON: {"speaker": "...", "addressee": "...", "speaker_at_end": "...", "handoff": "...",
 "claims": [{"text": "...", "said_by": "candidate", "speaker": "...", "quote": "..."}]}"""
 
 VERIFY_SYSTEM = """You are a rigorous, neutral fact-checker working live during a political debate.
@@ -283,6 +302,7 @@ CLAIMS_SCHEMA = {
             "speaker": {"type": "string"},
             "addressee": {"type": "string"},
             "speaker_at_end": {"type": "string"},
+            "handoff": {"type": "string"},
             "claims": {"type": "array", "items": {
                 "type": "object",
                 "properties": {
@@ -295,7 +315,7 @@ CLAIMS_SCHEMA = {
                 "additionalProperties": False,
             }},
         },
-        "required": ["speaker", "addressee", "speaker_at_end", "claims"],
+        "required": ["speaker", "addressee", "speaker_at_end", "handoff", "claims"],
         "additionalProperties": False,
     },
 }
@@ -377,6 +397,8 @@ class OpenAIFactChecker:
         self._recent_vecs: deque[np.ndarray] = deque(maxlen=RECENT_VEC_WINDOW)
         self._vec_cache: dict[str, np.ndarray] = {}  # claim text -> embedding, computed once in dedup and reused by verify
         self._last_speaker = ""  # one checker per pipeline: who held the floor in the previous segment
+        self._moderator_run = 0  # segments the model claimed a candidate while the moderator held the floor
+        self._pending_switch = ""  # a candidate the model switched to once, awaiting a second segment
 
     async def extract_claims(self, context: str, latest: str, recent_claims: list[str], strict: bool = False,
                              entities: list[str] | None = None) -> list[str]:
@@ -401,9 +423,53 @@ class OpenAIFactChecker:
         data = _parse_json(res.output_text)
         if data.get("speaker") or data.get("addressee"):
             log.info("extract: speaker=%r addressee=%r", data.get("speaker"), data.get("addressee"))
-        top = clean_speaker(str(data.get("speaker_at_end") or data.get("speaker") or ""))
+        # a turn outlives the 3-segment context window ("Candidato Lula, dois minutos"), and so does the moderator's:
+        # a question laid out over a minute of data must not inherit the last candidate's (or a mentioned) name
+        at_end = str(data.get("speaker_at_end") or "")
+        top = clean_speaker(at_end or str(data.get("speaker") or ""))
+        # Once the moderator has the floor, only a hand-off the model can QUOTE from the transcript gives it to a
+        # candidate (the fast model otherwise takes "o candidato Haddad foi ministro…" in a question as Haddad
+        # talking). If it keeps insisting for MODERATOR_ESCAPE segments, believe it (a missed hand-off must not
+        # silence a whole answer).
+        phrase = _norm_text(str(data.get("handoff") or ""))
+        # A hand-off must be in the transcript and point at who gets the floor. Between candidates the quoted words
+        # themselves must name them ("Candidato Lula, dois minutos" can't justify a switch to Flávio, even while it
+        # is still in the context window). From the moderator the name may sit just before the quoted words
+        # ("…o primeiro a responder é o candidato Tarcísio" / "dois minutos para a resposta").
+        quoted = len(phrase) >= 8 and phrase in _norm_text(f"{context} {latest}") and bool(top)
+        handoff_ok = quoted and _named_in(top, phrase)
+        moderator_handoff = quoted and (handoff_ok or _named_in(top, f"{context} {latest}"))
+        moderator_holds = False
+        kept_by = ""  # a candidate who keeps the floor although the model named someone they only mentioned
+        unsure = False  # an unconfirmed switch between candidates: nobody can be credited with this segment
+        if self._last_speaker == MODERATOR_FLOOR and top:
+            if moderator_handoff:
+                self._moderator_run = 0
+            else:
+                self._moderator_run += 1
+                moderator_holds = self._moderator_run < MODERATOR_ESCAPE
+                if moderator_holds:
+                    log.info("extract: moderator keeps the floor (no hand-off quoted), not %r", top)
+                    top = ""
+        elif self._last_speaker and top and top != self._last_speaker and not handoff_ok:
+            if _named_in(top, latest):
+                # someone who starts talking rarely says their own name: "cumprimentar meu adversário Fernando
+                # Haddad" is the speaker greeting Haddad, not Haddad speaking
+                log.info("extract: %s keeps the floor (%r is only mentioned)", self._last_speaker, top)
+                kept_by = top = self._last_speaker
+                self._pending_switch = ""
+            elif top != self._pending_switch:
+                # a switch between candidates with no hand-off must be confirmed by the next segment; meanwhile
+                # the floor stays and this segment's claims are dropped rather than pinned on the wrong person
+                log.info("extract: %s -> %r unconfirmed, holding the floor", self._last_speaker, top)
+                self._pending_switch, unsure = top, True
+                top = self._last_speaker
+        if not unsure:
+            self._pending_switch = ""  # confirmed by this segment (switch taken below), or not repeated: dropped
         if top:
-            self._last_speaker = top  # a turn outlives the 3-segment context window ("Candidato Lula, dois minutos")
+            self._last_speaker = top
+        elif moderator_holds or _MODERATOR.search(at_end or str(data.get("speaker") or "")):
+            self._last_speaker = MODERATOR_FLOOR
         claims = []
         for c in data.get("claims", []):
             text = (c.get("text") if isinstance(c, dict) else c) or ""
@@ -417,8 +483,14 @@ class OpenAIFactChecker:
             if _ADDRESSEE.search(quote):  # "o senhor deixou…" is unreadable on a card: show the named text instead
                 quote = ""
             quote = quote[:1].upper() + quote[1:]  # an excerpt may start mid-sentence ("o Bolsa Família…")
-            speaker = clean_speaker(str(meta.get("speaker") or ""))
+            speaker = kept_by or clean_speaker(str(meta.get("speaker") or ""))
             claims.append(ExtractedClaim(text.strip(), speaker, quote))
+        if claims and unsure:
+            log.info("extract: dropped segment of an unconfirmed switch: %s", claims[0][:80])
+            claims = []
+        if claims and moderator_holds:
+            log.info("extract: dropped moderator segment (still their floor): %s", claims[0][:80])
+            claims = []
         if claims and _MODERATOR.search(str(data.get("speaker", ""))):  # the moderator reading the rules got a "Falso"
             log.info("extract: dropped moderator segment: %s", claims[0][:80])
             claims = []

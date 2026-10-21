@@ -332,6 +332,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
 # Production: serve the built frontend from the same origin (Dockerfile copies it here), so /ws, /news… are same-host.
 _dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if _dist.is_dir():
+    @app.get("/sem-video", include_in_schema=False)
     @app.get("/admin", include_in_schema=False)
     async def admin_page():
         return FileResponse(_dist / "index.html")

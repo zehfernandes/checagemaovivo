@@ -289,6 +289,7 @@ button { font: inherit; }
 .pill:hover { color: var(--text); }
 .pill.active { color: var(--text); border-color: var(--border); background: var(--panel-2); }
 .pill__n { color: var(--muted); font-variant-numeric: tabular-nums; }
+.check { accent-color: var(--text); width: 15px; height: 15px; margin: 0; flex: none; cursor: pointer; }
 .search { margin-left: auto; width: 260px; font: inherit; font-size: 13px; background: var(--panel); color: inherit; border: 1px solid var(--border); border-radius: 6px; padding: 6px 10px; }
 .search:focus, .form input:focus, .form textarea:focus, .list-edit input:focus { outline: 0; border-color: #3a3f4b; }
 

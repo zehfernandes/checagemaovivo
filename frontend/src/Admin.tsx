@@ -857,10 +857,14 @@ function NewsPage({ notify }: { notify: (m: string) => void }) {
   const [disabled, setDisabled] = useState(false)
   const [q, setQ] = useState('')
   const [adding, setAdding] = useState(false)
+  const [sel, setSel] = useState<Set<number>>(new Set())
+  const [deleting, setDeleting] = useState(false)
+  const lastClicked = useRef<number | null>(null)  // anchor for shift-click ranges
   const load = useCallback(async (query: string) => {
     try {
       const d = await api<{ total: number; docs: Doc[]; disabled?: boolean }>(`/admin/news/docs?q=${encodeURIComponent(query)}&limit=200`)
       setDocs(d.docs); setTotal(d.total); setDisabled(!!d.disabled)
+      setSel((s) => new Set(d.docs.filter((x) => s.has(x.id)).map((x) => x.id)))  // selection only covers what's on screen
       setStats(await (await fetch('/news')).json())
     } catch (e) { notify((e as Error).message) }
   }, [notify])
@@ -874,6 +878,30 @@ function NewsPage({ notify }: { notify: (m: string) => void }) {
     try { await api(`/admin/news/docs/${d.id}`, { method: 'DELETE' }); await load(q) } catch (err) { notify((err as Error).message) }
   }
 
+  function toggle(i: number, on: boolean, range: boolean) {
+    const a = range && lastClicked.current !== null ? Math.min(lastClicked.current, i) : i
+    const b = range && lastClicked.current !== null ? Math.max(lastClicked.current, i) : i
+    setSel((s) => {
+      const n = new Set(s)
+      for (const d of docs.slice(a, b + 1)) { if (on) n.add(d.id); else n.delete(d.id) }
+      return n
+    })
+    lastClicked.current = i
+  }
+
+  async function delSelected() {
+    if (!confirm(`Remover ${sel.size} ${sel.size === 1 ? 'artigo' : 'artigos'} da base?`)) return
+    setDeleting(true)
+    // ponytail: one DELETE per doc (≤200 on screen); add a batch endpoint if this gets slow
+    const res = await Promise.allSettled([...sel].map((id) => api(`/admin/news/docs/${id}`, { method: 'DELETE' })))
+    const failed = res.filter((r) => r.status === 'rejected').length
+    if (failed) notify(`${failed} ${failed === 1 ? 'artigo não pôde' : 'artigos não puderam'} ser removido${failed === 1 ? '' : 's'}`)
+    setDeleting(false)
+    await load(q)
+  }
+
+  const allOn = docs.length > 0 && sel.size === docs.length
+
   return (
     <div className="page">
       <div className="page__content">
@@ -882,12 +910,22 @@ function NewsPage({ notify }: { notify: (m: string) => void }) {
         </PageHeader>
         {disabled && <div className="banner banner--error">Base de notícias desativada neste servidor (PROVIDER=mock ou sem chave da OpenAI).</div>}
         <div className="toolbar">
+          <input type="checkbox" className="check" aria-label="Selecionar todos" disabled={!docs.length} checked={allOn}
+            ref={(el) => { if (el) el.indeterminate = sel.size > 0 && !allOn }}
+            onChange={() => { setSel(allOn ? new Set() : new Set(docs.map((d) => d.id))); lastClicked.current = null }} />
+          {sel.size > 0 && <>
+            <span className="muted">{sel.size} {sel.size === 1 ? 'selecionado' : 'selecionados'}</span>
+            <button type="button" className="btn btn--danger" disabled={deleting} onClick={delSelected}>{deleting ? 'Removendo…' : 'Remover'}</button>
+            <button type="button" className="btn btn--ghost" onClick={() => setSel(new Set())}>Limpar seleção</button>
+          </>}
           <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por título, fonte ou URL…" autoFocus />
           <span className="muted">{total} {total === 1 ? 'resultado' : 'resultados'}{total > docs.length && ` · mostrando ${docs.length}`}</span>
         </div>
         <div className="rows">
-          {docs.map((d) => (
-            <div key={d.id} className="row row--static">
+          {docs.map((d, i) => (
+            <div key={d.id} className={`row row--static${sel.has(d.id) ? ' active' : ''}`}>
+              <input type="checkbox" className="check" aria-label={`Selecionar ${d.title || d.url}`} checked={sel.has(d.id)}
+                onChange={(e) => toggle(i, e.target.checked, (e.nativeEvent as MouseEvent).shiftKey)} />
               <span className="row__source">{d.source}</span>
               <span className="row__main">
                 {d.url.startsWith('http')

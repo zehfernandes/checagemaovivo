@@ -53,7 +53,19 @@
 .fcard__when { margin-left: auto; font-size: 13px; color: var(--f-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .fcard__quote { margin: 0; font-size: 16px; line-height: 1.5; color: var(--text); text-wrap: pretty; }
 .fcard__why { margin: 0; font-size: 15px; line-height: 1.55; color: var(--f-muted); }
+/* the footer never pushes the card (and the page) wider: the review chip gives way first, cut with "…" */
 .fcard__foot { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.fcard__foot > * { flex: none; }
+.fcard__foot > .fspacer { flex: 1; }
+.fcard__foot > .fchip { flex: 0 1 auto; min-width: 0; }
+.fchip__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* narrow phones: tighter pills and at most two outlet logos (all of them are in the details) */
+@media (max-width: 400px) {
+  .fcard__foot { gap: 6px; }
+  .fcard__foot .fpill, .fcard__foot .fchip { padding: 0 10px; }
+  .fcard__foot .fstack .flogo:nth-child(n+3) { display: none; }
+  .fcard__chev { margin-left: 2px; }
+}
 .fcard__chev { color: var(--text); flex: none; margin-left: 6px; }
 .fcard--fresh { animation: fcard-fresh 6s ease-out; }
 @keyframes fcard-fresh { from { background: #34343a; } }

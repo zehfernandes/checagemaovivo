@@ -28,6 +28,17 @@ const FILTER_TEXT: Record<string, string> = {
   fake: 'falsas', valid: 'verdadeiras', inconclusive: 'inconclusivas',
 }
 
+// the export needs the login token, which a plain link can't send: fetch it, then hand the browser the file
+async function downloadExport(run: string) {
+  const r = await fetch(`/review/export?run=${encodeURIComponent(run)}`, { headers: adminHeaders() })
+  if (!r.ok) return
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(await r.blob())
+  a.download = `golden-${run}.jsonl`
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
 export function Review() {
   const [runs, setRuns] = useState<Run[]>([])
   const [run, setRun] = useState<string>(() => new URLSearchParams(location.hash.split('?')[1]).get('run') || '')
@@ -41,7 +52,7 @@ export function Review() {
   const [evaluating, setEvaluating] = useState(false)
 
   useEffect(() => {
-    fetch('/review/runs').then((r) => r.json()).then((rs: Run[]) => {
+    fetch('/review/runs', { headers: adminHeaders() }).then((r) => r.json()).then((rs: Run[]) => {
       setRuns(rs)
       if (!run && rs[0]) setRun(rs[0].name)
     }).catch(() => {})
@@ -50,10 +61,10 @@ export function Review() {
 
   const load = useCallback(() => {
     if (!run) return
-    fetch(`/review/items?run=${encodeURIComponent(run)}`).then((r) => r.json()).then((d) => {
+    fetch(`/review/items?run=${encodeURIComponent(run)}`, { headers: adminHeaders() }).then((r) => r.json()).then((d) => {
       setItems(d.items); setMissed(d.missed); setMetrics(d.metrics)
     }).catch(() => {})
-    fetch(`/review/segments?run=${encodeURIComponent(run)}`).then((r) => r.json()).then(setSegments).catch(() => {})
+    fetch(`/review/segments?run=${encodeURIComponent(run)}`, { headers: adminHeaders() }).then((r) => r.json()).then(setSegments).catch(() => {})
   }, [run])
   useEffect(load, [load])
 
@@ -72,8 +83,8 @@ export function Review() {
     }
     setItems((is) => is.map((i) => (i.id === item.id ? { ...i, ...body } : i)))
     await fetch('/review/label', { method: 'POST', headers: { 'content-type': 'application/json', ...adminHeaders() }, body: JSON.stringify(body) })
-    fetch(`/review/items?run=${encodeURIComponent(run)}`).then((r) => r.json()).then((d) => setMetrics(d.metrics)).catch(() => {})
-    fetch('/review/runs').then((r) => r.json()).then(setRuns).catch(() => {})
+    fetch(`/review/items?run=${encodeURIComponent(run)}`, { headers: adminHeaders() }).then((r) => r.json()).then((d) => setMetrics(d.metrics)).catch(() => {})
+    fetch('/review/runs', { headers: adminHeaders() }).then((r) => r.json()).then(setRuns).catch(() => {})
   }
 
   async function addMissed(seg: Segment) {
@@ -105,7 +116,7 @@ export function Review() {
         <select value={run} onChange={(e) => setRun(e.target.value)}>
           {runs.map((r) => <option key={r.name} value={r.name}>{r.title} ({r.items} afirmações, {r.labelled} rotuladas)</option>)}
         </select>
-        <a className="btn btn--ghost" href={`/review/export?run=${encodeURIComponent(run)}`} download>Baixar conjunto de referência (.jsonl)</a>
+        <button type="button" className="btn btn--ghost" onClick={() => downloadExport(run)}>Baixar conjunto de referência (.jsonl)</button>
         <button type="button" className="btn btn--ghost" onClick={runEval} disabled={evaluating || !run}>
           {evaluating ? 'Avaliando…' : 'Avaliar pipeline atual'}
         </button>

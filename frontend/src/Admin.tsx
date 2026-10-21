@@ -10,6 +10,7 @@ type Tab = 'rooms' | 'news' | 'glossary' | 'users'
 
 interface Room extends PublicRoom {
   created: number; viewers: number; processed_to: number; state: string; message: string; usage: UsageSummary | null
+  human_review: boolean // "Aguardar checagem humana": new analyses wait as drafts (off = on the site at once, still in the queue)
 }
 interface Doc { id: number; url: string; source: string; title: string; published: number | null; kind: string; added: number; chunks: number; excerpt: string }
 interface Fix { from: string; to: string }
@@ -442,6 +443,13 @@ function RoomDetails({ room: r, busy, run, save, onSave, onDeleted, control }: {
         </section>
       )}
       {view === 'logs' && <ActivitySection roomId={r.id} live={r.processing} />}
+      {view === 'data' && (
+        <section className="panel__section">
+          <Switch label="Aguardar checagem humana" checked={r.human_review} onChange={(v) => patch({ human_review: v })}
+            hint={r.human_review ? 'As checagens só vão para o site depois que alguém publicar. Vale para as próximas.'
+              : 'As checagens vão direto para o site e continuam na fila de revisão. Vale para as próximas.'} />
+        </section>
+      )}
       {view === 'data' && <form className={`panel__section form${r.processing ? ' form--locked' : ''}`} onSubmit={(e) => { e.preventDefault(); patch({ name, url, kind }) }} onKeyDown={cmdEnter}>
         {r.processing && <p className="muted form__note">Pare a checagem para editar a sala.</p>}
         <fieldset className="form__fieldset" disabled={r.processing}>
@@ -509,7 +517,8 @@ function ActivitySection({ roomId, live }: { roomId: string; live: boolean }) {
 // ---- Checagens --------------------------------------------------------------------------------
 const STATUS_PT: Record<ReviewStatus, string> = { draft: 'Aguardando', published: 'Publicada', irrelevant: 'Irrelevante' }
 const STATUS_FILTERS: [ReviewStatus | 'all', string][] = [['draft', 'Aguardando'], ['published', 'Publicadas'], ['irrelevant', 'Irrelevantes'], ['all', 'Todas']]
-const statusOf = (c: Claim): ReviewStatus => c.status ?? 'published'
+// the queue's view: a claim published at once but not checked by a person yet still counts as "Aguardando"
+const statusOf = (c: Claim): ReviewStatus => c.awaiting_review ? 'draft' : c.status ?? 'published'
 const CARD_SWAP_MS = 120 // the exit animation; a fast server still waits this long so the action is felt
 const LEASE_RENEW_MS = 45_000 // the server holds a review for 120 s; renew well before that while the card is open
 
@@ -664,7 +673,7 @@ function ClaimsPage({ room, notify, me, aside, reviewSlot, reviewSecondary }: {
                 <span className="claim__badge">{c.verdict === 'pending' && <span className="spinner" aria-hidden />}{VERDICT_LABEL[c.verdict]}</span>
                 <span className="row__main"><span className="row__title row__title--normal">{c.speaker && <strong>{c.speaker}: </strong>}“{c.quote || c.text}”</span></span>
                 {other ? <span className="chip chip--held" title="Está com o card aberto">✎ {c.claimed_by}</span>
-                  : <span className={`chip chip--${s}`} title={c.reviewed_by ? `por ${c.reviewed_by}` : undefined}>{STATUS_PT[s]}{c.method === 'human' && ' · editada'}{s === 'draft' && skippedByMe(c) && ' · você pulou'}</span>}
+                  : <span className={`chip chip--${s}`} title={c.reviewed_by ? `por ${c.reviewed_by}` : undefined}>{STATUS_PT[s]}{c.awaiting_review && ' · no ar'}{c.method === 'human' && ' · editada'}{s === 'draft' && skippedByMe(c) && ' · você pulou'}</span>}
                 <span className="row__meta">{c.verdict !== 'pending' && `${Math.round(c.confidence * 100)}% · `}{fmt(c.start)}</span>
                 <span className="row__chevron">›</span>
               </button>
@@ -724,7 +733,7 @@ function ReviewCard({ claim: live, transcript, queue, onClose, onSkip, onDecide,
     if (!ok) { setBusy(null); setFrozen(null) } // failed (e.g. someone else changed it): the card comes back
   }
   const canPublish = !busy && !(pending && verdict === initialVerdict && !dirty) && (draft || statusOf(c) === 'irrelevant' || dirty)
-  const publishLabel = draft ? 'Publicar' : statusOf(c) === 'irrelevant' ? 'Publicar no site' : 'Salvar correção'
+  const publishLabel = c.awaiting_review ? 'Confirmar' : draft ? 'Publicar' : statusOf(c) === 'irrelevant' ? 'Publicar no site' : 'Salvar correção'
   return (
     <div className="dialog__backdrop dialog__backdrop--review" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className={`dialog dialog--review claim--${verdict}${busy ? ` review--out-${busy}` : ''}`} role="dialog" aria-label="Revisar análise">
@@ -733,7 +742,7 @@ function ReviewCard({ claim: live, transcript, queue, onClose, onSkip, onDecide,
             {fmt(c.start)}
             {c.method && ` · máquina: ${METHOD_PT[c.method] ?? c.method}`}
             {!pending && ` · ${VERDICT_LABEL[c.verdict]} ${Math.round(c.confidence * 100)}%`}
-            {` · ${STATUS_PT[statusOf(c)]}`}{c.reviewed_by && ` por ${c.reviewed_by}`}
+            {` · ${STATUS_PT[statusOf(c)]}`}{c.awaiting_review && ' · já está no site'}{c.reviewed_by && ` por ${c.reviewed_by}`}
           </span>
           <span className="spacer" />
           {draft && queue > 1 && <span className="muted review__queue">{queue - 1} na fila</span>}
@@ -785,7 +794,7 @@ function ReviewCard({ claim: live, transcript, queue, onClose, onSkip, onDecide,
           <span className="spacer" />
           {draft && <button type="button" className={`btn btn--stop${busy === 'skip' ? ' btn--pressed' : ''}`} onClick={() => act('skip')} disabled={!!busy} title="Não aparece mais para você em Revisar; continua na fila dos outros">Pular</button>}
           {statusOf(c) !== 'irrelevant' && (
-            <button type="button" className={`btn btn--stop${busy === 'irrelevant' ? ' btn--pressed' : ''}`} onClick={() => act('irrelevant')} disabled={!!busy} title={draft ? 'Não vai para o site' : 'Tira do site'}>
+            <button type="button" className={`btn btn--stop${busy === 'irrelevant' ? ' btn--pressed' : ''}`} onClick={() => act('irrelevant')} disabled={!!busy} title={draft && !c.awaiting_review ? 'Não vai para o site' : 'Tira do site'}>
               {busy === 'irrelevant' ? 'Salvando…' : draft ? 'Irrelevante' : 'Tirar do site'}
             </button>
           )}

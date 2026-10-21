@@ -41,9 +41,10 @@ export function VerdictPill({ verdict }: { verdict: Verdict }) {
 }
 
 export function ReviewChip({ claim: c }: { claim: Claim }) {
-  if (c.deep_pending) return <span className="fchip"><span className="fspin" aria-hidden />Checagem profunda</span>
+  if (c.deep_pending) return <span className="fchip"><span className="fspin" aria-hidden /><span className="fchip__text">Checagem profunda</span></span>
   if (c.verdict === 'pending') return null
-  return <span className="fchip">{humanReviewed(c) ? 'Revisão humana' : 'Revisão por IA'}</span>
+  const label = humanReviewed(c) ? 'Revisão humana' : 'Revisão por IA'
+  return <span className="fchip" title={label}><span className="fchip__text">{label}</span></span>
 }
 
 // ---- sources: the outlet's logo (its favicon) and name ---------------------------------------------------

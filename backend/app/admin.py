@@ -101,19 +101,27 @@ async def _public_host(url: str) -> bool:
 
 
 async def page_title(url: str) -> str:
-    """og:title, else <title>, read from the first ~400 KB of the page."""
-    async with httpx.AsyncClient(headers={"User-Agent": UA}, timeout=8, follow_redirects=True) as http:
-        async with http.stream("GET", url) as r:
-            if not await _public_host(str(r.url)):
+    """og:title, else <title>, read from the first ~400 KB of the page. Redirects are followed by hand, each hop
+    checked to be on the public internet BEFORE the server connects to it (a link can't bounce it into the network)."""
+    async with httpx.AsyncClient(headers={"User-Agent": UA}, timeout=8, follow_redirects=False) as http:
+        for _ in range(6):
+            if not re.match(r"https?://", url) or not await _public_host(url):
                 return ""
-            r.raise_for_status()
-            chunks, size = [], 0
-            async for chunk in r.aiter_bytes():
-                chunks.append(chunk)
-                size += len(chunk)
-                if size > 400_000 or b"</head>" in chunk.lower():
-                    break
-            page = b"".join(chunks).decode(r.encoding or "utf-8", errors="ignore")
+            async with http.stream("GET", url) as r:
+                if r.is_redirect and r.headers.get("location"):
+                    url = str(r.url.join(r.headers["location"]))
+                    continue
+                r.raise_for_status()
+                chunks, size = [], 0
+                async for chunk in r.aiter_bytes():
+                    chunks.append(chunk)
+                    size += len(chunk)
+                    if size > 400_000 or b"</head>" in chunk.lower():
+                        break
+                page = b"".join(chunks).decode(r.encoding or "utf-8", errors="ignore")
+                break
+        else:
+            return ""  # too many redirects
     for tag in _OG_TITLE.findall(page):
         m = _CONTENT.search(tag)
         if m and m.group(1).strip():

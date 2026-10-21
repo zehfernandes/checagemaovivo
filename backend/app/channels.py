@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import sqlite3
 import time
 from collections.abc import Callable
@@ -47,6 +48,16 @@ def public_view(ev: dict) -> dict:
     c = ev["claim"]
     reviewed = bool(c.get("reviewed_by")) and c.get("status") == "published" and not c.get("awaiting_review")
     return {**ev, "claim": {**{k: v for k, v in c.items() if k not in REVIEW_FIELDS}, "human_reviewed": reviewed}}
+
+
+def clean_sources(sources: list) -> list[dict]:
+    """Sources a person typed in /admin: only http(s) links reach the site (never javascript: or data:), trimmed."""
+    out = []
+    for s in sources[:12]:
+        url = str((s or {}).get("url", "")).strip() if isinstance(s, dict) else ""
+        if re.match(r"https?://[^\s]+$", url, re.I) and len(url) <= 2000:
+            out.append({"title": str(s.get("title") or "").strip()[:300], "url": url})
+    return out
 
 
 def needs_review(c: dict) -> bool:
@@ -365,6 +376,8 @@ class Channel:
         if not entry:
             raise KeyError(claim_id)
         old = entry["claim"]
+        if sources is not None:
+            sources = clean_sources(sources)
         if not force and rev is not None and rev != old.get("rev", 0):
             raise ReviewConflict(f"{old.get('reviewed_by') or 'Outra pessoa'} alterou esta análise enquanto você revisava")
         c = {**old}

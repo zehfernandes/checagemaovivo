@@ -22,6 +22,7 @@ from .pipeline import Pipeline
 from .review import LABELS, ReviewStore, run_eval
 from .rooms import RoomStore
 from .admin import make_router as make_admin_router
+from .security import RateLimiter, client_ip, csp, inline_script_hashes, security_headers
 from .auth import Access, User, UserStore, make_token, verify_google
 from .transcribe import make_transcriber
 
@@ -47,6 +48,22 @@ async def canonical_host(request: Request, call_next):
         url = request.url.replace(scheme="https", netloc=settings.canonical_host)
         return RedirectResponse(str(url), status_code=301)
     return await call_next(request)
+
+
+# Production serves the built frontend (below); its inline analytics script is allowed by hash in the CSP.
+_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+_headers = security_headers(csp(inline_script_hashes(_dist / "index.html")), hsts=bool(settings.canonical_host))
+limiter = RateLimiter(settings.rate_limit_per_minute, settings.ws_per_ip)
+
+
+@app.middleware("http")
+async def protect(request: Request, call_next):
+    if request.url.path != "/health" and not limiter.allow(client_ip(request)):
+        return PlainTextResponse("Muitas requisições. Tente de novo em instantes.", status_code=429, headers={"Retry-After": "30"})
+    response = await call_next(request)
+    for k, v in _headers.items():
+        response.headers.setdefault(k, v)
+    return response
 
 client = (
     AsyncOpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url or None)
@@ -228,23 +245,23 @@ async def health():
 
 
 
-@app.get("/channels")
+@app.get("/channels", dependencies=[Depends(current_user)])
 async def channel_stats():
     return channels.stats()
 
 
 # ---- offline review loop (human labels -> golden set -> eval) ----------------------------------
-@app.get("/review/runs")
+@app.get("/review/runs", dependencies=[Depends(current_user)])  # newsroom data (drafts, labels): logged in only
 async def review_runs():
     return review.runs()
 
 
-@app.get("/review/items")
+@app.get("/review/items", dependencies=[Depends(current_user)])
 async def review_items(run: str):
     return {"items": review.items(run), "missed": review.missed(run), "metrics": review.metrics(run)}
 
 
-@app.get("/review/segments")
+@app.get("/review/segments", dependencies=[Depends(current_user)])
 async def review_segments(run: str, start: float = 0, end: float = 1e12):
     return review.segments(run, start, end)
 
@@ -290,7 +307,7 @@ async def review_missed_delete(mid: str):
     return {"ok": True}
 
 
-@app.get("/review/export")
+@app.get("/review/export", dependencies=[Depends(current_user)])
 async def review_export(run: str):
     body = "\n".join(json.dumps(r, ensure_ascii=False) for r in review.golden(run))
     return PlainTextResponse(body, media_type="application/x-ndjson",
@@ -305,6 +322,18 @@ async def review_eval(run: str, rerun: bool = False):
 
 @app.websocket("/ws")
 async def ws_endpoint(ws: WebSocket) -> None:
+    """At most WS_PER_IP open sockets per address (security.py); past that the socket is refused."""
+    ip = client_ip(ws)
+    if not limiter.ws_open(ip):
+        await ws.close(code=1013)  # "try again later"
+        return
+    try:
+        await _ws_session(ws)
+    finally:
+        limiter.ws_close(ip)
+
+
+async def _ws_session(ws: WebSocket) -> None:
     """One socket = one viewer. Processing is shared per video (see channels.py): `start`
     subscribes to the video's channel (history first, then live events), `stop` unsubscribes."""
     await ws.accept()
@@ -387,7 +416,6 @@ async def ws_endpoint(ws: WebSocket) -> None:
 
 
 # Production: serve the built frontend from the same origin (Dockerfile copies it here), so /ws, /news… are same-host.
-_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 if _dist.is_dir():
     @app.get("/sem-video", include_in_schema=False)
     @app.get("/admin", include_in_schema=False)

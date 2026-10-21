@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './compact.css'
 import { useSession } from './useSession'
 import { FitSelect } from './components/FitSelect'
-import { ClaimSheet, CountBar, FeedCard, FilterSheet, LiveChip, ScoreBars } from './components/Feed'
+import { ClaimSheet, CountBar, FeedCard, FilterSheet, LiveChip, ScoreBars, ViewSwap } from './components/Feed'
 import { NO_FILTER, PhotosContext, UNNAMED, applyFilters, applyRoster, photoMap, roomTitle, scoreRows, totalOf, useSharedClaim, type Filters } from './components/feedData'
 import type { Claim, Room, Verdict } from './types'
 
@@ -155,7 +155,7 @@ export function Compact() {
           </FitSelect>
         ) : <span className="fhead__title">{roomTitle(room?.name ?? '')}</span>}
         <LiveChip label={status} live={live && session.state === 'listening'} />
-        {room && !tv && <a className="fhead__link" href={`/?room=${room.id}`}>Ver com vídeo</a>}
+        {room && !tv && <ViewSwap href={`/?room=${room.id}`} video />}
         <span className="fspacer" />
         {!tv && <span className="compact__desk">{watchingToggle}</span>}
       </header>

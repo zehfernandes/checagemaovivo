@@ -26,6 +26,9 @@
 /* ---- pills ---- */
 .fpill { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 9px; font-size: 15px; font-weight: 500;
   color: var(--f-ink); background: var(--card-2); white-space: nowrap; }
+/* optical centring: the content sits 1px above the box's middle (padding-bottom), the icon 1px below the word's cap middle */
+.fpill { padding-bottom: 2px; }
+.fpill > svg { position: relative; top: 1px; }
 .fpill--valid { background: var(--f-valid); }
 .fpill--fake { background: var(--f-fake); }
 .fpill--inconclusive { background: var(--f-inconclusive); }
@@ -77,13 +80,19 @@ select.fhead__title option { background: var(--card); }
 /* "Ver com/sem vídeo": a quiet text link next to the status */
 .fhead__link { margin-left: 6px; font-size: 13px; color: var(--f-muted); text-decoration: none; white-space: nowrap; flex: none; }
 .fhead__link:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
-/* phone: picker + status on the first line, "Ver com/sem vídeo" below */
+.fhead__link-icon { display: none; }
+/* phone: one line — the picker, then the TV icon and the status chip */
 @media (max-width: 640px) {
-  .fhead { display: grid; grid-template-columns: minmax(0, max-content) 1fr auto; row-gap: 8px; }
+  .fhead { display: grid; grid-template-columns: minmax(0, max-content) 1fr auto auto; column-gap: 8px; }
   .fhead > .fspacer { display: none; }
   .fhead > .controls, .fhead > .fit-select, .fhead > .fhead__title { grid-row: 1; grid-column: 1; min-width: 0; }
-  .fhead > .flive, .fhead > .fhead__status { grid-row: 1; grid-column: 3; }
-  .fhead__link { grid-row: 2; grid-column: 1 / -1; justify-self: start; margin-left: 4px; }
+  .fhead > .flive, .fhead > .fhead__status { grid-row: 1; grid-column: 4; }
+  /* the TV icon, a square like the status chip, just before it */
+  .fhead__link { grid-row: 1; grid-column: 3; margin: 0; display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 12px;
+    background: var(--card); color: var(--text-2); }
+  .fhead__link:hover { text-decoration: none; color: var(--text); background: var(--card-2); }
+  .fhead__link-icon { display: block; }
+  .fhead__link-text { display: none; }
 }
 .flive { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-radius: 12px; background: var(--card); font-size: 15px; white-space: nowrap; flex: none; }
 .flive__dot { width: 10px; height: 10px; border-radius: 50%; background: var(--f-muted); }
@@ -146,10 +155,7 @@ select.fhead__title option { background: var(--card); }
   .fspin, .flive--on .flive__dot, .fcard--fresh { animation: none; }
 }
 
-/* the overlay on the video speaks the same language: solid verdict pill, no colored outline */
+/* the overlay on the video speaks the same language: the list's verdict pill, no colored outline */
 .app .danmu__item { background: rgba(0, 0, 0, .78); border-color: transparent; border-radius: 12px; padding: 6px 14px 6px 6px; }
-.app .danmu__badge { border-radius: 8px; text-transform: none; letter-spacing: 0; font-size: 13px; font-weight: 600; padding: 5px 10px; color: var(--f-ink); }
-.app .danmu__item--fake .danmu__badge { background: var(--f-fake); }
-.app .danmu__item--valid .danmu__badge { background: var(--f-valid); color: var(--f-ink); }
-.app .danmu__item--inconclusive .danmu__badge { background: var(--f-inconclusive); color: var(--f-ink); }
+.app .danmu__item .fpill { text-shadow: none; }
 

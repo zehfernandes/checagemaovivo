@@ -212,6 +212,20 @@ export function ScoreBars({ rows, unnamed, reserve = 0 }: { rows: [string, Recor
   )
 }
 
+// "Ver com vídeo" / "Ver sem vídeo": a quiet text link; on a phone a TV icon (crossed out = without the video)
+export function ViewSwap({ href, video }: { href: string; video: boolean }) {
+  const label = video ? 'Ver com vídeo' : 'Ver sem vídeo'
+  return (
+    <a className="fhead__link" href={href} title={label} aria-label={label}>
+      <svg className="fhead__link-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <rect x="2.5" y="6" width="19" height="13" rx="2.5" /><path d="M8 2.5 12 6l4-3.5" />
+        {!video && <path d="M3 3l18 18" />}
+      </svg>
+      <span className="fhead__link-text">{label}</span>
+    </a>
+  )
+}
+
 // ---- header: the broadcast's name and whether it is live -----------------------------------------------------
 export function LiveChip({ label, live }: { label: string; live: boolean }) {
   return <span className={`flive${live ? ' flive--on' : ''}`}><span className="flive__dot" aria-hidden />{label}</span>

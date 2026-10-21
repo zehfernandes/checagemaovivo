@@ -1,6 +1,6 @@
 import { useCallback, useRef, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Danmu } from './components/Danmu'
-import { ClaimSheet, CountBar, FeedCard, FilterSheet, LiveChip, ScoreBars } from './components/Feed'
+import { ClaimSheet, CountBar, FeedCard, FilterSheet, LiveChip, ScoreBars, ViewSwap } from './components/Feed'
 import { NO_FILTER, PhotosContext, UNNAMED, applyFilters, applyRoster, photoMap, roomTitle, scoreRows, totalOf, useSharedClaim, type Filters } from './components/feedData'
 import { FitSelect } from './components/FitSelect'
 import { Player } from './components/Player'
@@ -252,7 +252,7 @@ export default function App() {
             label={session.state === 'error' ? (waiting ? 'Aguardando' : 'Erro') : session.state === 'resolving' || session.state === 'connecting' || !session.info ? 'Conectando'
               : session.info.is_live ? (session.state === 'listening' ? 'Ao vivo' : 'Ao vivo · pausado') : 'Gravado'} />
         </span>
-        {rooms && rooms.length > 0 && room && <a className="fhead__link" href={`/sem-video?room=${room.id}`}>Ver sem vídeo</a>}
+        {rooms && rooms.length > 0 && room && <ViewSwap href={`/sem-video?room=${room.id}`} video={false} />}
       </header>
 
 

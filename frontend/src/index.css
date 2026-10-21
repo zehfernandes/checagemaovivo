@@ -107,16 +107,6 @@ button { font: inherit; }
 }
 .danmu__item:hover { animation-play-state: paused; z-index: 2; }
 @keyframes danmu-fly { to { transform: translateX(calc(-100% - var(--stage-w))); } }
-.danmu__badge {
-  display: inline-flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase;
-  letter-spacing: .05em; padding: 5px 9px; border-radius: 999px; background: var(--pending); color: white;
-}
-.danmu__item--fake { border-color: var(--fake); }
-.danmu__item--fake .danmu__badge { background: var(--fake); }
-.danmu__item--valid { border-color: var(--valid); }
-.danmu__item--valid .danmu__badge { background: var(--valid); color: #052e16; }
-.danmu__item--inconclusive { border-color: var(--inconclusive); }
-.danmu__item--inconclusive .danmu__badge { background: var(--inconclusive); color: #431407; }
 .danmu__item--pending { opacity: .8; }
 
 

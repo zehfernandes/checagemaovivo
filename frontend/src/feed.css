@@ -66,17 +66,9 @@
 
 /* ---- header ---- */
 .fhead { display: flex; align-items: center; gap: 8px; padding: 12px 16px; min-height: 64px; }
-.fhead > .fhead__title:first-child { padding-left: 4px; } /* a single room: plain title */
-.fhead__title { font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-/* the room picker: a box like the status chip, as wide as the chosen room (FitSelect) */
-select.fhead__title { font: inherit; font-size: 16px; font-weight: 600; color: var(--text); height: 40px; border: 0; border-radius: 12px; padding: 0 34px 0 14px;
-  cursor: pointer; appearance: none; outline: none; background-color: var(--card);
-  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
-  background-position: calc(100% - 19px) 52%, calc(100% - 14px) 52%; background-size: 5px 5px; background-repeat: no-repeat; }
-select.fhead__title:hover { background-color: var(--card-2); }
-select.fhead__title:focus-visible { box-shadow: 0 0 0 2px var(--text-2); }
-select.fhead__title option { background: var(--card); }
-.fhead__title.fit-select__sizer { font-size: 16px; padding: 0 18px 0 14px; } /* + the 22px arrow slot: a bit more than the select's padding */
+/* the room's name: a box like the status chip (the room comes from the link, ?room=…) */
+.fhead__title { display: block; line-height: 40px; height: 40px; padding: 0 14px; border-radius: 12px; background: var(--card);
+  font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 /* "Ver com/sem vídeo": a quiet text link next to the status */
 .fhead__link { margin-left: 6px; font-size: 13px; color: var(--f-muted); text-decoration: none; white-space: nowrap; flex: none; }
 .fhead__link:hover { color: var(--text); text-decoration: underline; text-underline-offset: 3px; }
@@ -85,7 +77,7 @@ select.fhead__title option { background: var(--card); }
 @media (max-width: 640px) {
   .fhead { display: grid; grid-template-columns: minmax(0, max-content) 1fr auto auto; column-gap: 8px; }
   .fhead > .fspacer { display: none; }
-  .fhead > .controls, .fhead > .fit-select, .fhead > .fhead__title { grid-row: 1; grid-column: 1; min-width: 0; }
+  .fhead > .controls, .fhead > .fhead__title { grid-row: 1; grid-column: 1; min-width: 0; }
   .fhead > .flive, .fhead > .fhead__status { grid-row: 1; grid-column: 4; }
   /* the TV icon, a square like the status chip, just before it */
   .fhead__link { grid-row: 1; grid-column: 3; margin: 0; display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 12px;

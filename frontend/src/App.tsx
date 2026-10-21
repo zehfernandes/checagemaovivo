@@ -2,7 +2,6 @@ import { useCallback, useRef, useEffect, useMemo, useState, type FormEvent } fro
 import { Danmu } from './components/Danmu'
 import { ClaimSheet, CountBar, FeedCard, FilterSheet, LiveChip, ScoreBars, ViewSwap } from './components/Feed'
 import { NO_FILTER, PhotosContext, UNNAMED, applyFilters, applyRoster, photoMap, roomTitle, scoreRows, totalOf, useSharedClaim, type Filters } from './components/feedData'
-import { FitSelect } from './components/FitSelect'
 import { Player } from './components/Player'
 import { useSession } from './useSession'
 import type { Claim, Room, Verdict } from './types'
@@ -93,7 +92,7 @@ export default function App() {
 
   // Rooms: broadcasts opened by the newsroom. When there are rooms, viewers pick one instead of pasting a URL.
   const [rooms, setRooms] = useState<Room[] | null>(null)
-  const [roomId, setRoomId] = useState(() => new URLSearchParams(location.search).get('room') ?? '')
+  const [roomId] = useState(() => new URLSearchParams(location.search).get('room') ?? '')
   useEffect(() => {
     let alive = true
     const load = () => fetch('/rooms').then((r) => r.json()).then((d: Room[]) => alive && setRooms(d)).catch(() => alive && setRooms([]))
@@ -116,13 +115,6 @@ export default function App() {
     setUrl(roomUrl)
     setBaseline(0)
   }, [roomUrl])
-  function pickRoom(id: string) {
-    setRoomId(id)
-    setFilters(NO_FILTER)
-    const p = new URLSearchParams(location.search)
-    p.set('room', id)
-    history.replaceState(null, '', `?${p}`)
-  }
 
   const typedId = extractVideoId(url)
   // Only YouTube has an embedded player. g1/Globo (and anything else yt-dlp reads) is checked from
@@ -234,9 +226,7 @@ export default function App() {
       <header className="fhead topbar">
         <form className="controls" onSubmit={onSubmit}>
           {rooms && rooms.length > 0 ? (<>
-            <FitSelect className="fhead__title" label={roomTitle(room?.name ?? '')} value={room?.id ?? ''} onChange={(e) => pickRoom(e.target.value)} title="Transmissão">
-              {rooms.map((r) => <option key={r.id} value={r.id}>{roomTitle(r.name)}</option>)}
-            </FitSelect>
+            <span className="fhead__title">{roomTitle(room?.name ?? '')}</span>
           </>) : (
             <input
               type="url"

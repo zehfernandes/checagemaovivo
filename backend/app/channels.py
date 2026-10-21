@@ -30,7 +30,7 @@ PRIVATE_IDLE_SECONDS = 5  # a fresh (uncached) run dies shortly after its only v
 MAX_QUEUE = 2000
 REVIEW_LEASE_SECONDS = 120  # an open review card holds its claim this long; the newsroom UI renews it while open
 # newsroom-only fields: who is reviewing / reviewed a claim never reaches the public site
-REVIEW_FIELDS = ("status", "claimed_by", "claimed_until", "reviewed_by", "reviewed_at", "rev", "skipped_by")
+REVIEW_FIELDS = ("status", "awaiting_review", "claimed_by", "claimed_until", "reviewed_by", "reviewed_at", "rev", "skipped_by")
 
 
 class ReviewConflict(Exception):
@@ -44,6 +44,11 @@ def is_public(c: dict) -> bool:
 
 def public_view(ev: dict) -> dict:
     return {**ev, "claim": {k: v for k, v in ev["claim"].items() if k not in REVIEW_FIELDS}}
+
+
+def needs_review(c: dict) -> bool:
+    """In the newsroom queue: a draft, or a claim published at once (room not holding for review) nobody checked yet."""
+    return c.get("status") == "draft" or bool(c.get("awaiting_review"))
 
 
 def _held_by_other(c: dict, reviewer: str) -> bool:
@@ -228,11 +233,15 @@ class Channel:
                 self.broadcast({"type": "status", **self.status})
                 asyncio.get_running_loop().call_soon(lambda: asyncio.create_task(self.stop_pipeline()))
         elif kind == "claim":
-            # the machine (extraction, verdict, deep check): a claim waits for the newsroom unless review is off
+            # the machine (extraction, verdict, deep check): a claim waits for the newsroom unless review is off.
+            # The room's "Aguardar checagem humana" is read as each claim arrives, so changing it only affects
+            # the next ones; off = on the site at once, still in the queue for a person to check.
             c = ev["claim"]
             old = self.claims.get(c["id"])
             if old is None:
-                c = {**c, "status": "draft" if settings.human_review and not self.private else "published", "rev": 0}
+                review = settings.human_review and not self.private
+                hold = review and self.manager.holds_for_review(self.video_id)
+                c = {**c, "status": "draft" if hold else "published", "rev": 0, **({"awaiting_review": True} if review and not hold else {})}
             elif old["claim"].get("reviewed_by"):
                 return  # a person already decided it: a late deep check must not overwrite their verdict
             else:
@@ -336,7 +345,7 @@ class Channel:
                      + [e for e in order if (e["claim"]["start"], e["claim"]["id"]) <= mark])
         for entry in order:
             c = entry["claim"]
-            if (c.get("status") == "draft" and c["id"] not in skip and c["id"] != after
+            if (needs_review(c) and c["id"] not in skip and c["id"] != after
                     and reviewer not in (c.get("skipped_by") or []) and c["verdict"] != "pending"
                     and not c.get("deep_pending") and not _held_by_other(c, reviewer)):
                 return self.lease(c["id"], reviewer)
@@ -376,7 +385,7 @@ class Channel:
             c["status"] = "irrelevant"
         else:
             raise ValueError(action)
-        c.update(reviewed_by=reviewer, reviewed_at=time.time(), rev=old.get("rev", 0) + 1, claimed_by=None, claimed_until=None)
+        c.update(awaiting_review=False, reviewed_by=reviewer, reviewed_at=time.time(), rev=old.get("rev", 0) + 1, claimed_by=None, claimed_until=None)
         self._store_claim({**entry, "claim": c}, entry)
         return c
 
@@ -472,6 +481,8 @@ class ChannelManager:
         self.private_channels: set[Channel] = set()
         self.failures: dict[str, str] = {}  # video_id -> last resolve error (no channel exists for it)
         self._locks: dict[str, asyncio.Lock] = {}
+        # video_id -> do new analyses wait for a person? (set from the rooms in main; default: wait)
+        self.holds_for_review: Callable[[str], bool] = lambda _vid: True
 
     async def get(self, url: str, save: bool = False) -> Channel:
         vid = audio.extract_video_id(url) or url

@@ -13,6 +13,7 @@ export interface Claim {
   quote?: string | null // the claim as the speaker said it ("Eu…"); `text` is the third-person version that was checked
   // newsroom only (never sent to the public site): drafts wait for a person to publish them
   status?: ReviewStatus // missing = published (claims from before the review queue)
+  awaiting_review?: boolean // published at once (room not holding for review) but nobody checked it yet
   claimed_by?: string | null // who has its review card open…
   claimed_until?: number | null // …until (server clock, s)
   reviewed_by?: string | null

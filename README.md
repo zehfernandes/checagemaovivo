@@ -88,6 +88,9 @@ The viewer UI has no admin controls; everything operational lives at `/admin` (p
 - **Checks inside a room** — the newsroom review queue. With `HUMAN_REVIEW=true` (default) every machine analysis is
   a **draft** that the public site never sees; a person opens it, adjusts it if needed and **Publica** (now
   on the site) or marks it **Irrelevante** (never on the site), and the next card opens by itself.
+  With the room's **Aguardar checagem humana** off, new analyses go on the site at once (`status: published`,
+  `awaiting_review: true`) and still wait in *Aguardando* ("no ar"): **Confirmar** keeps them, **Tirar do site**
+  removes them. The switch is read as each claim arrives, so changing it mid-run only affects the next ones.
   **Revisar** opens the oldest draft the machine has finished. Filters: Aguardando / Publicadas /
   Irrelevantes / Todas, verdict, search. A published claim can be corrected or taken off the site later.
   Several people review at once: opening a card *leases* it for 120 s (renewed every 45 s while open), so
@@ -140,7 +143,7 @@ no Fly account or production secrets required. Production secrets (`OPENAI_API_K
 | `TRANSCRIBE_MODEL` | `gpt-4o-mini-transcribe` | speech-to-text model |
 | `FACTCHECK_MODEL` | `gpt-4.1-mini` | model for claim extraction and verification |
 | `DEEP_MODEL` | `gpt-5-mini` | reasoning model for the deep check (third level / Rechecar in `/admin`); `reasoning.effort=low`, no `temperature` |
-| `HUMAN_REVIEW` | `true` | machine analyses wait as drafts until a person publishes them in `/admin` → *Salas* → the room; `false` publishes them at once (the old behaviour) |
+| `HUMAN_REVIEW` | `true` | machine analyses wait as drafts until a person publishes them in `/admin` → *Salas* → the room; `false` publishes them at once with no review queue (the old behaviour). Per room, *Aguardar checagem humana* (on by default, changeable while checking runs) can instead put new analyses on the site at once while keeping them in the queue |
 | `CANDIDATES_ONLY` | `true` | only fact-check candidates/interviewees: claims the extractor attributes to moderators, presenters or journalists (e.g. a question's premise) are dropped; set `false` for news broadcasts |
 | `DEEP_CHECK` | `true` | automatically run the deep check on claims the fast pass left inconclusive |
 | `DECIDER` | `openai` | `jev`: TypeSafe Jev decision model via Vercel AI Gateway decides from DB evidence in ~0.3 s and gates non-checkable claims; falls back to OpenAI on low confidence/error |

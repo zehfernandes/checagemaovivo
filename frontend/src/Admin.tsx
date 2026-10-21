@@ -149,7 +149,7 @@ function Login({ auth, onOk }: { auth: { mode: AuthMode; google_client_id: strin
           else setError(d.detail || 'Não foi possível entrar')
         },
       })
-      gid.renderButton(el, { theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with', locale: 'pt-BR', width: 280 })
+      gid.renderButton(el, { theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with', locale: 'pt-BR', width: 284 })
     }).catch((e) => setError((e as Error).message))
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- render the Google button once
   }, [google])

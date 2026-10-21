@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS rooms (
 );
 """
 # columns added after the table existed: (name, declaration)
-MIGRATIONS = [("speakers", "TEXT DEFAULT '[]'")]
+MIGRATIONS = [("human_review", "INTEGER DEFAULT 1"), ("speakers", "TEXT DEFAULT '[]'")]
 
 
 class RoomStore:
@@ -53,11 +53,12 @@ class RoomStore:
         return self.get(room_id)  # type: ignore[return-value]
 
     def update(self, room_id: str, **fields) -> dict | None:
-        allowed = {k: v for k, v in fields.items() if k in ("name", "url", "kind", "active", "speakers") and v is not None}
+        allowed = {k: v for k, v in fields.items() if k in ("name", "url", "kind", "active", "human_review", "speakers") and v is not None}
         if "url" in allowed:
             allowed["video_id"] = audio.extract_video_id(allowed["url"]) or allowed["url"]
-        if "active" in allowed:
-            allowed["active"] = int(bool(allowed["active"]))
+        for flag in ("active", "human_review"):
+            if flag in allowed:
+                allowed[flag] = int(bool(allowed[flag]))
         if "speakers" in allowed:
             allowed["speakers"] = json.dumps(allowed["speakers"], ensure_ascii=False)
         if allowed:
@@ -66,6 +67,12 @@ class RoomStore:
             self.conn.execute(f"UPDATE rooms SET {sets} WHERE id = ?", (*allowed.values(), room_id))
             self.conn.commit()
         return self.get(room_id)
+
+    def holds_for_review(self, video_id: str) -> bool:
+        """Whether new machine analyses of this video wait for a person before reaching the site:
+        yes unless its room(s) turned "Aguardar checagem humana" off (no room = the default, wait)."""
+        rows = self.conn.execute("SELECT human_review FROM rooms WHERE video_id = ?", (video_id,)).fetchall()
+        return not rows or any(r["human_review"] for r in rows)
 
     def delete(self, room_id: str) -> bool:
         cur = self.conn.execute("DELETE FROM rooms WHERE id = ?", (room_id,))

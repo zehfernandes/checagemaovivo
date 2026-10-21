@@ -47,6 +47,7 @@ class RoomPatch(BaseModel):
     url: str | None = None
     kind: str | None = None
     active: bool | None = None
+    human_review: bool | None = None  # "Aguardar checagem humana": changeable while checking runs, applies to new claims
     # who speaks in this broadcast: when set, the site only shows (and counts) what these people said
     speakers: list[Speaker] | None = Field(default=None, max_length=20)
 
@@ -130,7 +131,7 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
         vid = room["video_id"]
         ch = channels.channels.get(vid)
         row = channels.cache.video(vid)
-        out = {**room, "active": bool(room["active"]), "speakers": json.loads(room.get("speakers") or "[]"), "title": (ch.info.title if ch else (row or {}).get("title")),
+        out = {**room, "active": bool(room["active"]), "speakers": json.loads(room.get("speakers") or "[]"), "human_review": bool(room.get("human_review", 1)), "title": (ch.info.title if ch else (row or {}).get("title")),
                "is_live": (ch.info.is_live if ch else bool((row or {}).get("is_live"))),
                "processing": bool(ch and ch.run_task and not ch.run_task.done()),
                "viewers": len(ch.subscribers) if ch else 0,

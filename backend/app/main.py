@@ -67,6 +67,7 @@ channels = ChannelManager(
     settings.news_db_file.parent / Path(settings.cache_db_path).name,
 )
 rooms = RoomStore(settings.news_db_file.parent / Path(settings.cache_db_path).name)
+channels.holds_for_review = rooms.holds_for_review  # the room's "Aguardar checagem humana", read per new claim
 _bg_tasks: set[asyncio.Task] = set()
 
 

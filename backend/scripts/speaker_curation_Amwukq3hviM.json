@@ -1,0 +1,2890 @@
+[
+ {
+  "id": "596289bcc1",
+  "start": 7768,
+  "action": "speaker",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "sem falante"
+  ],
+  "text": "O primeiro debate entre os dois candidatos à presidência mais votados no primeiro turno ocorre uma semana antes da eleição."
+ },
+ {
+  "id": "5d4ea4ec21",
+  "start": 7788,
+  "action": "speaker",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "sem falante"
+  ],
+  "text": "O primeiro debate entre os dois candidatos à presidência mais votados no primeiro turno ocorre a uma semana da eleição."
+ },
+ {
+  "id": "e9d5176753",
+  "start": 7788,
+  "action": "speaker",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "sem falante"
+  ],
+  "text": "A Band realiza uma tradição de décadas ao promover debates presidenciais."
+ },
+ {
+  "id": "09457b1dc6",
+  "start": 7796,
+  "action": "speaker",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "sem falante"
+  ],
+  "text": "O debate entre Flávio Bolsonaro e Luiz Inácio Lula da Silva foi organizado com a ordem previamente sorteada para a participação dos candidatos."
+ },
+ {
+  "id": "35b7f4a183",
+  "start": 7804,
+  "action": "speaker",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "sem falante",
+   "duplicada"
+  ],
+  "text": "A Band tem como parceiras para esse debate a TV Cultura, o jornal Estadão, a TV Gazeta e a Jovem Pan."
+ },
+ {
+  "id": "5d3c467f81",
+  "start": 7804,
+  "action": "speaker",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "sem falante",
+   "duplicada"
+  ],
+  "text": "A Band tem como parceiras para esse debate a TV Cultura, o jornal Estadão, a TV Gazeta e a Jovem Pan."
+ },
+ {
+  "id": "f19894955e",
+  "start": 7809,
+  "action": "speaker",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "sem falante"
+  ],
+  "text": "O programa está sendo transmitido pela Band News TV."
+ },
+ {
+  "id": "7b3b5ef53e",
+  "start": 7812,
+  "action": "speaker",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "sem falante"
+  ],
+  "text": "O programa está sendo transmitido pelos canais Agro Mais e Terra Viva."
+ },
+ {
+  "id": "f6b2437561",
+  "start": 7852,
+  "action": "speaker",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "sem falante"
+  ],
+  "text": "Cada candidato terá um banco de tempo de 15 minutos para usar da maneira que preferir no primeiro confronto direto do debate."
+ },
+ {
+  "id": "7b0b82c8f8",
+  "start": 7956,
+  "action": "speaker",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "sem falante"
+  ],
+  "text": "Os assassinatos no Brasil estão em queda e atingiram o menor patamar desde 2010."
+ },
+ {
+  "id": "b9bed021ab",
+  "start": 7963,
+  "action": "speaker",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "sem falante"
+  ],
+  "text": "O anuário registrou 40.775 mortes violentas no ano passado."
+ },
+ {
+  "id": "eea62a07b3",
+  "start": 7969,
+  "action": "speaker",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "sem falante"
+  ],
+  "text": "Os roubos de todo tipo no Brasil estão em queda."
+ },
+ {
+  "id": "f32f9fb982",
+  "start": 7972,
+  "action": "speaker",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "sem falante"
+  ],
+  "text": "O tráfico de drogas avançou em 25 estados brasileiros."
+ },
+ {
+  "id": "00ba573492",
+  "start": 7980,
+  "action": "speaker",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "sem falante"
+  ],
+  "text": "Quase 69 milhões de brasileiros afirmam que convivem no bairro onde moram com a atual situação (implícito: situação de segurança pública)."
+ },
+ {
+  "id": "2427e98804",
+  "start": 8044,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Eu vou declarar guerra ao narcoterrorismo. Eu vou classificar PCC, Comando Vermelho e milícias como organizações",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "Flávio Bolsonaro declarou que vai classificar o PCC, Comando Vermelho e milícias como organizações narcoterroristas."
+ },
+ {
+  "id": "4c74e27ec7",
+  "start": 8083,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Com a lei antifacção que nós aprovamos, os líderes dessas organizações vão ficar até 80 anos presos.",
+  "notes": [],
+  "text": "A lei antifacção aprovada permite que os líderes dessas organizações criminosas fiquem presos por até 80 anos."
+ },
+ {
+  "id": "139404cd45",
+  "start": 8156,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Da Constituição, que eu mandei dia 25 de março do ano passado para dar ao governo federal as condições de interceder.",
+  "notes": [],
+  "text": "No dia 25 de março de 2025, Lula enviou uma proposta para dar ao governo federal as condições de interceder na questão da segurança pública."
+ },
+ {
+  "id": "1cb556dd2c",
+  "start": 8164,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "A questão da segurança pública que é uma questão do Estado. Todo mundo sabe que a Constituição de 88 garantiu",
+  "notes": [],
+  "text": "A Constituição de 1988 garantiu que a segurança pública é uma questão do Estado."
+ },
+ {
+  "id": "9682c0941c",
+  "start": 8169,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Que a segurança pública é uma da responsabilidade dos estados.",
+  "notes": [],
+  "text": "A Constituição de 1988 estabelece que a segurança pública é uma responsabilidade dos estados."
+ },
+ {
+  "id": "fc6efd2c40",
+  "start": 8180,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "A União cuida da política federal, que é a política fazendária, cuida da política rodoviária federal.",
+  "notes": [],
+  "text": "A União é responsável pela política federal, incluindo a política fazendária e a política rodoviária federal no Brasil."
+ },
+ {
+  "id": "bfc95e9248",
+  "start": 8186,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Eu já fiz a lei antitfação, ela foi aprovada",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "Lula afirmou que já fez a lei antitfação, que foi aprovada."
+ },
+ {
+  "id": "13f06ec5f0",
+  "start": 8188,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Eu já fiz a lei antitfação, ela foi aprovada, já aumentamos o tempo de cadeia.",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "Lula afirmou que o tempo de cadeia foi aumentado."
+ },
+ {
+  "id": "69cdde5c49",
+  "start": 8252,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "O que nós fizemos nesses quatro anos foi muito mais do que foi feito em muitos anos nesse país no combate ao crime",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "O governo Lula afirmou que, nos últimos quatro anos, fez muito mais no combate ao crime do que foi feito em muitos anos anteriores no Brasil."
+ },
+ {
+  "id": "029e82c86f",
+  "start": 8272,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [
+   "duplicada"
+  ],
+  "text": "A economia brasileira cresceu abaixo da média mundial."
+ },
+ {
+  "id": "ce9d9c8da0",
+  "start": 8276,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [],
+  "text": "O Brasil está sem grau de investimento há mais de dez anos."
+ },
+ {
+  "id": "3c925532b0",
+  "start": 8282,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Entra governo, sai governo, troca ideologia, a carga tributária só sobe.",
+  "notes": [],
+  "text": "A carga tributária brasileira aumentou continuamente independentemente do governo ou da ideologia no poder."
+ },
+ {
+  "id": "a048c17c23",
+  "start": 8288,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "A China é das que mais crescem das grandes economias",
+  "notes": [],
+  "text": "A China é uma das grandes economias que mais crescem atualmente."
+ },
+ {
+  "id": "6c8696c512",
+  "start": 8292,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "O Brasil amarga a maior taxa de juros real do planeta.",
+  "notes": [],
+  "text": "O Brasil tem a maior taxa de juros real do planeta."
+ },
+ {
+  "id": "b6b5a847dc",
+  "start": 8316,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Eu tenho consciência da dificuldade de governar esse país, porque já governo o país há 12 anos.",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "Lula afirmou que governa o Brasil há 12 anos."
+ },
+ {
+  "id": "e6dc9b1356",
+  "start": 8324,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Tenho orgulho de ter sido o primeiro presidente da República a conseguir dois graus de investimento nesse país.",
+  "notes": [],
+  "text": "Lula foi o primeiro presidente da República do Brasil a conseguir dois graus de investimento para o país."
+ },
+ {
+  "id": "56e57ad561",
+  "start": 8332,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "De 2007 a 2010, depois nós perdemos. E tenho orgulho de ter o país hoje com o risco muito pequeno.",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "Lula afirmou que de 2007 a 2010 o Brasil teve dois graus de investimento e que atualmente o país tem um risco muito pequeno."
+ },
+ {
+  "id": "91a4b86cb2",
+  "start": 8345,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "E depois que eu deixei a presidência, ele só voltou a crescer acima de 3% depois que eu voltei na presidenta da República por causa da compra.",
+  "notes": [],
+  "text": "O Brasil só voltou a crescer acima de 3% após o retorno de Lula à presidência da República."
+ },
+ {
+  "id": "6c46d69460",
+  "start": 8364,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "É por isso que nós criamos o MEI.",
+  "notes": [],
+  "text": "O governo Lula criou o MEI (Microempreendedor Individual)."
+ },
+ {
+  "id": "2aa46809a2",
+  "start": 8370,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "É por isso que foi no meu governo que nós criamos a lei geral da pequena e média empresa.",
+  "notes": [],
+  "text": "O governo Lula criou a lei geral da pequena e média empresa."
+ },
+ {
+  "id": "d6b6c7d1f2",
+  "start": 8394,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Quando eu cheguei na presidência, esse país devia 30 bilhões para o FMI",
+  "notes": [],
+  "text": "Quando Lula chegou à presidência, o Brasil devia 30 bilhões de dólares ao FMI."
+ },
+ {
+  "id": "08cb812d0b",
+  "start": 8396,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [],
+  "text": "O governo Lula afirmou que o Brasil não tinha reservas internacionais quando ele assumiu a presidência."
+ },
+ {
+  "id": "8f12efbc5c",
+  "start": 8396,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [],
+  "text": "O governo Lula afirmou que o Brasil pagou dívidas ao FMI e acumulou 270 bilhões de dólares em reservas internacionais."
+ },
+ {
+  "id": "25d398a370",
+  "start": 8404,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [
+   "editada por revisor: só o falante (veredito e texto ficam)"
+  ],
+  "text": "O governo Lula bancarizou 22 milhões de brasileiros."
+ },
+ {
+  "id": "d4b0082fb3",
+  "start": 8408,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [
+   "editada por revisor: só o falante (veredito e texto ficam)"
+  ],
+  "text": "A economia brasileira cresceu 7,5% em 2010."
+ },
+ {
+  "id": "d3746ab967",
+  "start": 8436,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "O PT já governa esse país há 20 anos dos últimos 24.",
+  "notes": [],
+  "text": "O Partido dos Trabalhadores (PT) governa o Brasil há 20 anos dos últimos 24 anos."
+ },
+ {
+  "id": "33e922d74b",
+  "start": 8476,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [
+   "parece narração/3ª pessoa",
+   "revisão: falante corrigido pelo contexto"
+  ],
+  "text": "Mais de 50 milhões de brasileiros e brasileiras escolheram o candidato mencionado na virada da eleição."
+ },
+ {
+  "id": "143222400a",
+  "start": 8484,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [
+   "editada por revisor: só o falante (veredito e texto ficam)"
+  ],
+  "text": "A taxa de juro futuro caiu após Flávio Bolsonaro passar para a frente no segundo turno."
+ },
+ {
+  "id": "12c0a8414d",
+  "start": 8489,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Com essa dívida que o atual governo está deixando de 11 trilhões de reais",
+  "notes": [],
+  "text": "O atual governo está deixando uma dívida de 11 trilhões de reais."
+ },
+ {
+  "id": "3f49327283",
+  "start": 8491,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Com essa dívida que o atual governo está deixando de 11 trilhões de reais, mais um recorde de negativo,",
+  "notes": [],
+  "text": "A dívida de 11 trilhões de reais é um recorde negativo."
+ },
+ {
+  "id": "7580c4318b",
+  "start": 8596,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Em 2009, Flávio Bolsonaro era deputado estadual e participou de discussões na Assembleia Legislativa para ampliar a licença de mate",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "Em 2009, Flávio Bolsonaro era deputado estadual e participou de discussões na Assembleia Legislativa para ampliar a licença de maternidade."
+ },
+ {
+  "id": "33e58f7d5a",
+  "start": 8604,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "Flávio Bolsonaro foi o único entre 49 deputados a votar contra a ampliação da licença-maternidade para 180 dias (Alerj, 2009)."
+ },
+ {
+  "id": "3b2b194b91",
+  "start": 8649,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "Roberta Lucinger fez acusações muito graves contra Lula ontem."
+ },
+ {
+  "id": "8d02c35c9b",
+  "start": 8668,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Roberto é uma questão da Polícia Federal, e a Polícia Federal vai cuidar.",
+  "notes": [],
+  "text": "A Polícia Federal está cuidando da questão relacionada a Roberto Lucinha."
+ },
+ {
+  "id": "435368847d",
+  "start": 8683,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "Roberta Luchsinger é sócia do filho de Lula (Lulinha)."
+ },
+ {
+  "id": "4d464c3702",
+  "start": 8687,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Por que a Polícia Federal só vai na casa dela e não vai na casa do seu filho? Cadê o Lulinha?",
+  "notes": [],
+  "text": "A Polícia Federal está investigando Roberta Luchsinger."
+ },
+ {
+  "id": "1ebea3be9d",
+  "start": 8718,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "O funcionário conhecido como 'careca do INSS' foi nomeado durante o governo Lula."
+ },
+ {
+  "id": "27fc4d55d9",
+  "start": 8722,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "O funcionário conhecido como 'careca do INSS' pagou dinheiro para o filho de Lula."
+ },
+ {
+  "id": "c02e813e84",
+  "start": 8730,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "O filho de Lula mora em um bairro muito rico próximo ao local onde Vini Júnior reside."
+ },
+ {
+  "id": "d1de9ff25d",
+  "start": 8755,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Eu não escondo nem mudo o diretor da Polícia Federal",
+  "notes": [],
+  "text": "Lula não esconde nem muda o diretor da Polícia Federal."
+ },
+ {
+  "id": "f9e74f8df1",
+  "start": 8756,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Eu não escondo nem mudo o diretor da Polícia Federal e nem mando o ministro embora.",
+  "notes": [],
+  "text": "Lula não manda o ministro embora para proteger familiares em investigações."
+ },
+ {
+  "id": "bc5eb3f167",
+  "start": 8769,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Para roubar a Previdência. Nós descobrimos a quadrilha, prendemos a quadrilha e já pagamos os aposentados. A quadrilha foi montada ou não foi?",
+  "notes": [],
+  "text": "O governo Lula descobriu e prendeu uma quadrilha que roubava a Previdência Social."
+ },
+ {
+  "id": "493fd48b3d",
+  "start": 8771,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [
+   "editada por revisor: só o falante (veredito e texto ficam)"
+  ],
+  "text": "O governo Lula descobriu e prendeu a quadrilha que roubava a Previdência e já pagou os aposentados lesados."
+ },
+ {
+  "id": "bf5d8797a9",
+  "start": 8784,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "A Polícia Federal até agora não foi atrás do seu filho",
+  "notes": [],
+  "text": "A Polícia Federal não investigou o filho de Lula até o momento."
+ },
+ {
+  "id": "4faff858a1",
+  "start": 8788,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Por que que ele está fugido lá na Espanha? Por que que ele não está aqui?",
+  "notes": [],
+  "text": "O filho de Lula está na Espanha e não está no Brasil."
+ },
+ {
+  "id": "5b6e702673",
+  "start": 8796,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "O sermão está fugido nos Estados Unidos, tramando contra o Brasil.",
+  "notes": [],
+  "text": "O filho de Lula está fugido na Espanha."
+ },
+ {
+  "id": "26473f9fe5",
+  "start": 8826,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "O nome Lulinha é usado para se referir ao filho de Lula."
+ },
+ {
+  "id": "c2ea234ae1",
+  "start": 8828,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "Roberto Lucchinger, conhecido como Lulinha, é filho do ex-presidente Lula."
+ },
+ {
+  "id": "f1cfbafcee",
+  "start": 8841,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Meu filho, acho que ele é inocente, e ele tem três inquéritos e ele vai apurar os inquéritos, ele não vai ser negado.",
+  "notes": [],
+  "text": "O filho de Lula tem três inquéritos abertos contra ele."
+ },
+ {
+  "id": "3b76c65b72",
+  "start": 8851,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "O juiz que está com o processo, que é o seu amigo, que é o André Mendonça, que traga ele para ser julgado.",
+  "notes": [],
+  "text": "O juiz André Mendonça está com o processo relacionado a Roberto Lucchinger."
+ },
+ {
+  "id": "8d42dd4775",
+  "start": 8884,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [
+   "editada por revisor: só o falante (veredito e texto ficam)"
+  ],
+  "text": "O governo Lula desarticulou a quadrilha que roubava a Previdência, prendeu muita gente e já devolveu R$ 3 bilhões aos aposentados."
+ },
+ {
+  "id": "a8e7d7c40c",
+  "start": 8892,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "Lula foi aconselhado a não confiar cegamente em seu filho, Lulinha."
+ },
+ {
+  "id": "a99e5fa02a",
+  "start": 8898,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Porque ela falou que o seu filho é sócio dela.",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "Roberta Lussinger afirmou que o filho de Lula é sócio dela."
+ },
+ {
+  "id": "e21888a4fd",
+  "start": 8900,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Ela falou que o seu filho é sócio dela e o Marcola abria as portas dos ministros.",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "Roberta Lussinger afirmou que Marcola abria as portas dos ministros."
+ },
+ {
+  "id": "6d006817e3",
+  "start": 8906,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "A Roberta é um cargo da Polícia Federal",
+  "notes": [],
+  "text": "Roberta Lucinger ocupa um cargo na Polícia Federal."
+ },
+ {
+  "id": "0f809e1d86",
+  "start": 8937,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Se foram os seus aliados que estavam lá comemorando o fim da CPI do INSS",
+  "notes": [],
+  "text": "Aliados de Lula estavam comemorando o fim da CPI do INSS."
+ },
+ {
+  "id": "d12d9842fa",
+  "start": 8946,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "O seu irmão, o Freixinho, que é vice-presidente, vice-presidente de um sindicato",
+  "notes": [],
+  "text": "O irmão de Lula, conhecido como Freixinho, é vice-presidente de um sindicato."
+ },
+ {
+  "id": "0d3bc8604f",
+  "start": 8948,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Esquema para favorecer o seu irmão, o Freixinho, que é vice-presidente, vice-presidente de um sindicato que roubou os aposentados.",
+  "notes": [],
+  "text": "O sindicato do qual Freixinho é vice-presidente roubou os aposentados."
+ },
+ {
+  "id": "9f664f6750",
+  "start": 8988,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "O governo Lula tem pessoas dentro dele envolvidas em roubar 5 milhões de reais."
+ },
+ {
+  "id": "f465e8513c",
+  "start": 9052,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [
+   "editada por revisor: só o falante (veredito e texto ficam)"
+  ],
+  "text": "Flávio Bolsonaro contou 43 mentiras, segundo a contagem do Aos Fatos."
+ },
+ {
+  "id": "88c7c1b454",
+  "start": 9059,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "O pai dele mentia 11 vezes por dia.",
+  "notes": [],
+  "text": "O pai de Vorcaro mentia 11 vezes por dia."
+ },
+ {
+  "id": "4628b0e5c1",
+  "start": 9076,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [
+   "texto em inglês"
+  ],
+  "text": "Sergio Moro and Deltan Dallagnol have been recognized publicly for their roles in anti-corruption activities."
+ },
+ {
+  "id": "4c7db27f49",
+  "start": 9076,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "Somente Lula foi condenado ou preso por corrupção e lavagem de dinheiro entre as pessoas presentes no auditório mencionado."
+ },
+ {
+  "id": "0f784e9f3b",
+  "start": 9080,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [
+   "texto em inglês"
+  ],
+  "text": "Sergio Moro and Deltan Dallagnol were involved in efforts to combat corruption in Brazil."
+ },
+ {
+  "id": "cafdaece49",
+  "start": 9097,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "A primeira coisa que o presidente Bolsonaro fez quando se elegeu foi mandar uma MP para O INSS",
+  "notes": [],
+  "text": "O presidente Jair Bolsonaro enviou uma Medida Provisória (MP) relacionada ao INSS logo após ser eleito."
+ },
+ {
+  "id": "ef65d045ef",
+  "start": 9115,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Fazer uma emendinha para favorecer os sindicatos e conseguir fazer esses descontos de forma totalmente desenfreada, sem controle, foi banc",
+  "notes": [],
+  "text": "Uma emenda foi feita para favorecer os sindicatos permitindo descontos de forma desenfreada e sem controle."
+ },
+ {
+  "id": "c4e55dab25",
+  "start": 9123,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Lula, o Brasil elegeu agora um Congresso Nacional muito mais à direita, Lula.",
+  "notes": [],
+  "text": "O Brasil elegeu um Congresso Nacional muito mais à direita na eleição mais recente."
+ },
+ {
+  "id": "93af236b84",
+  "start": 9131,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "Houve roubalheira no governo Lula."
+ },
+ {
+  "id": "fc52524f12",
+  "start": 9172,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "O áudio do Boycaro falou que é teu dinheiro por fita conta 30 milhões para o Instituto Lula por fora.",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "O áudio de Vorcaro afirmou que 30 milhões de reais foram destinados por fora para o Instituto Lula."
+ },
+ {
+  "id": "0485a6b342",
+  "start": 9195,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Partido dos Trabalhadores, PT, partido destruidor.",
+  "notes": [],
+  "text": "O Partido dos Trabalhadores (PT) foi chamado de partido destruidor."
+ },
+ {
+  "id": "934d17a15a",
+  "start": 9214,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "Flávio Bolsonaro disse que os R$ 24 milhões de Vorcaro foram para um fundo, mas isso não ocorreu."
+ },
+ {
+  "id": "e67c22637c",
+  "start": 9217,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "24 milhões do Vorcaro, que Flávio Bolsonaro disse que não pegou e pegou.",
+  "notes": [],
+  "text": "Flávio Bolsonaro recebeu R$ 24 milhões de Daniel Vorcaro, valor que ele disse não ter pegado."
+ },
+ {
+  "id": "d49a23a665",
+  "start": 9220,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "Há uma cobrança para que Lula explique o que ele fez com 136 milhões de reais."
+ },
+ {
+  "id": "47f9cc98c1",
+  "start": 9224,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "O Banco Central não tem dinheiro, não tem contabilidade de dinheiro.",
+  "notes": [],
+  "text": "O Banco Central não possui dinheiro nem contabilidade de dinheiro."
+ },
+ {
+  "id": "7dae1353b0",
+  "start": 9284,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "Daniel Vorcaro está preso."
+ },
+ {
+  "id": "c44c189372",
+  "start": 9284,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "Daniel Vorcaro foi nomeado banqueiro durante o governo Bolsonaro."
+ },
+ {
+  "id": "cf6d8c1fb9",
+  "start": 9297,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Quando que ele tinha quebrado, dado um golpe de 60 bilhões de reais.",
+  "notes": [],
+  "text": "Daniel Vorcaro deu um golpe de 60 bilhões de reais."
+ },
+ {
+  "id": "0b4bb6a0ea",
+  "start": 9339,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [
+   "editada por revisor: só o falante (veredito e texto ficam)"
+  ],
+  "text": "O ministro André Mendonça prendeu Daniel Vorcaro."
+ },
+ {
+  "id": "780e21397a",
+  "start": 9367,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Lula com Vorcaro da Bahia, é seu Jaques Wagner",
+  "notes": [],
+  "text": "Jacques Wagner is associated with Daniel Vorcaro from Bahia."
+ },
+ {
+  "id": "5f95560696",
+  "start": 9380,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Usa o próprio um pedacinho da Polícia Federal para poder procurar bens são usados predeterminados e ajudar os seus amigos.",
+  "notes": [],
+  "text": "A Polícia Federal é usada para procurar bens predeterminados e ajudar os amigos de Lula."
+ },
+ {
+  "id": "e412b24924",
+  "start": 9388,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Usa o próprio um pedacinho da Polícia Federal para poder procurar bens são usados predeterminados e ajudar os seus amigos.",
+  "notes": [],
+  "text": "O governo Lula usou um pedacinho da Polícia Federal para procurar bens predeterminados e ajudar seus amigos."
+ },
+ {
+  "id": "61de4f77ee",
+  "start": 9404,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [
+   "editada por revisor: só o falante (veredito e texto ficam)"
+  ],
+  "text": "Flávio Bolsonaro recebeu R$ 134 milhões de Daniel Vorcaro."
+ },
+ {
+  "id": "dad2ad7f91",
+  "start": 9448,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "A diretora do filme disse que não recebeu nada.",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "A diretora do filme sobre Bolsonaro afirmou que não recebeu nenhum pagamento pelo filme."
+ },
+ {
+  "id": "7c6c9fd6a5",
+  "start": 9487,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "E pagou à vista uma parte dela com dinheiro do BRB, que está metido no caso do banco do Vorcaro.",
+  "notes": [],
+  "text": "Uma parte da casa de 10 milhões foi paga à vista com dinheiro do BRB."
+ },
+ {
+  "id": "beb526ee85",
+  "start": 9490,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "E pagou à vista uma parte dela com dinheiro do BRB, que está metido no caso do banco do Vorcaro.",
+  "notes": [],
+  "text": "O BRB está envolvido no caso do banco do Vorcaro."
+ },
+ {
+  "id": "b7226463fd",
+  "start": 9508,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Seu filho cresceu o patrimônio dele, sabe-se lá como.",
+  "notes": [],
+  "text": "O filho de Lula cresceu o patrimônio dele, mas não se sabe como isso ocorreu."
+ },
+ {
+  "id": "40b386471a",
+  "start": 9516,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "O presidente Lula está associado a uma política de juros altos que afeta o pagamento de dívidas dos cidadãos."
+ },
+ {
+  "id": "de11b47e9c",
+  "start": 9524,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "É porque o juro do governo foi lá para a lua",
+  "notes": [],
+  "text": "A taxa de juros do governo subiu significativamente, sendo descrita como \"foi lá para a lua\"."
+ },
+ {
+  "id": "82aad17f63",
+  "start": 9548,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [],
+  "text": "O governo Lula reajustou o valor do Bolsa Família em 3 reais por dia após quatro anos sem aumento."
+ },
+ {
+  "id": "4f64489b10",
+  "start": 9553,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [],
+  "text": "O governo Lula concedeu um reajuste de 3 reais por dia para os beneficiários do Bolsa Família."
+ },
+ {
+  "id": "e41eebedcb",
+  "start": 9572,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [],
+  "text": "Flávio Bolsonaro foi solicitado a explicar a origem ou destino de 128 milhões de reais."
+ },
+ {
+  "id": "73df0f4d48",
+  "start": 9577,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "34 milhões de votos veio falar de Bolsa Família, porra!",
+  "notes": [],
+  "text": "Flávio Bolsonaro recebeu 34 milhões de votos no primeiro turno."
+ },
+ {
+  "id": "6d69cd7c95",
+  "start": 9593,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Pagar a hipótese inflacionária é obrigação, é lei, é obrigação.",
+  "notes": [],
+  "text": "Pagar a hipótese inflacionária é uma obrigação legal no Brasil."
+ },
+ {
+  "id": "f898aa38b2",
+  "start": 9600,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Cometeram um equívoco na fazenda. Quando eu descobri, eu mandei pagar.",
+  "notes": [],
+  "text": "O governo Lula cometeu um equívoco na fazenda e, ao descobrir, mandou pagar o valor devido."
+ },
+ {
+  "id": "e71d524797",
+  "start": 9608,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Anistiei 12 bilhões e 700 de dívida dos MEI.",
+  "notes": [],
+  "text": "O governo Lula anistiou 12,7 bilhões de reais de dívida dos MEI (Microempreendedores Individuais)."
+ },
+ {
+  "id": "8556d5b023",
+  "start": 9628,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [
+   "revisão: falante corrigido pelo contexto"
+  ],
+  "text": "O presidente Jair Bolsonaro foi retratado em um filme que destaca sua honestidade, correção e patriotismo."
+ },
+ {
+  "id": "bce5d425a0",
+  "start": 9628,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [
+   "editada por revisor: só o falante (veredito e texto ficam)"
+  ],
+  "text": "O governo Jair Bolsonaro elevou o Bolsa Família (então Auxílio Brasil) para no mínimo R$ 600."
+ },
+ {
+  "id": "b13fc1114d",
+  "start": 9641,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "O foi o presidente Bolsonaro que passou para no mínimo 600 reais o Bolsa Família.",
+  "notes": [],
+  "text": "O presidente Jair Bolsonaro aumentou o valor do Bolsa Família para no mínimo 600 reais durante seu governo."
+ },
+ {
+  "id": "0f64bfa1eb",
+  "start": 9652,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Era em média 190, o presidente Bolsonaro triplicou esse valor.",
+  "notes": [],
+  "text": "O valor médio do Bolsa Família era de 190 reais antes do presidente Bolsonaro triplicar esse valor."
+ },
+ {
+  "id": "10086a3635",
+  "start": 9708,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "O filme do Lula teve 30 milhões de reais por fora no Instituto Lula.",
+  "notes": [],
+  "text": "O Instituto Lula recebeu 30 milhões de reais por fora relacionados ao Lula."
+ },
+ {
+  "id": "60168477d8",
+  "start": 9748,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "73% dos presidiários votaram em Lula."
+ },
+ {
+  "id": "f2ae78427c",
+  "start": 9779,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "Lula foi eleito com votos de pessoas presas em presídios."
+ },
+ {
+  "id": "54f53240f4",
+  "start": 9809,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [],
+  "text": "Lula foi condenado em todas as instâncias judiciais."
+ },
+ {
+  "id": "0ebd9543fb",
+  "start": 9887,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "Flávio Bolsonaro afirmou que o problema do Brasil é a falta de fiscalização nas fronteiras."
+ },
+ {
+  "id": "296b10271f",
+  "start": 9916,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [
+   "editada por revisor: só o falante (veredito e texto ficam)"
+  ],
+  "text": "O governo Lula empregou várias pessoas que foram condenadas nos escândalos do mensalão e do petrolão."
+ },
+ {
+  "id": "4fb4666a77",
+  "start": 9962,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Mais de um milhão de armas, mais de um milhão de armas que uma parte delas foi para o crime organizado",
+  "notes": [
+   "revisão: falante corrigido pelo contexto"
+  ],
+  "text": "Mais de um milhão de armas foram distribuídas, sendo que uma parte delas foi para o crime organizado."
+ },
+ {
+  "id": "7cdec78d71",
+  "start": 9964,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [
+   "editada por revisor: só o falante (veredito e texto ficam)"
+  ],
+  "text": "O governo Bolsonaro comprou um bilhão e cem milhões de balas."
+ },
+ {
+  "id": "632e26caa8",
+  "start": 9979,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [
+   "revisão: falante corrigido pelo contexto"
+  ],
+  "text": "Flávio Bolsonaro liberou armas que entraram ilegalmente no país e foram usadas por traficantes nas comunidades."
+ },
+ {
+  "id": "e43ea106cb",
+  "start": 10004,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [],
+  "text": "O pai de Lula anunciou a compra de um bilhão e cem milhões de dólares."
+ },
+ {
+  "id": "641b9f5992",
+  "start": 10075,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "O presidente Lula não explicou a destinação dos 134 milhões de reais mencionados."
+ },
+ {
+  "id": "deb7b43af4",
+  "start": 10080,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "Lula absolveu um policial acusado de matar uma criança."
+ },
+ {
+  "id": "d1f8f190a8",
+  "start": 10083,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "Lula não quis a marca da bala no caso do policial acusado de matar uma criança."
+ },
+ {
+  "id": "ce3508b06a",
+  "start": 10212,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [
+   "editada por revisor: só o falante (veredito e texto ficam)"
+  ],
+  "text": "O governo Lula registrou recordes negativos em índices de miséria, endividamento, assassinatos de mulheres, violência contra mulheres e falência de empresas."
+ },
+ {
+  "id": "3a5560095a",
+  "start": 10216,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Fechada, recorde de indústrias deixando o Brasil",
+  "notes": [],
+  "text": "O Brasil está enfrentando um recorde de indústrias deixando o país."
+ },
+ {
+  "id": "4dc0efa4e9",
+  "start": 10217,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Fechada, recorde de indústrias deixando o Brasil, é recorde de criminalidade, é só recorde ruim.",
+  "notes": [],
+  "text": "O Brasil está enfrentando um recorde de criminalidade."
+ },
+ {
+  "id": "6d72c6cfbb",
+  "start": 10228,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Já foi obrigado a tirar um monte de propaganda do ar que estava mentindo contra mim.",
+  "notes": [],
+  "text": "Flávio Bolsonaro foi obrigado a retirar do ar várias propagandas com mentiras contra Lula."
+ },
+ {
+  "id": "f4432e76d3",
+  "start": 10244,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "E o seu amigo que é o Maduro, que está preso?",
+  "notes": [],
+  "text": "Nicolás Maduro, presidente da Venezuela, está preso."
+ },
+ {
+  "id": "f78694ed15",
+  "start": 10250,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "O vice-presidente de Lula visitou a posse do líder do Irã, que foi referido como ditador."
+ },
+ {
+  "id": "463c577239",
+  "start": 10299,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Ele está deixando o Brasil muito endividado.",
+  "notes": [],
+  "text": "O governo Lula está deixando o Brasil muito endividado."
+ },
+ {
+  "id": "05b50a815b",
+  "start": 10483,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Um modelo que fez com que, sabe, a gente fez essa maior demarcação de terras indígenas desse país.",
+  "notes": [],
+  "text": "O governo Lula realizou a maior demarcação de terras indígenas na história do Brasil."
+ },
+ {
+  "id": "590629a3fb",
+  "start": 10484,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "O direito que colocou pobre pra fazer universidade, o direito que colocou negro...",
+  "notes": [],
+  "text": "O governo Lula ampliou o acesso de pessoas pobres e negras à universidade."
+ },
+ {
+  "id": "39dcb6c3d3",
+  "start": 10489,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "O poder que devolveu aos quilombos o direito de cidadania e respeito.",
+  "notes": [],
+  "text": "O governo Lula devolveu aos quilombos o direito de cidadania e respeito."
+ },
+ {
+  "id": "6ec56139e1",
+  "start": 10547,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Mais de 40 milhões no Brasil moram em áreas que são deflagradas, áreas que são dominadas por esses...",
+  "notes": [],
+  "text": "Mais de 40 milhões de pessoas no Brasil moram em áreas dominadas por violência ou controle de grupos criminosos."
+ },
+ {
+  "id": "2a4b886fd4",
+  "start": 10644,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Flávio Bolsonaro é candidato à presidência da república pelo Partido Liberal (PL) no segundo turno das eleições de 2026."
+ },
+ {
+  "id": "fd169a19ec",
+  "start": 10644,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "O segundo turno das eleições presidenciais de 2026 está sendo transmitido pela Band News FM em rede com a TV Bandeirantes."
+ },
+ {
+  "id": "7c78cc8849",
+  "start": 10654,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Luiza Nascimento Lula da Silva, do PT.",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Luiza Nascimento Lula da Silva é candidata à Presidência da República pelo PT no segundo turno das eleições de 2026."
+ },
+ {
+  "id": "69d839b277",
+  "start": 10689,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Ele cumprimentou Lula, deu boa noite a todos",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Flávio Bolsonaro cumprimentou Lula e deu boa noite a todos durante o evento."
+ },
+ {
+  "id": "fc82ee7acc",
+  "start": 10697,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Declarar que as organizações criminosas brasileiras são organizações narcoterroristas",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Flávio Bolsonaro declarou que as organizações criminosas brasileiras são organizações narcoterroristas."
+ },
+ {
+  "id": "1d0f78c5a9",
+  "start": 10746,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Se o Senado aprovar a PEC da segurança pública",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "A PEC da segurança pública está sendo proposta para aprovação no Senado."
+ },
+ {
+  "id": "1ce1a6871e",
+  "start": 10843,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "É um confronto mais como um embate, um pouco mais tenso, inclusive com Flávio Bolsonaro utilizando um tom mais sarcástico.",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Flávio Bolsonaro utilizou um tom mais sarcástico durante o confronto no debate."
+ },
+ {
+  "id": "6903f0cdce",
+  "start": 10852,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Com o presidente Lula, fazendo perguntas envolvendo Roberta Luxinger, que é uma lobista investigada no caso...",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Roberta Luxinger é uma lobista investigada em um caso mencionado durante o debate com o presidente Lula."
+ },
+ {
+  "id": "8c8b0f821c",
+  "start": 10868,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Do INSS, que era uma das cabeças por trás deste escândalo de desvio de verbas do INSS e também de descontos ilegais na aposentadoria.",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "O escândalo de desvio de verbas do INSS envolveu uma das cabeças por trás do esquema, que também praticava descontos ilegais na aposentadoria."
+ },
+ {
+  "id": "60e0ca1df0",
+  "start": 10880,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Ele citou que a economia cresceu abaixo da média mundial",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo",
+   "duplicada"
+  ],
+  "text": "A economia brasileira cresceu abaixo da média mundial."
+ },
+ {
+  "id": "0d03dafe7e",
+  "start": 10884,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Ele citou que a economia cresceu abaixo da média mundial, com carga tributária subindo, o Brasil tendo a maior taxa real de juros.",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "O Brasil tem a maior taxa real de juros e a carga tributária está subindo."
+ },
+ {
+  "id": "f8da28f5e1",
+  "start": 10898,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Foi o primeiro a conseguir dois graus de investimentos no Brasil",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "O governo Lula foi o primeiro a conseguir dois graus de investimentos no Brasil."
+ },
+ {
+  "id": "cf0f98dbc5",
+  "start": 10908,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Postas sobre economia para falar sobre alguns feitos do governo e relembrou, inclusive, as ações recentes com microempreendedores individuais.",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "O governo Lula realizou ações recentes com microempreendedores individuais."
+ },
+ {
+  "id": "c7d2978604",
+  "start": 10916,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Disse que o PT já governa o país há 20 dos 24",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "O Partido dos Trabalhadores (PT) governa o Brasil há 20 dos últimos 24 anos."
+ },
+ {
+  "id": "01d0fd6dd0",
+  "start": 10952,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Flávio Bolsonaro era deputado pelo Rio de Janeiro em 2009",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Flávio Bolsonaro era deputado pelo Rio de Janeiro em 2009."
+ },
+ {
+  "id": "71e11f7dc8",
+  "start": 10956,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Flávio Bolsonaro participou de uma ação sobre o aumento da licença-maternidade das mulheres em 2009."
+ },
+ {
+  "id": "cd5538aff6",
+  "start": 10966,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Das duas filhas que tem",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Flávio Bolsonaro tem duas filhas."
+ },
+ {
+  "id": "f71f7a3e3b",
+  "start": 10970,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Perguntou para Lula se ele conhecia a lobista Roberta Lucchinger.",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Lula foi questionado durante o debate sobre seu conhecimento da lobista Roberta Lucchinger."
+ },
+ {
+  "id": "cae68edeb0",
+  "start": 10979,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Em vários momentos do debate, a relação dos dois candidatos com o escândalo do INSS, com troca de acusações.",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Os dois candidatos à presidência da república em 2026 trocaram acusações relacionadas ao escândalo do INSS durante o debate."
+ },
+ {
+  "id": "025ae8efe8",
+  "start": 10988,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Flávio Bolsonaro teve o gerenciamento de tempo um pouco mais curto.",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Flávio Bolsonaro teve um gerenciamento de tempo um pouco mais curto durante o bloco final do debate."
+ },
+ {
+  "id": "0cb1f166eb",
+  "start": 10995,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "O presidente Lula, então, ele encerrou o tempo que ele tinha e Lula ainda teve mais um minuto para falar",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "O presidente Luiz Inácio Lula da Silva encerrou seu tempo de fala e ainda teve mais um minuto para falar durante o debate."
+ },
+ {
+  "id": "2b638839ec",
+  "start": 10996,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Depois, Flávio Bolsonaro teve direito.",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Flávio Bolsonaro teve direito a tempo de fala após o presidente Lula no debate."
+ },
+ {
+  "id": "0357bfe632",
+  "start": 11044,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Primeiro debate do segundo turno entre os candidatos à presidência da República, na Band News FM. Rede com a TV Band.",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "O primeiro debate das eleições de 2026 entre os candidatos à presidência está sendo transmitido ao vivo pela Band, Band News FM, Band News TV, Agro Mais e Terra Viva."
+ },
+ {
+  "id": "a59f1180c5",
+  "start": 11052,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Presidência da República do segundo turno, realizado pela Band em parceria com as TVs Cultura e Gazeta, o jornal",
+  "notes": [],
+  "text": "O segundo turno da eleição para a Presidência da República está sendo realizado pela Band em parceria com as TVs Cultura e Gazeta."
+ },
+ {
+  "id": "7f35e47e70",
+  "start": 11060,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "O programa está sendo exibido também pela Band News TV, nos canais Agro Mais e Terra Viva.",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "O programa do debate presidencial está sendo exibido pela Band News TV, nos canais Agro Mais e Terra Viva."
+ },
+ {
+  "id": "281a7237d1",
+  "start": 11083,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "O SUS é reconhecido como um patrimônio nacional.",
+  "notes": [],
+  "text": "O Sistema Único de Saúde (SUS) é reconhecido como um patrimônio nacional do Brasil."
+ },
+ {
+  "id": "edb73e5783",
+  "start": 11092,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Durante a pandemia da Covid, mas há vários anos, os pacientes enfrentam problemas para marcar uma consulta com um especialista, exames e cirurg",
+  "notes": [],
+  "text": "Durante a pandemia da Covid-19, os pacientes enfrentaram problemas para marcar consultas com especialistas, exames e cirurgias no Brasil."
+ },
+ {
+  "id": "54dd56de6b",
+  "start": 11100,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Hoje o Brasil gasta o equivalente a 4.",
+  "notes": [],
+  "text": "O Brasil gasta atualmente o equivalente a 4% do PIB para financiar o SUS."
+ },
+ {
+  "id": "043a4dbd69",
+  "start": 11108,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "O SUS é reconhecido como um patrimônio nacional.",
+  "notes": [],
+  "text": "O SUS é reconhecido como um patrimônio nacional no Brasil."
+ },
+ {
+  "id": "d2f7690539",
+  "start": 11108,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "A Organização Pan-Americana de Saúde e vários estudiosos do tema consideram que o mínimo necessário",
+  "notes": [],
+  "text": "A Organização Pan-Americana de Saúde e vários estudiosos consideram que o mínimo necessário para financiar o SUS é um percentual específico do PIB."
+ },
+ {
+  "id": "b9ee89032a",
+  "start": 11155,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Cláudio Lottenberg, que simplesmente foi o presidente do melhor hospital da América Latina, que é o Albert Einstein.",
+  "notes": [],
+  "text": "Cláudio Lottenberg foi presidente do hospital Albert Einstein, considerado o melhor hospital da América Latina."
+ },
+ {
+  "id": "114e110832",
+  "start": 11228,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [],
+  "text": "Muitas unidades básicas de saúde no Brasil frequentemente não dispõem de dipirona para atendimento aos pacientes."
+ },
+ {
+  "id": "26aa75125e",
+  "start": 11267,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "E foi o maior desastre da história desse país. 726 mil pessoas morreram por irresponsabilidade.",
+  "notes": [],
+  "text": "726 mil pessoas morreram no Brasil por irresponsabilidade, o que foi descrito como o maior desastre da história do país."
+ },
+ {
+  "id": "bf8021f6cb",
+  "start": 11308,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Eu vi que ele quer dizer que quer privatizar o SUS.",
+  "notes": [
+   "revisão: Ciro não existe; fala do Lula"
+  ],
+  "text": "O Sistema Único de Saúde (SUS) está sendo mencionado no debate presidencial de 19 de outubro de 2026 em relação à possibilidade de privatização."
+ },
+ {
+  "id": "894f4c2907",
+  "start": 11361,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "O candidato Flávio afirmou que Lula nunca foi ao Sistema Único de Saúde (SUS) nem ao AUPA, e que Lula utiliza exclusivamente médicos particular",
+  "notes": [
+   "revisão: afirmação do Lula sobre o Flávio"
+  ],
+  "text": "O candidato Flávio afirmou que Lula nunca foi ao Sistema Único de Saúde (SUS) nem ao AUPA, e que Lula utiliza exclusivamente médicos particulares."
+ },
+ {
+  "id": "c80bfa8940",
+  "start": 11375,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Ele já foi presidente de uma empresa da Saudi e não deu certo.",
+  "notes": [],
+  "text": "Ele foi presidente de uma empresa da Arábia Saudita, mas essa gestão não teve sucesso."
+ },
+ {
+  "id": "666ceb1fc4",
+  "start": 11404,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [
+   "editada por revisor: só o falante (veredito e texto ficam)"
+  ],
+  "text": "18 de outubro é o Dia do Médico no Brasil."
+ },
+ {
+  "id": "cd353b7c43",
+  "start": 11475,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Um marginal que já estava preso por ter assassinado uma mulher e ele recebeu o direito à saidinha",
+  "notes": [],
+  "text": "Um marginal que já estava preso por ter assassinado uma mulher recebeu o direito à saidinha no Brasil."
+ },
+ {
+  "id": "7473ce2273",
+  "start": 11484,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "Renata Teles foi brutalmente assassinada por um marginal quando ele deixou o presídio."
+ },
+ {
+  "id": "f270afd9db",
+  "start": 11484,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "Um homem que assassinou uma mulher recebeu o direito à saidinha do presídio na véspera de Natal de 2023 e, após sair, violentou e assassinou brutalmente outra mulher."
+ },
+ {
+  "id": "f38ffecdd9",
+  "start": 11486,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "A saidinha, tão defendida pelo meu concorrente.",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "A saidinha de Natal é uma medida que foi defendida pelo concorrente do orador no debate."
+ },
+ {
+  "id": "aa828faa4e",
+  "start": 11499,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "A família do Sérgio Sargento PM Dias, lá de Minas Gerais, um policial militar que estava em serviço, que também foi assassinado.",
+  "notes": [],
+  "text": "Sérgio Sargento PM Dias, um policial militar de Minas Gerais, foi assassinado enquanto estava em serviço."
+ },
+ {
+  "id": "7c1b60a3e9",
+  "start": 11523,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "O meu concorrente é um uma pessoa que defende abertamente, por questões pessoais dele, que a saidinha permaneça, que ela continue a",
+  "notes": [],
+  "text": "Lula defende a manutenção da 'saidinha' e tentou, inclusive na Justiça, que ela voltasse depois de derrubada pelo Congresso."
+ },
+ {
+  "id": "43cb9a7bfa",
+  "start": 11531,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "A gente teve que derrubar a saidinha no Congresso Nacional e ele fez de tudo lá, até acionou a Justiça para tentar voltar com o que",
+  "notes": [],
+  "text": "O Congresso Nacional derrubou a chamada 'saidinha' e Lula acionou a Justiça para tentar restabelecer essa medida."
+ },
+ {
+  "id": "32ab8a97a0",
+  "start": 11596,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Aquele que praticou estupro não sai.",
+  "notes": [],
+  "text": "Pessoas que praticaram estupro não recebem direito à saidinha no sistema prisional brasileiro."
+ },
+ {
+  "id": "2f39842f59",
+  "start": 11601,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Aquele que praticou estupro não sai. Aquele que praticou violência contra a mulher não sai.",
+  "notes": [],
+  "text": "Pessoas que praticaram violência contra a mulher não recebem direito à saidinha no sistema prisional brasileiro."
+ },
+ {
+  "id": "19da3c9b00",
+  "start": 11620,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Agora, se o cara for bandido, não sai. Se o cara tiver culpado, não sai. O cara tiver crime muito violento, não sai.",
+  "notes": [],
+  "text": "Pessoas que cometeram crimes muito violentos não têm direito à saidinha no sistema prisional brasileiro."
+ },
+ {
+  "id": "41ec07e170",
+  "start": 11628,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "E quem sabe disso é o pessoal que cuida da cadeia no Supremo Tribunal da República.",
+  "notes": [],
+  "text": "O Supremo Tribunal da República é responsável pela administração das cadeias no Brasil."
+ },
+ {
+  "id": "37e8f9460d",
+  "start": 11648,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [],
+  "text": "Flávio Bolsonaro votou a favor do fim da escala 6x1."
+ },
+ {
+  "id": "6308e6839c",
+  "start": 11715,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Nem os seus 600 reais do Bolsa Família, que na época do presidente...",
+  "notes": [],
+  "text": "O Bolsa Família pagava 600 reais durante o governo do presidente anterior."
+ },
+ {
+  "id": "5b86c1f696",
+  "start": 11772,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Nunca trabalhou, nunca trabalhou. Sabe quem é a pessoa que nunca trabalhou? É o Flávio.",
+  "notes": [],
+  "text": "Flávio Bolsonaro nunca trabalhou."
+ },
+ {
+  "id": "affabb4756",
+  "start": 11788,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [],
+  "text": "O custo de vida estava mais caro no governo do pai do concorrente do orador."
+ },
+ {
+  "id": "d1be94dfef",
+  "start": 11796,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [
+   "editada por revisor: só o falante (veredito e texto ficam)"
+  ],
+  "text": "Nos quatro anos do governo Bolsonaro, a inflação de alimentos foi de 56%."
+ },
+ {
+  "id": "e2853c7586",
+  "start": 11801,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Nos quatro anos do governo deles, a inflação de alimentos estava 56 pontos.",
+  "notes": [],
+  "text": "A inflação de alimentos durante os quatro anos do governo anterior foi de 56%."
+ },
+ {
+  "id": "522a9850a1",
+  "start": 11803,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [
+   "editada por revisor: só o falante (veredito e texto ficam)"
+  ],
+  "text": "A inflação de alimentos durante os quatro anos do governo atual foi de 13%, quatro vezes menor que no governo anterior."
+ },
+ {
+  "id": "eebcc4c9f2",
+  "start": 11812,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "No governo deles, a cesta básica, o salário mínimo comprava 1.8 cesta básica.",
+  "notes": [],
+  "text": "No governo deles, o salário mínimo comprava 1.8 cesta básica."
+ },
+ {
+  "id": "f5cd873b51",
+  "start": 11826,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Que tivemos a decência de aumentar o salário mínimo acima da inflação, coisa que eles não fizeram nenhum ano. Fomos nós.",
+  "notes": [],
+  "text": "O governo Lula aumentou o salário mínimo acima da inflação, o que não foi feito por nenhum governo anterior durante seus mandatos."
+ },
+ {
+  "id": "209ff963a9",
+  "start": 11836,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Que tivemos a decência de dizer que os aposentados que estão aposentados, que as pensionistas têm direito ao salário mínimo, não é luxo.",
+  "notes": [],
+  "text": "Os aposentados e pensionistas têm direito ao salário mínimo no Brasil."
+ },
+ {
+  "id": "d232ef1145",
+  "start": 11847,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "São de 210 milhões de habitantes.",
+  "notes": [],
+  "text": "O Brasil tem uma população de 210 milhões de habitantes."
+ },
+ {
+  "id": "b1387ab1bf",
+  "start": 11891,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "E a inflação, que aumentou muito por conta da guerra do amigo dele, chamado Trump, com a guerra, sabe, do Irã.",
+  "notes": [],
+  "text": "A inflação aumentou muito por conta da guerra entre os Estados Unidos, liderados por Donald Trump, e o Irã."
+ },
+ {
+  "id": "b5b2faaf6c",
+  "start": 11896,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Aumentou muito pela guerra do Putin com a Ucrânia",
+  "notes": [],
+  "text": "A inflação aumentou muito devido à guerra entre Putin e a Ucrânia."
+ },
+ {
+  "id": "3d9c096faa",
+  "start": 11905,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Que o diesel subisse a gasolina, porque estamos subsidiando pra acabar com o efeito da guerra.",
+  "notes": [],
+  "text": "O governo Lula está subsidiando o diesel e a gasolina para reduzir o impacto da guerra entre Putin e a Ucrânia nos preços dos combustíveis."
+ },
+ {
+  "id": "3d62cea24a",
+  "start": 11916,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "O candidato Flávio Bolsonaro fez um pedido de direito de resposta que foi negado."
+ },
+ {
+  "id": "d1e57cd287",
+  "start": 11972,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Não podia tomar cloroquina, gente! Não era remédio para isso!",
+  "notes": [],
+  "text": "A cloroquina não era um medicamento indicado para o tratamento da Covid-19."
+ },
+ {
+  "id": "67705a03b3",
+  "start": 12003,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Nós temos 726 mil pessoas que morreram nesse país, da qual metade poderia ter sido salva.",
+  "notes": [],
+  "text": "726 mil pessoas morreram no Brasil devido à Covid-19, das quais metade poderia ter sido salva."
+ },
+ {
+  "id": "288eb0c45e",
+  "start": 12015,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Um país com mais de 100 milhões de habitantes, que tem um sistema único de saúde do tamanho do SUS, da qualidade do SUS.",
+  "notes": [],
+  "text": "O Brasil tem mais de 100 milhões de habitantes."
+ },
+ {
+  "id": "d815d3c225",
+  "start": 12017,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Um país com mais de 100 milhões de habitantes, que tem um sistema único de saúde do tamanho do SUS, da qualidade do SUS.",
+  "notes": [],
+  "text": "O Sistema Único de Saúde (SUS) é um sistema único de saúde no Brasil."
+ },
+ {
+  "id": "d2ef791fb2",
+  "start": 12039,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Tivemos uma pandemia, dois anos de pandemia, uma coisa nova, que ninguém sabia direito como enfrentar",
+  "notes": [],
+  "text": "A pandemia durou dois anos."
+ },
+ {
+  "id": "deae3a62fd",
+  "start": 12050,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "E ele tomou vacina quem comprou vacina? O presidente Bolsonaro.",
+  "notes": [],
+  "text": "O presidente Jair Bolsonaro comprou vacinas durante seu governo."
+ },
+ {
+  "id": "6c6a11f3c7",
+  "start": 12060,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Durante os 20 anos do governo do PT, mais de 770 mil pessoas morreram assassinadas.",
+  "notes": [],
+  "text": "Durante os 20 anos do governo do PT, mais de 770 mil pessoas morreram assassinadas no Brasil."
+ },
+ {
+  "id": "4d45c21e60",
+  "start": 12099,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "8 mil médicos do Mais Médicos estava só com 12 mil médicos.",
+  "notes": [],
+  "text": "O programa Mais Médicos tinha 12 mil médicos quando foi iniciado."
+ },
+ {
+  "id": "979fb53468",
+  "start": 12100,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Hoje nós estamos com 27 mil médicos, quase 28 mil médicos.",
+  "notes": [],
+  "text": "Atualmente, o Brasil conta com quase 28 mil médicos, segundo dados recentes."
+ },
+ {
+  "id": "4af3bf9bd5",
+  "start": 12140,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Da destruição que ele fez nos seis hospitais federais do Rio de Janeiro, que nós agora estamos recuperando.",
+  "notes": [],
+  "text": "O atual governo está recuperando seis hospitais federais do Rio de Janeiro que foram destruídos durante a administração anterior."
+ },
+ {
+  "id": "9b302e12cb",
+  "start": 12145,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Ele cobrava até pedágio dos funcionários, os caras pagavam estacionamento.",
+  "notes": [],
+  "text": "Funcionários dos hospitais federais do Rio de Janeiro pagavam estacionamento e pedágio enquanto esses hospitais estavam sob a administração anterior."
+ },
+ {
+  "id": "1e9326f49d",
+  "start": 12148,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Tinha hospital lá do Rio de Janeiro, federal, que ele tomava conta.",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "Jair Bolsonaro era responsável pela administração de hospitais federais no Rio de Janeiro."
+ },
+ {
+  "id": "e829d09cb5",
+  "start": 12514,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Um prontuário único eletrônico de uma forma a unificar o SUS.",
+  "notes": [],
+  "text": "Flávio Bolsonaro propôs a criação de um prontuário único eletrônico para unificar o Sistema Único de Saúde (SUS)."
+ },
+ {
+  "id": "71860b097f",
+  "start": 12522,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Ministério da Saúde, caso seja eleito, o nome apresentado por ele foi o de Cláudio Lottenberg",
+  "notes": [],
+  "text": "Flávio Bolsonaro apresentou o nome de Cláudio Lottenberg para o Ministério da Saúde caso seja eleito."
+ },
+ {
+  "id": "801c3c5a4a",
+  "start": 12578,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Lula levantou a questão sobre os mortos durante a pandemia, quando na época o presidente era...",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "Lula levantou a questão sobre os mortos durante a pandemia no debate contra Flávio Bolsonaro."
+ },
+ {
+  "id": "4414c35775",
+  "start": 12579,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Na época o presidente era...",
+  "notes": [],
+  "text": "Durante a pandemia, o presidente do Brasil era Jair Bolsonaro."
+ },
+ {
+  "id": "82a6d309c7",
+  "start": 12582,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Quando na época o presidente era Jair Bolsonaro.",
+  "notes": [],
+  "text": "Jair Bolsonaro foi presidente do Brasil durante a pandemia."
+ },
+ {
+  "id": "866585f187",
+  "start": 12586,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "E na sequência, questionou se Flávio gostaria de privatizar o SUS.",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "Flávio Bolsonaro foi questionado sobre a privatização do Sistema Único de Saúde (SUS) durante o debate com Lula."
+ },
+ {
+  "id": "cdd1f436fd",
+  "start": 12596,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "O Flávio voltou a falar sobre a saidinha, aquele direito...",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "Flávio Bolsonaro falou sobre o direito de saidinha, que permite que pessoas presas saiam durante datas especiais se tiverem bom comportamento."
+ },
+ {
+  "id": "6e6e5a59f1",
+  "start": 12609,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Que as pessoas presas têm de sair durante datas especiais se tiverem bom comportamento.",
+  "notes": [],
+  "text": "Pessoas presas no Brasil podem sair durante datas especiais se tiverem bom comportamento."
+ },
+ {
+  "id": "79d4e54d91",
+  "start": 12619,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Contra, presidente Lula respondeu citando o ex-presidente Jair Bolsonaro, pai de Flávio Bolsonaro, que está condenado.",
+  "notes": [],
+  "text": "O ex-presidente Jair Bolsonaro, pai de Flávio Bolsonaro, está condenado."
+ },
+ {
+  "id": "c4b2c8ca7f",
+  "start": 12634,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Falando sobre questões de segurança pública, Flávio Bolsonaro aproveitou para falar sobre a escala 6x1. A gente lembra aqui que ao ",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "Flávio Bolsonaro falou sobre a escala 6x1 em questões de segurança pública durante a campanha eleitoral de 2026."
+ },
+ {
+  "id": "aac63ae01f",
+  "start": 12642,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Se colocou contra a PEC que acabava com a escala 6x1, mas nesta semana acabou votando a favor.",
+  "notes": [],
+  "text": "Flávio Bolsonaro se colocou contra a PEC que acabava com a escala 6x1, mas nesta semana acabou votando a favor dessa PEC."
+ },
+ {
+  "id": "914a95f84a",
+  "start": 12667,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Questionou os preços de cesta básica e também dos alimentos de maneira geral durante o governo Bolsonaro",
+  "notes": [],
+  "text": "Durante o governo Jair Bolsonaro, os preços da cesta básica e dos alimentos em geral foram questionados."
+ },
+ {
+  "id": "ddba03aa06",
+  "start": 12684,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Essa alta do petróleo e da gasolina, consequentemente, foi puxada por conta da guerra no Oriente Médio.",
+  "notes": [],
+  "text": "A alta do preço do petróleo e da gasolina foi puxada por conta da guerra no Oriente Médio."
+ },
+ {
+  "id": "80b752b6a2",
+  "start": 12699,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Flávio chegou ali a fazer um mea culpa, falou...",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Flávio Bolsonaro fez um mea culpa sobre a postura de Jair Bolsonaro durante a crise sanitária da pandemia."
+ },
+ {
+  "id": "cd7682e4dc",
+  "start": 12707,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Disse que saúde não era o forte do pai dele, mas falou sobre a compra de vacina",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Flávio Bolsonaro afirmou que saúde não era o ponto forte do pai dele, Jair Bolsonaro, e falou sobre a compra de vacinas durante a pandemia."
+ },
+ {
+  "id": "13dad20d73",
+  "start": 12708,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Mas falou sobre a compra de vacina e ainda destacou Lula.",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Flávio Bolsonaro destacou o ex-presidente Lula ao falar sobre a questão das mortes na pandemia."
+ },
+ {
+  "id": "bf20324e31",
+  "start": 12713,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Vacina, quem comprou essa vacina foi o meu pai.",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Jair Bolsonaro comprou a vacina contra Covid-19."
+ },
+ {
+  "id": "ae4b5c8539",
+  "start": 12716,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "O Flávio Bolsonaro chegou a comparar as mortes por Covid com as mortes por criminalidade.",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Flávio Bolsonaro comparou as mortes por Covid-19 com as mortes por criminalidade."
+ },
+ {
+  "id": "36e0be010c",
+  "start": 12724,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Lula aproveitou esse bloco para relembrar a trajetória política dele, então destacou feitos dele em outras gestões, como presidente.",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Lula destacou feitos políticos dele em outras gestões como presidente do Brasil."
+ },
+ {
+  "id": "69323009d7",
+  "start": 12732,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Flávio fez mais um pedido aí de direito de resposta.",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Flávio Bolsonaro fez um pedido de direito de resposta durante o debate com Lula."
+ },
+ {
+  "id": "0ccefc7255",
+  "start": 12804,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "O debate entre Lula e Flávio Bolsonaro em 2026 é o único debate entre os dois nessa disputa presidencial."
+ },
+ {
+  "id": "327bdfe01f",
+  "start": 12804,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "O debate está dividido em três blocos, e o terceiro bloco será o último do debate entre Lula e Flávio Bolsonaro."
+ },
+ {
+  "id": "6cb8791de1",
+  "start": 12825,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Na primeira resposta, lá no primeiro bloco, Flávio chegou a cumprimentar Lula, que não respondeu o boa noite.",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Flávio Bolsonaro cumprimentou Lula na primeira resposta do primeiro bloco do debate de 2026, mas Lula não respondeu ao cumprimento."
+ },
+ {
+  "id": "4e38bf1760",
+  "start": 12849,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Cumprimentou o apoiador e também colega de partido. Os dois são do Partido Liberal.",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "Flávio Bolsonaro e um apoiador colega de partido são ambos do Partido Liberal."
+ },
+ {
+  "id": "c93524315c",
+  "start": 12873,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Segundo turno das eleições 2026 entre os candidatos à presidência da república",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "O segundo turno das eleições presidenciais de 2026 está ocorrendo entre os candidatos à presidência da república."
+ },
+ {
+  "id": "2154efba54",
+  "start": 12876,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Um encontro promovido pelo Grupo Bandeirantes.",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "O Grupo Bandeirantes promoveu um encontro entre os candidatos ao segundo turno das eleições presidenciais de 2026."
+ },
+ {
+  "id": "56874bd131",
+  "start": 12883,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Um encontro promovido pelo Grupo Bandeirantes e parceria com o jornal Estadão, as TVs Cultura e Gazeta e a Jovem Pan News.",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "O debate do segundo turno das eleições presidenciais de 2026 é promovido pelo Grupo Bandeirantes em parceria com o jornal Estadão, as TVs Cultura e Gazeta e a Jovem Pan News."
+ },
+ {
+  "id": "ddd41be111",
+  "start": 12884,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Voltamos ao vivo para todo o Brasil com este primeiro debate do Segundo turno das eleições 2026 entre os candidatos à presidência d",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "O debate está sendo exibido ao vivo para todo o Brasil."
+ },
+ {
+  "id": "5053db123a",
+  "start": 12892,
+  "action": "irrelevant",
+  "speaker": null,
+  "quote": "Transmitido pela Band News TV, pelas rádios Bandeirantes e Band News FM e pelos canais digitais da Band, além dos canais...",
+  "notes": [
+   "irrelevante: narração da rádio no intervalo"
+  ],
+  "text": "O debate presidencial de 2026 está sendo transmitido pela Band News TV, pelas rádios Bandeirantes e Band News FM, pelos canais digitais da Band e por outros canais."
+ },
+ {
+  "id": "ea7ee257a8",
+  "start": 12956,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "A economia cresce sem distorção, sem gerar inflação. De 1995 pra cá, vários governos, orientações diferentes...",
+  "notes": [
+   "parece pergunta do mediador"
+  ],
+  "text": "A economia brasileira cresceu sem distorção e sem gerar inflação desde 1995, apesar de vários governos com orientações diferentes."
+ },
+ {
+  "id": "61788e8704",
+  "start": 12963,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Na Alemanha, por exemplo, subiu 60%.",
+  "notes": [
+   "parece pergunta do mediador"
+  ],
+  "text": "A produtividade na Alemanha subiu 60%."
+ },
+ {
+  "id": "182dc4683e",
+  "start": 12964,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [
+   "parece pergunta do mediador"
+  ],
+  "text": "A produtividade na China aumentou 600% desde 1995."
+ },
+ {
+  "id": "d51a6643fa",
+  "start": 12964,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [
+   "parece pergunta do mediador"
+  ],
+  "text": "A produtividade na Coreia do Sul aumentou 150% desde 1995."
+ },
+ {
+  "id": "a461e3b37d",
+  "start": 12976,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Nossa, a produtividade brasileira cresceu 25%, isso graças ao agro, se a gente não tivesse tido o agro que cresceu em ritmo chinês.",
+  "notes": [
+   "parece pergunta do mediador"
+  ],
+  "text": "A produtividade brasileira cresceu 25% no período mencionado."
+ },
+ {
+  "id": "1000e2e85f",
+  "start": 12980,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Nossa, a produtividade brasileira cresceu 25%, isso graças ao agro, se a gente não tivesse tido o agro que cresceu em ritmo chinês.",
+  "notes": [
+   "parece pergunta do mediador"
+  ],
+  "text": "O crescimento da produtividade brasileira foi atribuído ao setor agropecuário, que cresceu em ritmo semelhante ao da China."
+ },
+ {
+  "id": "d43f87599f",
+  "start": 13012,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Nós criamos a nova Indústria Brasil.",
+  "notes": [],
+  "text": "O governo Lula criou a nova Indústria Brasil para fomentar a inovação nas indústrias brasileiras."
+ },
+ {
+  "id": "90cdaaca01",
+  "start": 13017,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Foi aplicado e investido 725 bilhões de reais e estamos fazendo com que a economia volte a crescer.",
+  "notes": [],
+  "text": "O governo Lula aplicou e investiu 725 bilhões de reais na economia brasileira."
+ },
+ {
+  "id": "dc252296b2",
+  "start": 13025,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Depois de muitos anos, a economia brasileira voltou a crescer o PIB industrial de 3,4%. É um começo extraordinário.",
+  "notes": [],
+  "text": "A economia brasileira voltou a crescer com um crescimento do PIB industrial de 3,4% após muitos anos."
+ },
+ {
+  "id": "f677f93e9f",
+  "start": 13124,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [
+   "revisão: falante corrigido pelo contexto",
+   "texto extraído errado: Flávio disse que o PT (“seu partido”) governou 20 dos últimos 24 anos; vale rechecar"
+  ],
+  "text": "O partido de Jair Bolsonaro governou o Brasil por 20 anos."
+ },
+ {
+  "id": "fb65c005dc",
+  "start": 13126,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [
+   "editada por revisor: só o falante (veredito e texto ficam)"
+  ],
+  "text": "O PT governou o Brasil por 20 dos últimos 24 anos."
+ },
+ {
+  "id": "1b1c6085cb",
+  "start": 13250,
+  "action": "speaker",
+  "speaker": null,
+  "quote": null,
+  "notes": [
+   "parece narração/3ª pessoa",
+   "revisão: mediador explicando as regras, sem falante"
+  ],
+  "text": "Cada candidato tem um tempo de um minuto e meio para fazer uma pergunta."
+ },
+ {
+  "id": "8e9d562a23",
+  "start": 13252,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Quem responde tem quatro minutos para a",
+  "notes": [],
+  "text": "Quem responde à pergunta tem quatro minutos para responder."
+ },
+ {
+  "id": "689f9a9e64",
+  "start": 13310,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Terra-raras, aquilo que faz bateria, que faz chip, que faz celular, que faz um monte de coisa.",
+  "notes": [],
+  "text": "Terra-raras são elementos usados na fabricação de baterias, chips e celulares."
+ },
+ {
+  "id": "ebe406c487",
+  "start": 13337,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Fui até lá os Estados Unidos para defender as empresas e os produtos brasileiros.",
+  "notes": [
+   "duplicada"
+  ],
+  "text": "Lula foi aos Estados Unidos para defender as empresas e os produtos brasileiros."
+ },
+ {
+  "id": "cfd63d2a22",
+  "start": 13345,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Fui até lá os Estados Unidos para defender as empresas e os produtos brasileiros.",
+  "notes": [
+   "duplicada"
+  ],
+  "text": "Lula foi aos Estados Unidos para defender as empresas e os produtos brasileiros."
+ },
+ {
+  "id": "8da5183baf",
+  "start": 13348,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Ele foi para lá para defender CV e PCC, pelo amor de Deus.",
+  "notes": [],
+  "text": "Jair Bolsonaro foi para os Estados Unidos para defender o CV e o PCC."
+ },
+ {
+  "id": "df99c21e11",
+  "start": 13505,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Como falou Vorcaro, o dinheiro do seu filme foi por fora, 30 milhões no Instituto Lula, isso tem que ser investigado.",
+  "notes": [],
+  "text": "O Instituto Lula recebeu 30 milhões de reais em dinheiro não declarado relacionado ao filme de Lula, conforme mencionado por Vorcaro."
+ },
+ {
+  "id": "0aa9f54a10",
+  "start": 13521,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Porque hoje, sob o governo Lula, o Brasil está subordinado às organizações terroristas.",
+  "notes": [],
+  "text": "O governo Lula subordinou o Brasil a organizações terroristas."
+ },
+ {
+  "id": "087db0b18b",
+  "start": 13554,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "É com a Argentina, é com Bolívia, é com vários países da América Central, todos unidos para...",
+  "notes": [],
+  "text": "A cooperação do programa Escudos das Américas envolve países como Argentina, Bolívia e vários países da América Central."
+ },
+ {
+  "id": "e7b9fbb1b4",
+  "start": 13584,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Hoje é o segundo porto que mais exporta cocaína no mundo.",
+  "notes": [],
+  "text": "O Porto de Santos é o segundo porto que mais exporta cocaína no mundo."
+ },
+ {
+  "id": "e0e453c5fc",
+  "start": 13612,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Esse pessoal que depredou a Avenida Paulista inteira, que pichou o Moro, que depredou estação de ônibus, vai ser tudo...",
+  "notes": [],
+  "text": "Pessoas depredaram a Avenida Paulista inteira, picharam o Moro e depredaram uma estação de ônibus."
+ },
+ {
+  "id": "f7ec944069",
+  "start": 13660,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "O presidente Lula não colocou em funcionamento o cadastro nacional de pedófilos até a data mencionada."
+ },
+ {
+  "id": "2eddaee2a7",
+  "start": 13668,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "A lei do cadastro nacional de pedófilos está em vigor no Brasil."
+ },
+ {
+  "id": "5ce9cdde28",
+  "start": 13668,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "O presidente Lula não colocou até hoje no ar o site para que a população saiba quem são os pedófilos e estupradores."
+ },
+ {
+  "id": "1acd91e7b6",
+  "start": 13827,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Ele certamente sabe que já existe o seguro celular, que é uma lei",
+  "notes": [],
+  "text": "Já existe uma lei que institui o seguro celular no Brasil."
+ },
+ {
+  "id": "cb8548e81c",
+  "start": 13835,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Inclusive pelo Congresso Nacional, em que as pessoas que roubaram o celular e o dono do celular comunicar...",
+  "notes": [],
+  "text": "O Congresso Nacional aprovou uma medida relacionada a pessoas que roubaram celular e à comunicação do roubo pelo dono do celular."
+ },
+ {
+  "id": "6dc4fe01d7",
+  "start": 13839,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Ao GovBR, esse celular será bloqueado e ele não vai valer mais nada.",
+  "notes": [],
+  "text": "O celular será bloqueado pelo GovBR e não terá mais valor após o bloqueio."
+ },
+ {
+  "id": "0c0f1057be",
+  "start": 13850,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Nós estamos comprando a dívida. Ele sabe que nós lançamos uma medida provisória comprando dívida.",
+  "notes": [],
+  "text": "O governo Lula lançou uma medida provisória para comprar dívida pública."
+ },
+ {
+  "id": "8e2fcf0b2d",
+  "start": 13852,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Nós estamos comprando a dívida. Ele sabe que nós lançamos uma medida provisória comprando dívida. Vamos chegar até 300 bilhões.",
+  "notes": [],
+  "text": "O governo Lula pretende comprar até R$ 300 bilhões em dívidas de pessoas endividadas (Desenrola)."
+ },
+ {
+  "id": "041531d4fc",
+  "start": 13859,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Fazendo um leilão nos bancos para que as pessoas que estão endividadas vão ter um desconto de até noventa e dois por cento para que",
+  "notes": [],
+  "text": "O governo Lula está realizando um leilão nos bancos para oferecer desconto de até noventa e dois por cento para pessoas endividadas."
+ },
+ {
+  "id": "267a661e03",
+  "start": 13900,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Mas 16 anos, a gente sempre foi a favor, porque, no meu ponto de vista, quem é menor de idade e comete crime de adulto tem que resp",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "O presidente Lula declarou que menores de idade que cometem crimes de adultos devem responder por esses crimes."
+ },
+ {
+  "id": "64ecc6e654",
+  "start": 13903,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Mas 16 anos, a gente sempre foi a favor, porque, no meu ponto de vista, quem é menor de idade e comete crime de adulto tem que resp",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "O presidente Lula afirmou que sempre foi a favor da redução da maioridade penal para 16 anos."
+ },
+ {
+  "id": "9f7b58d235",
+  "start": 13914,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": null,
+  "notes": [],
+  "text": "A bancada do PT no Congresso Nacional mudou sua posição e começou a apoiar algo que antes sempre foi contra."
+ },
+ {
+  "id": "2baf33ced8",
+  "start": 13940,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Eles fizeram uma manobra lá que era exatamente para garantir que a maioridade penal fosse apenas para os crimes hediondos",
+  "notes": [],
+  "text": "Eles fizeram uma manobra para garantir que a maioridade penal fosse aplicada apenas para crimes hediondos."
+ },
+ {
+  "id": "f458f2df90",
+  "start": 13985,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Estuprador de 14 anos de idade tem que ser preso e responder como adulto, e é assim que vai ser no meu governo!",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "O presidente Lula afirmou que um estuprador de 14 anos de idade deve ser preso e responder como adulto."
+ },
+ {
+  "id": "31dc4da349",
+  "start": 14033,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Nós criamos o simples, nós criamos o meio e criamos o super simples.",
+  "notes": [],
+  "text": "O governo Lula criou o Simples, o Meio e o Super Simples."
+ },
+ {
+  "id": "8d2373db92",
+  "start": 14036,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Nós fizemos a maior política de crédito para a função.",
+  "notes": [],
+  "text": "O governo Lula implementou a maior política de crédito para a função."
+ },
+ {
+  "id": "f1d7f69488",
+  "start": 14044,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "E mais ainda, já perdoamos a dívida de 12 bilhões e 700 milhões dos meios que estão devendo",
+  "notes": [],
+  "text": "O governo Lula perdoou dívidas no valor de 12 bilhões e 700 milhões de reais de pessoas endividadas."
+ },
+ {
+  "id": "06fea95861",
+  "start": 14068,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Resolver uma da dívida desse país é a economia voltar a crescer. Se a economia crescer 4%, 5% ao ano, o Brasil vai ter uma dívida menor.",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "O presidente Lula afirmou que se a economia do Brasil crescer 4% ou 5% ao ano, a dívida do país será menor."
+ },
+ {
+  "id": "b5d00c6581",
+  "start": 14105,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Como agora apresentamos um orçamento com superávit de 0,1%. É a primeira vez.",
+  "notes": [],
+  "text": "O governo Lula apresentou um orçamento com superávit de 0,1%, o que foi a primeira vez que isso ocorreu."
+ },
+ {
+  "id": "f362f49898",
+  "start": 14154,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Eu até criei agora a Universidade Indígena, que vai ser em Brasília, para que os índios...",
+  "notes": [],
+  "text": "O governo Lula criou a Universidade Indígena, que será em Brasília, para atender a população indígena."
+ },
+ {
+  "id": "dcbd35dd91",
+  "start": 14313,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Agradecer ao povo brasileiro que tem ido para as ruas.",
+  "notes": [],
+  "text": "O povo brasileiro tem ido para as ruas."
+ },
+ {
+  "id": "3e0f447b1c",
+  "start": 14339,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Quando eu peguei o país da primeira vez, ele estava quebrado.",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "O presidente Lula afirmou que quando ele assumiu o país pela primeira vez, o Brasil estava quebrado."
+ },
+ {
+  "id": "a0ec830005",
+  "start": 14343,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": null,
+  "notes": [
+   "editada por revisor: só o falante (veredito e texto ficam)"
+  ],
+  "text": "O governo Lula pagou o FMI e deixou US$ 270 bilhões em reservas internacionais."
+ },
+ {
+  "id": "c7909dc7bd",
+  "start": 14346,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Agora eu peguei o país quebrado outra vez",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "O presidente Lula afirmou que pegou o país quebrado novamente."
+ },
+ {
+  "id": "bdb52e6730",
+  "start": 14351,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "O país começou a crescer acima de 3%.",
+  "notes": [],
+  "text": "O país começou a crescer acima de 3% durante o governo Lula."
+ },
+ {
+  "id": "d2fe3963bf",
+  "start": 14363,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Eu sei o fazer para o país voltar a crescer. Eu sei, já recuperamos a indústria naval, já recuperamos a indústria...",
+  "notes": [],
+  "text": "O governo Lula recuperou a indústria naval no Brasil."
+ },
+ {
+  "id": "b0987d5f68",
+  "start": 14379,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Eu quero empresa estatal forte e produtiva.",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "O presidente Lula declarou que quer uma empresa estatal forte e produtiva."
+ },
+ {
+  "id": "bd7846227f",
+  "start": 14392,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "A gente não aumenta o preço da Petrobras e o preço aumenta da distribuidora, porque eles privatizaram.",
+  "notes": [],
+  "text": "O preço da Petrobras não foi aumentado pelo governo Lula, mas o preço aumentou nas distribuidoras devido à privatização."
+ },
+ {
+  "id": "8c3f758fc0",
+  "start": 14400,
+  "action": "speaker",
+  "speaker": "Lula",
+  "quote": "Uma empresa extraordinária que controlava a energia desse país e privatizaram na mão mole, ou seja, privatizaram",
+  "notes": [],
+  "text": "A Eletrobras controlava a energia do país antes de ser privatizada."
+ },
+ {
+  "id": "dc6b9c79bc",
+  "start": 14452,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "Teve já três mandatos para fazer e não fez.",
+  "notes": [
+   "parece narração/3ª pessoa"
+  ],
+  "text": "Bolsonaro afirmou que teve três mandatos para fazer algo e não fez."
+ },
+ {
+  "id": "d88c4a9c9c",
+  "start": 14473,
+  "action": "speaker",
+  "speaker": "Flávio",
+  "quote": "O que ele está fazendo aí, gastou mais 350 bilhões já pra tentar se reeleger.",
+  "notes": [],
+  "text": "Lula gastou mais de R$ 350 bilhões para tentar se reeleger."
+ }
+]

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './compact.css'
 import { useSession } from './useSession'
-import { FitSelect } from './components/FitSelect'
 import { ClaimSheet, CountBar, FeedCard, FilterSheet, LiveChip, ScoreBars, ViewSwap } from './components/Feed'
 import { NO_FILTER, PhotosContext, UNNAMED, applyFilters, applyRoster, photoMap, roomTitle, scoreRows, totalOf, useSharedClaim, type Filters } from './components/feedData'
 import type { Claim, Room, Verdict } from './types'
@@ -39,7 +38,7 @@ export function Compact() {
   const tv = useTv(params.get('tv'))
   const session = useSession()
   const [rooms, setRooms] = useState<Room[] | null>(null)
-  const [roomId, setRoomId] = useState(params.get('room') ?? '')
+  const roomId = params.get('room') ?? ''
   const [filters, setFilters] = useState<Filters>(NO_FILTER)
   const [filtering, setFiltering] = useState(false)
   const closeFilters = useCallback(() => setFiltering(false), [])
@@ -85,13 +84,6 @@ export function Compact() {
     return () => clearTimeout(t)
     // oxlint-disable-next-line react-hooks/exhaustive-deps
   }, [url, session.state, session.lost])
-  function pickRoom(id: string) {
-    setRoomId(id)
-    setFilters(NO_FILTER)
-    const p = new URLSearchParams(location.search)
-    p.set('room', id)
-    history.replaceState(null, '', `?${p}`)
-  }
 
   const live = session.info?.is_live ?? false
   const delay = live && watching === 'internet' ? internetDelay : 0
@@ -148,12 +140,7 @@ export function Compact() {
     <PhotosContext.Provider value={photos}>
     <div className={`compact${tv ? ' compact--tv' : ''}`}>
       <header className="fhead compact__bar">
-        {rooms && rooms.length > 1 ? (
-          <FitSelect className="fhead__title" label={roomTitle(room?.name ?? '')} value={room?.id ?? ''}
-            onChange={(e) => pickRoom(e.target.value)} aria-label="Transmissão">
-            {rooms.map((r) => <option key={r.id} value={r.id}>{roomTitle(r.name)}</option>)}
-          </FitSelect>
-        ) : <span className="fhead__title">{roomTitle(room?.name ?? '')}</span>}
+        <span className="fhead__title">{roomTitle(room?.name ?? '')}</span>
         <LiveChip label={status} live={live && session.state === 'listening'} />
         {room && !tv && <ViewSwap href={`/?room=${room.id}`} video />}
         <span className="fspacer" />

@@ -240,12 +240,6 @@ button { font: inherit; }
 .room-picker:focus { border-bottom-color: var(--muted); }
 .room-picker option { background: var(--panel); }
 
-/* FitSelect: the select and an invisible copy of its selected label share one grid cell */
-.fit-select { display: inline-grid; min-width: 0; max-width: 100%; }
-.fit-select > * { grid-area: 1 / 1; min-width: 0; }
-.fit-select > select { width: 0; min-width: 100%; max-width: none; } /* the sizer alone sets the width, not the longest option */
-.fit-select__sizer { visibility: hidden; white-space: pre; overflow: hidden; }
-.fit-select__arrow { display: inline-block; width: 22px; }
 
 /* ---- /admin ---- */
 .admin { --row-h: 44px; --panel-w: 400px; --side-w: 220px; }

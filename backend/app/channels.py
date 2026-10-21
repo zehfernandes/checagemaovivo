@@ -13,12 +13,13 @@ import json
 import logging
 import sqlite3
 import time
+import uuid
 from collections.abc import Callable
 from pathlib import Path
 
 from . import audio
 from .config import settings
-from .models import StreamInfo
+from .models import Claim, StreamInfo
 from .news import _blocked_host
 from .pipeline import Pipeline
 
@@ -441,6 +442,19 @@ class Channel:
         except KeyError:
             return None
 
+    def add_claim(self, reviewer: str, quote: str, verdict: str, explanation: str = "", sources: list[dict] | None = None,
+                  speaker: str = "", start: float | None = None) -> dict:
+        """A fact the newsroom adds by hand (no machine claim covers it): published at once as a human verdict,
+        at `start` (seconds into the video) or, by default, at the point the transmission has reached."""
+        now = time.time()
+        start = self.processed_to if start is None else start
+        c = Claim(id=uuid.uuid4().hex[:10], text=quote, quote=quote, verdict=verdict, confidence=1.0, explanation=explanation,
+                  sources=sources or [], start=start, end=start, speaker=speaker or None,
+                  method="human", verified_at=now).model_dump(mode="json")
+        c.update(status="published", reviewed_by=reviewer, reviewed_at=now, rev=1)
+        self._store_claim({"type": "claim", "claim": c}, None)
+        return c
+
     async def remove_claim(self, claim_id: str) -> bool:
         """Admin deletes a claim (bad extraction): gone from the cache and from every viewer's list."""
         if claim_id not in self.claims:
@@ -457,7 +471,6 @@ class Channel:
         entry = self.claims.get(claim_id)
         if entry and claim_id not in self.pipeline.claims:
             # claim came from cache: rebuild enough state for the deep pass
-            from .models import Claim
             claim = Claim.model_validate(entry["claim"])
             ctx = " ".join(t["segment"]["text"] for t in self.transcripts.values()
                            if abs(t["segment"]["start"] - claim.start) <= 24)

@@ -513,7 +513,8 @@ const statusOf = (c: Claim): ReviewStatus => c.status ?? 'published'
 const CARD_SWAP_MS = 120 // the exit animation; a fast server still waits this long so the action is felt
 const LEASE_RENEW_MS = 45_000 // the server holds a review for 120 s; renew well before that while the card is open
 
-interface Edits { verdict: Final; explanation: string; sources: Source[]; quote: string; speaker: string }
+const NEW_ID = 'new' // the review card opened by "Nova checagem": a fact no machine claim covers
+interface Edits { verdict: Final; explanation: string; sources: Source[]; quote: string; speaker: string; start?: number }
 
 function ReviewerDialog({ initial, onSave, onClose }: { initial: string; onSave: (name: string) => void; onClose?: () => void }) {
   const [name, setName] = useState(initial)
@@ -596,7 +597,14 @@ function ClaimsPage({ room, notify, me, aside, reviewSlot, reviewSecondary }: {
       if (r.claim) { setOpened(r.claim); setOpenId(r.claim.id) } else { setOpenId(null); notify('Nenhuma análise aguardando revisão agora') }
     } catch (e) { notify((e as Error).message) }
   }
+  function newClaim() {
+    if (needName(newClaim) || !url) return
+    const at = session.progress?.processed_to ?? 0 // goes on the transmission where it is now
+    setOpened({ id: NEW_ID, text: '', verdict: 'inconclusive', confidence: 1, explanation: '', sources: [], start: at, end: at, status: 'draft', receivedAt: Date.now() })
+    setOpenId(NEW_ID)
+  }
   function release(id: string) {
+    if (id === NEW_ID) return
     api(`/admin/review/${id}/release`, { method: 'POST', body: body() }).catch(() => {})
   }
   function close() {
@@ -613,6 +621,11 @@ function ClaimsPage({ room, notify, me, aside, reviewSlot, reviewSecondary }: {
   }
   async function decide(c: Claim, action: 'publish' | 'irrelevant', edits?: Edits): Promise<boolean> {
     const t0 = performance.now()
+    if (c.id === NEW_ID) {
+      try { await api('/admin/review/new', { method: 'POST', body: body(edits) }) } catch (e) { notify((e as Error).message); return false }
+      setOpenId(null)
+      return true
+    }
     try {
       await api(`/admin/review/${c.id}/decide`, { method: 'POST', body: body({ action, rev: c.rev ?? 0, ...edits }) })
     } catch (e) { notify((e as Error).message); return false }
@@ -622,7 +635,7 @@ function ClaimsPage({ room, notify, me, aside, reviewSlot, reviewSecondary }: {
   }
   // keep the review while the card is open; if someone else took it over (lease expired), say so and close
   useEffect(() => {
-    if (!openId || !url) return
+    if (!openId || openId === NEW_ID || !url) return
     const t = setInterval(() => {
       api(`/admin/review/${openId}/lease`, { method: 'POST', body: JSON.stringify({ url, reviewer }) })
         .catch((e) => { notify((e as Error).message); setOpenId(null) })
@@ -638,9 +651,10 @@ function ClaimsPage({ room, notify, me, aside, reviewSlot, reviewSecondary }: {
   return (
     <div className="page">
       <div className="page__content">
-        {reviewSlot && createPortal(
-          <button type="button" className={reviewSecondary ? 'btn btn--stop' : 'btn'} onClick={() => next()} disabled={ready === 0}>Revisar{ready > 0 && ` (${ready})`}</button>,
-          reviewSlot)}
+        {reviewSlot && createPortal(<>
+          <button type="button" className="btn btn--stop" onClick={newClaim} title="Publica no site agora, no ponto em que a transmissão está">Nova checagem</button>
+          <button type="button" className={reviewSecondary ? 'btn btn--stop' : 'btn'} onClick={() => next()} disabled={ready === 0}>Revisar{ready > 0 && ` (${ready})`}</button>
+        </>, reviewSlot)}
         <div className="toolbar">
           <div className="pills">
             {STATUS_FILTERS.map(([f, label]) => (
@@ -692,6 +706,7 @@ function ReviewCard({ claim: live, transcript, queue, onClose, onSkip, onDecide,
   // under it, which would swap the buttons mid-animation)
   const [frozen, setFrozen] = useState<Claim | null>(null)
   const c = frozen ?? live
+  const isNew = c.id === NEW_ID
   const draft = statusOf(c) === 'draft'
   const pending = c.verdict === 'pending'
   const initialVerdict: Final = pending ? 'inconclusive' : c.verdict as Final
@@ -702,6 +717,8 @@ function ReviewCard({ claim: live, transcript, queue, onClose, onSkip, onDecide,
   const [explanation, setExplanation] = useState(c.explanation)
   const [sources, setSources] = useState<Source[]>(c.sources)
   const [busy, setBusy] = useState<'publish' | 'irrelevant' | 'skip' | null>(null)
+  const [at, setAt] = useState(fmt(c.start)) // new fact: where it goes on the transmission
+  const start = parseTime(at)
   const [titling, setTitling] = useState<number | null>(null) // source row whose page title is being fetched
   // pasting a link fills an empty title with the page's own (the server reads it: browsers can't cross-origin)
   async function titleFor(i: number, url: string) {
@@ -720,23 +737,24 @@ function ReviewCard({ claim: live, transcript, queue, onClose, onSkip, onDecide,
     setFrozen(live)
     setBusy(action)
     const ok = action === 'skip' ? await onSkip() : await onDecide(c, action, action === 'publish'
-      ? { verdict, explanation, sources: cleanSources, quote: quote.trim() || initialQuote, speaker: speaker.trim() } : undefined)
+      ? { verdict, explanation, sources: cleanSources, quote: quote.trim() || initialQuote, speaker: speaker.trim(), ...(isNew && { start: start ?? c.start }) } : undefined)
     if (!ok) { setBusy(null); setFrozen(null) } // failed (e.g. someone else changed it): the card comes back
   }
-  const canPublish = !busy && !(pending && verdict === initialVerdict && !dirty) && (draft || statusOf(c) === 'irrelevant' || dirty)
+  const canPublish = !busy && (!isNew || (!!quote.trim() && start !== null)) && !(pending && verdict === initialVerdict && !dirty) && (draft || statusOf(c) === 'irrelevant' || dirty)
   const publishLabel = draft ? 'Publicar' : statusOf(c) === 'irrelevant' ? 'Publicar no site' : 'Salvar correção'
   return (
     <div className="dialog__backdrop dialog__backdrop--review" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
       <div className={`dialog dialog--review claim--${verdict}${busy ? ` review--out-${busy}` : ''}`} role="dialog" aria-label="Revisar análise">
         <header className="dialog__header review__header">
           <span className="muted review__meta">
-            {fmt(c.start)}
+            {isNew ? <>Nova checagem · entra em <input className="review__at" value={at} onChange={(e) => setAt(e.target.value)} aria-label="Tempo na transmissão"
+              aria-invalid={start === null} placeholder="m:ss" size={Math.max(4, at.length)} /></> : <>{fmt(c.start)}
             {c.method && ` · máquina: ${METHOD_PT[c.method] ?? c.method}`}
             {!pending && ` · ${VERDICT_LABEL[c.verdict]} ${Math.round(c.confidence * 100)}%`}
-            {` · ${STATUS_PT[statusOf(c)]}`}{c.reviewed_by && ` por ${c.reviewed_by}`}
+            {` · ${STATUS_PT[statusOf(c)]}`}{c.reviewed_by && ` por ${c.reviewed_by}`}</>}
           </span>
           <span className="spacer" />
-          {draft && queue > 1 && <span className="muted review__queue">{queue - 1} na fila</span>}
+          {draft && !isNew && queue > 1 && <span className="muted review__queue">{queue - 1} na fila</span>}
           <button type="button" className="icon-btn" onClick={onClose} title="Fechar (Esc)" aria-label="Fechar">×</button>
         </header>
         <form id={`review-${c.id}`} className="form review__body" onSubmit={(e) => { e.preventDefault(); if (canPublish) act('publish') }} onKeyDown={cmdEnter}>
@@ -746,7 +764,7 @@ function ReviewCard({ claim: live, transcript, queue, onClose, onSkip, onDecide,
             <div className="review__said-box">
               <input className="review__speaker" value={speaker} onChange={(e) => setSpeaker(e.target.value)} placeholder="Quem falou" aria-label="Quem falou"
                 size={Math.max(8, speaker.length + 1)} />
-              <textarea className="review__quote" value={quote} onChange={(e) => setQuote(e.target.value)} aria-label="Frase como aparece no site"
+              <textarea className="review__quote" value={quote} autoFocus={isNew} placeholder={isNew ? 'A afirmação, como vai aparecer no site' : undefined} onChange={(e) => setQuote(e.target.value)} aria-label="Frase como aparece no site"
                 rows={Math.min(5, Math.max(2, Math.ceil(quote.length / 60)))} />
             </div>
           </div>
@@ -781,10 +799,10 @@ function ReviewCard({ claim: live, transcript, queue, onClose, onSkip, onDecide,
           </div>
         </form>
         <footer className="review__footer">
-          {draft && !pending && !c.deep_pending && <button type="button" className="link" onClick={() => onRecheck(c.id)}>Rechecar com IA</button>}
+          {draft && !isNew && !pending && !c.deep_pending && <button type="button" className="link" onClick={() => onRecheck(c.id)}>Rechecar com IA</button>}
           <span className="spacer" />
-          {draft && <button type="button" className={`btn btn--stop${busy === 'skip' ? ' btn--pressed' : ''}`} onClick={() => act('skip')} disabled={!!busy} title="Não aparece mais para você em Revisar; continua na fila dos outros">Pular</button>}
-          {statusOf(c) !== 'irrelevant' && (
+          {draft && !isNew && <button type="button" className={`btn btn--stop${busy === 'skip' ? ' btn--pressed' : ''}`} onClick={() => act('skip')} disabled={!!busy} title="Não aparece mais para você em Revisar; continua na fila dos outros">Pular</button>}
+          {statusOf(c) !== 'irrelevant' && !isNew && (
             <button type="button" className={`btn btn--stop${busy === 'irrelevant' ? ' btn--pressed' : ''}`} onClick={() => act('irrelevant')} disabled={!!busy} title={draft ? 'Não vai para o site' : 'Tira do site'}>
               {busy === 'irrelevant' ? 'Salvando…' : draft ? 'Irrelevante' : 'Tirar do site'}
             </button>
@@ -1042,6 +1060,12 @@ function GlossaryPage({ notify }: { notify: (m: string) => void }) {
       </div>
     </div>
   )
+}
+
+// "1:02:03" / "2:03" -> seconds; null if it isn't a time
+function parseTime(t: string): number | null {
+  const m = t.trim().match(/^(?:(\d+):)?(\d{1,2}):(\d{2})$/)
+  return m && +m[3] < 60 && (!m[1] || +m[2] < 60) ? +(m[1] ?? 0) * 3600 + +m[2] * 60 + +m[3] : null
 }
 
 function fmt(s: number) {

@@ -450,6 +450,8 @@ a.row__title:hover { text-decoration: underline; text-underline-offset: 3px; }
 .review__header { padding: 12px 12px 12px 20px; border-bottom: 1px solid var(--border); flex: none; }
 .review__header .claim__badge { font-size: 12px; }
 .review__meta, .review__queue { font-size: 12px; font-variant-numeric: tabular-nums; }
+.review__at { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; margin-left: 2px; }
+.review__at[aria-invalid="true"] { border-color: var(--fake); }
 .dialog .review__body { overflow-y: auto; flex: 1; min-height: 0; padding: 16px 20px; }
 .review__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 16px; align-items: start; }
 .review__notice { margin: 0; padding: 8px 12px; border-radius: 8px; font-size: 13px; color: var(--inconclusive); background: color-mix(in srgb, var(--inconclusive) 10%, transparent); }
@@ -526,6 +528,7 @@ a.row__title:hover { text-decoration: underline; text-underline-offset: 3px; }
 .roomview__body .panel { order: -1; border-left: 0; border-right: 1px solid var(--border); }
 .room-delete { margin-right: auto; font-size: 13px; }
 .roomview__review { display: contents; }
+.roomview__bar .btn { white-space: nowrap; flex: none; }
 
 /* sidebar: the rooms under "Salas" */
 .sidebar__rooms { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 6px; }

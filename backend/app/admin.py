@@ -17,7 +17,7 @@ from pathlib import Path
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import audio
 from .auth import User
@@ -66,6 +66,17 @@ class DecisionIn(BaseModel):
     text: str | None = None
     speaker: str | None = None
     quote: str | None = None  # the sentence as shown on the site ("Nós criamos…")
+
+
+class NewClaimIn(BaseModel):
+    url: str
+    reviewer: str = ""
+    quote: str  # the sentence as shown on the site
+    verdict: str
+    explanation: str = ""
+    sources: list[dict] = []
+    speaker: str = ""
+    start: float | None = Field(None, ge=0)  # seconds into the video; None = where the transmission is now
 
 
 class DocIn(BaseModel):
@@ -309,13 +320,32 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
             raise HTTPException(404, "Afirmação não encontrada")
         except ReviewConflict as e:
             raise HTTPException(409, str(e))
-        if store and body.action == "publish" and c.get("method") == "human":  # a person's verdict: reuse it across videos
-            try:
-                vec = (await store.embed([c["text"]]))[0]
-                store.remember_verdict(c["text"], vec, c["verdict"], 1.0, c["explanation"], c.get("sources") or [], "human")
-            except Exception:  # noqa: BLE001
-                log.exception("verdict memory write failed")
+        if body.action == "publish" and c.get("method") == "human":
+            await remember(c)
         return {"claim": c}
+
+    @r.post("/admin/review/new")
+    async def review_new(body: NewClaimIn, user: User = Depends(require_user)):
+        """A fact no machine claim covers: the newsroom writes it and it goes on the transmission at once."""
+        if body.verdict not in ("fake", "valid", "inconclusive"):
+            raise HTTPException(400, "Veredito inválido")
+        if not body.quote.strip():
+            raise HTTPException(400, "Escreva a afirmação")
+        ch = await review_channel(body.url)
+        c = ch.add_claim(reviewer_of(user, body.reviewer), body.quote.strip(), body.verdict, body.explanation.strip(),
+                         body.sources, body.speaker.strip(), body.start)
+        await remember(c)
+        return {"claim": c}
+
+    async def remember(c: dict) -> None:
+        """A person's verdict: reused for similar claims across videos."""
+        if not store:
+            return
+        try:
+            vec = (await store.embed([c["text"]]))[0]
+            store.remember_verdict(c["text"], vec, c["verdict"], 1.0, c["explanation"], c.get("sources") or [], "human")
+        except Exception:  # noqa: BLE001
+            log.exception("verdict memory write failed")
 
     @r.get("/admin/page-title", dependencies=checker)
     async def admin_page_title(url: str):

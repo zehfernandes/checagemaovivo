@@ -63,7 +63,8 @@ every `NEWS_REFRESH_MINUTES`. `backend/data/` is gitignored — every clone star
 
 **Access.** With `GOOGLE_CLIENT_ID` set, people sign in with Google and get in only if their verified e-mail
 is listed: **owners** (`OWNER_EMAILS`) can do everything; **checkers**, added by an owner in *Usuários*, see
-*Checagens* (correct, re-check, review labels), *Base de notícias* and *Glossário* — no rooms, start/stop, exports or users.
+*Salas* (enter a room to review, correct and re-check its claims; review labels), *Base de notícias* and *Glossário* —
+they can't create, configure, start or stop rooms, export data or manage users.
 The role is checked on every request, so removing someone cuts them off at once. Endpoints: `GET /admin/auth`,
 `POST /admin/login/google`, `GET /admin/me`, `GET/POST /admin/users`, `DELETE /admin/users/{email}`.
 Google Cloud Console → *APIs & Services* → *Credentials* → *OAuth client ID* (Web application); authorized
@@ -73,7 +74,10 @@ Without `GOOGLE_CLIENT_ID` the shared `ADMIN_PASSWORD` still works (as an owner)
 The viewer UI has no admin controls; everything operational lives at `/admin` (password =
 `ADMIN_PASSWORD`, sent as the `x-admin-password` header / `admin` field on the WebSocket).
 
-- **Salas** — rooms are YouTube URLs (debate, live interview…) stored in the cache DB. Create, rename,
+- **Salas** — the rooms are listed in the sidebar (status dot + name); opening one shows its fact-checks (the review
+  queue below) and, for owners, the room panel beside them with two tabs, *Dados* (the room's form, locked while
+  checking runs) and *Logs* (usage and the run's log), plus Iniciar/Religar/Parar. Checkers only see the checks.
+  Rooms are YouTube URLs (debate, live interview…) stored in the cache DB. Owners create, rename,
   hide/publish (`active`), delete; **Iniciar/Parar** the shared processing (optionally in save mode);
   viewer count, claim count and progress per room. Only published rooms appear in the viewer's room picker.
   The room panel also shows the backend's own log for the run (`GET /admin/rooms/{id}/activity`): transcription
@@ -81,7 +85,7 @@ The viewer UI has no admin controls; everything operational lives at `/admin` (p
   method and time, errors and realtime reconnects.
   Endpoints: `GET /rooms` (public, active only), `GET/POST /admin/rooms`, `PATCH/DELETE /admin/rooms/{id}`,
   `POST /admin/rooms/{id}/start|stop`.
-- **Checagens** — the newsroom review queue. With `HUMAN_REVIEW=true` (default) every machine analysis is
+- **Checks inside a room** — the newsroom review queue. With `HUMAN_REVIEW=true` (default) every machine analysis is
   a **draft** that the public site never sees; a person opens it, adjusts it if needed and **Publica** (now
   on the site) or marks it **Irrelevante** (never on the site), and the next card opens by itself.
   **Revisar** opens the oldest draft the machine has finished. Filters: Aguardando / Publicadas /
@@ -136,7 +140,7 @@ no Fly account or production secrets required. Production secrets (`OPENAI_API_K
 | `TRANSCRIBE_MODEL` | `gpt-4o-mini-transcribe` | speech-to-text model |
 | `FACTCHECK_MODEL` | `gpt-4.1-mini` | model for claim extraction and verification |
 | `DEEP_MODEL` | `gpt-5-mini` | reasoning model for the deep check (third level / Rechecar in `/admin`); `reasoning.effort=low`, no `temperature` |
-| `HUMAN_REVIEW` | `true` | machine analyses wait as drafts until a person publishes them in `/admin` → *Checagens*; `false` publishes them at once (the old behaviour) |
+| `HUMAN_REVIEW` | `true` | machine analyses wait as drafts until a person publishes them in `/admin` → *Salas* → the room; `false` publishes them at once (the old behaviour) |
 | `CANDIDATES_ONLY` | `true` | only fact-check candidates/interviewees: claims the extractor attributes to moderators, presenters or journalists (e.g. a question's premise) are dropped; set `false` for news broadcasts |
 | `DEEP_CHECK` | `true` | automatically run the deep check on claims the fast pass left inconclusive |
 | `DECIDER` | `openai` | `jev`: TypeSafe Jev decision model via Vercel AI Gateway decides from DB evidence in ~0.3 s and gates non-checkable claims; falls back to OpenAI on low confidence/error |
@@ -201,7 +205,7 @@ python -m app.news stats
 A claim that is still `inconclusive` after the DB and web passes is automatically re-run through a
 slower, stronger pass (`DEEP_MODEL`, several web searches targeting fact-checkers and official sources,
 two independent sources required for fake/valid). While it runs the card shows "Deep check…"; the result
-replaces the verdict with a `Deep` badge. Every settled card in `/admin` → *Checagens* also has a **Rechecar** button that triggers
+replaces the verdict with a `Deep` badge. Every settled card in `/admin` → *Salas* → the room also has a **Rechecar** button that triggers
 the same pass manually (`{"type":"recheck","claim_id":"…"}` over the WebSocket).
 
 ## Shared processing + cache (many viewers, one pipeline)

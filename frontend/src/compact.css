@@ -19,6 +19,9 @@
 /* phone: brand + state on the first line, the room on its own full-width line, then the score */
 .compact__state { order: 2; margin-left: auto; }
 .compact__room { order: 3; flex-basis: 100%; max-width: none; }
+.compact__room-wrap { order: 3; }
+.compact__swap { order: 2; font-size: 12px; color: var(--muted); white-space: nowrap; text-underline-offset: 3px; }
+.compact__swap:hover { color: var(--text); }
 .compact__score { order: 4; flex-basis: 100%; display: flex; gap: 14px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .compact__count strong { font-size: 15px; }
 .compact__count--fake strong { color: var(--fake); }
@@ -75,7 +78,7 @@
 @media (min-width: 960px) {
   .compact { --quote: 17px; --now-quote: clamp(24px, 2.2vw, 34px); }
   .compact__bar { flex-wrap: nowrap; padding: 14px 28px; }
-  .compact__state, .compact__room, .compact__score { order: 0; }
+  .compact__state, .compact__room, .compact__room-wrap, .compact__swap, .compact__score { order: 0; }
   .compact__state { margin-left: 0; }
   .compact__room { flex-basis: auto; max-width: 360px; }
   .compact__score { flex-basis: auto; margin-left: auto; }
@@ -110,7 +113,7 @@
 .compact--tv .compact__brand, .compact--tv .compact__room { font-size: clamp(15px, 1.05vw, 28px); }
 .compact--tv .compact__state, .compact--tv .compact__count { font-size: clamp(13px, .9vw, 24px); }
 .compact--tv .compact__count strong { font-size: clamp(16px, 1.3vw, 34px); }
-.compact--tv .compact__state, .compact--tv .compact__room, .compact--tv .compact__score { order: 0; }
+.compact--tv .compact__state, .compact--tv .compact__room, .compact--tv .compact__room-wrap, .compact--tv .compact__score { order: 0; }
 .compact--tv .compact__state { margin-left: 0; }
 .compact--tv .compact__room { flex-basis: auto; max-width: 30vw; }
 .compact--tv .compact__score { flex-basis: auto; margin-left: auto; }

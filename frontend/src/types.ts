@@ -101,7 +101,6 @@ export interface NewsStats {
   docs: number
   chunks: number
   sources: Record<string, number>
-  last_refresh: number | null
 }
 
 export interface Room {

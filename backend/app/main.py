@@ -57,7 +57,7 @@ if settings.provider == "openai" and client is None:
     log.warning("PROVIDER=openai but OPENAI_API_KEY is empty; falling back to mock")
 
 store: NewsStore | None = (
-    NewsStore(client, settings.news_db_file, settings.embedding_model, settings.news_feed_map)
+    NewsStore(client, settings.news_db_file, settings.embedding_model)
     if client and settings.provider == "openai"
     else None
 )
@@ -70,23 +70,10 @@ rooms = RoomStore(settings.news_db_file.parent / Path(settings.cache_db_path).na
 _bg_tasks: set[asyncio.Task] = set()
 
 
-async def _refresh_loop() -> None:
-    while True:
-        try:
-            await store.refresh(settings.news_max_age_days)
-        except Exception:  # noqa: BLE001
-            log.exception("news refresh failed")
-        await asyncio.sleep(settings.news_refresh_minutes * 60)
-
-
 @app.on_event("startup")
 async def _startup() -> None:
     if rooms.count() == 0 and settings.default_room_url:
         rooms.create(settings.default_room_name, settings.default_room_url)
-    if store and settings.news_refresh_minutes > 0:
-        t = asyncio.create_task(_refresh_loop())
-        _bg_tasks.add(t)
-        t.add_done_callback(_bg_tasks.discard)
 
 
 users = UserStore(settings.news_db_file.parent / Path(settings.cache_db_path).name)
@@ -226,14 +213,7 @@ async def admin_glossary_save(req: GlossaryRequest):
 
 @app.get("/news")
 async def news_stats():
-    return store.stats() if store else {"docs": 0, "chunks": 0, "sources": {}, "last_refresh": None}
-
-
-@app.post("/news/refresh", dependencies=[Depends(current_user)])
-async def news_refresh():
-    if not store:
-        return {"error": "news DB disabled (mock provider)"}
-    return await store.refresh(settings.news_max_age_days)
+    return store.stats() if store else {"docs": 0, "chunks": 0, "sources": {}}
 
 
 @app.get("/health")

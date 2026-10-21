@@ -857,7 +857,6 @@ function NewsPage({ notify }: { notify: (m: string) => void }) {
   const [disabled, setDisabled] = useState(false)
   const [q, setQ] = useState('')
   const [adding, setAdding] = useState(false)
-  const [busy, setBusy] = useState<string | null>(null)
   const load = useCallback(async (query: string) => {
     try {
       const d = await api<{ total: number; docs: Doc[]; disabled?: boolean }>(`/admin/news/docs?q=${encodeURIComponent(query)}&limit=200`)
@@ -874,16 +873,11 @@ function NewsPage({ notify }: { notify: (m: string) => void }) {
     if (!confirm(`Remover "${d.title || d.url}" da base?`)) return
     try { await api(`/admin/news/docs/${d.id}`, { method: 'DELETE' }); await load(q) } catch (err) { notify((err as Error).message) }
   }
-  async function refresh() {
-    setBusy('refresh')
-    try { await api('/news/refresh', { method: 'POST', body: '{}' }); await load(q) } catch (err) { notify((err as Error).message) } finally { setBusy(null) }
-  }
 
   return (
     <div className="page">
       <div className="page__content">
-        <PageHeader title="Base de notícias" meta={stats && <span title={Object.entries(stats.sources).map(([k, v]) => `${k}: ${v}`).join('\n')}>{stats.docs} artigos{stats.last_refresh ? ` · feeds ${ago(stats.last_refresh)}` : ''}</span>}>
-          <button type="button" className="btn btn--ghost" onClick={refresh} disabled={busy === 'refresh' || disabled}>{busy === 'refresh' ? 'Atualizando…' : 'Atualizar feeds'}</button>
+        <PageHeader title="Base de notícias" meta={stats && <span title={Object.entries(stats.sources).map(([k, v]) => `${k}: ${v}`).join('\n')}>{stats.docs} artigos</span>}>
           <button type="button" className="btn" onClick={() => setAdding(true)} disabled={disabled}>Adicionar artigo</button>
         </PageHeader>
         {disabled && <div className="banner banner--error">Base de notícias desativada neste servidor (PROVIDER=mock ou sem chave da OpenAI).</div>}

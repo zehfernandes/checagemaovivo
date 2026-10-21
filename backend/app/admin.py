@@ -348,6 +348,8 @@ def make_router(channels: ChannelManager, store: NewsStore | None, rooms: RoomSt
             raise HTTPException(400, "A URL precisa começar com http")
         if not url and len(text) < 40:
             raise HTTPException(400, "Informe uma URL ou um texto com pelo menos 40 caracteres")
+        if url:
+            s.unremove(url)
         if url and s.has_url(url):
             raise HTTPException(409, "Esse link já está na base")
         t0 = time.time()

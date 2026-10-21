@@ -1,11 +1,10 @@
-"""Local evidence store: trusted RSS feeds -> article text -> OpenAI embeddings -> SQLite.
+"""Local evidence store, curated by editors in /admin: article text -> OpenAI embeddings -> SQLite.
 
 Verification looks here first (cosine search over an in-memory matrix, ~ms) and only
 falls back to live web search when nothing relevant is found. Pages found by web
 search are written back so the next similar claim becomes a DB hit.
 """
 import asyncio
-import calendar
 import json
 import logging
 import re
@@ -15,13 +14,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
-import feedparser
 import html
 import httpx
 import numpy as np
 import trafilatura
-import xml.etree.ElementTree as ET
-from datetime import datetime
 from openai import AsyncOpenAI
 
 from . import usage
@@ -29,19 +25,6 @@ from .config import settings
 
 log = logging.getLogger(__name__)
 logging.getLogger("trafilatura").setLevel(logging.CRITICAL)
-
-DEFAULT_FEEDS: dict[str, str] = {
-    "Lupa": "https://lupa.uol.com.br/feed",
-    "g1 Fato ou Fake": "https://g1.globo.com/rss/g1/fato-ou-fake/",
-    "g1 Política": "https://g1.globo.com/rss/g1/politica/",
-    "Agência Brasil": "https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml",
-    "Agência Brasil Política": "https://agenciabrasil.ebc.com.br/rss/politica/feed.xml",
-    "Poder360": "https://www.poder360.com.br/feed/",
-    "Folha Poder": "https://feeds.folha.uol.com.br/poder/rss091.xml",
-    "CNN Brasil": "https://www.cnnbrasil.com.br/feed/",
-    "E-Farsas": "https://www.e-farsas.com/feed",
-    "Boatos.org": "https://www.boatos.org/feed",
-}
 
 def _blocked_host(url: str, hosts: list[str]) -> bool:
     host = (urlparse(url).hostname or "").lower().removeprefix("www.")
@@ -63,6 +46,7 @@ CREATE TABLE IF NOT EXISTS chunks (
   idx INTEGER, text TEXT, embedding BLOB);
 CREATE INDEX IF NOT EXISTS chunks_doc ON chunks(doc_id);
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS removed (url TEXT PRIMARY KEY);  -- deleted by an editor: never re-ingest
 CREATE TABLE IF NOT EXISTS verdicts (
   id INTEGER PRIMARY KEY, claim TEXT, verdict TEXT, confidence REAL, explanation TEXT,
   sources TEXT, method TEXT, ts REAL, embedding BLOB);
@@ -104,43 +88,14 @@ def _chunk(text: str) -> list[str]:
     return [c for c in chunks if len(c) > 80]
 
 
-def _published(entry) -> float | None:
-    t = entry.get("published_parsed") or entry.get("updated_parsed")
-    return float(calendar.timegm(t)) if t else None
-
-
-def _sitemap_entries(xml: bytes) -> list[dict]:
-    """Feed-like entries from a sitemap.xml (sites without RSS). The site root is skipped."""
-    ns = {"s": "http://www.sitemaps.org/schemas/sitemap/0.9"}
-    out: list[dict] = []
-    for u in ET.fromstring(xml).findall("s:url", ns):
-        loc = (u.findtext("s:loc", default="", namespaces=ns) or "").strip()
-        if not loc or loc.rstrip("/").count("/") <= 2:
-            continue
-        mod = u.findtext("s:lastmod", default="", namespaces=ns) or ""
-        out.append({"link": loc, "title": "", "summary": "", "published_parsed": _iso_to_struct(mod)})
-    return out
-
-
-def _iso_to_struct(iso: str):
-    if not iso:
-        return None
-    try:
-        return datetime.fromisoformat(iso.replace("Z", "+00:00")).utctimetuple()
-    except ValueError:
-        return None
-
-
 class NewsStore:
-    def __init__(self, client: AsyncOpenAI, path: str | Path, embedding_model: str, feeds: dict[str, str] | None = None):
+    def __init__(self, client: AsyncOpenAI, path: str | Path, embedding_model: str):
         self.client = client
         self.model = embedding_model
-        self.feeds = feeds or DEFAULT_FEEDS
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(self.path, check_same_thread=False)
         self.db.executescript(SCHEMA)
-        self._refresh_lock = asyncio.Lock()
         self._mat = np.zeros((0, 1), dtype=np.float32)
         self._rows: list[tuple] = []  # doc_id, url, source, title, published, text, kind
         self._vmat = np.zeros((0, 1), dtype=np.float32)  # verdict memory: settled claims + their verdicts
@@ -221,7 +176,14 @@ class NewsStore:
         return None
 
     def has_url(self, url: str) -> bool:
-        return self.db.execute("SELECT 1 FROM docs WHERE url = ?", (url,)).fetchone() is not None
+        """True if indexed or deleted by an editor, so web-search write-back skips it."""
+        return self.db.execute(
+            "SELECT 1 FROM docs WHERE url = ? UNION SELECT 1 FROM removed WHERE url = ?", (url, url)).fetchone() is not None
+
+    def unremove(self, url: str) -> None:
+        """An editor re-adding a URL by hand overrides an earlier delete."""
+        with self.db:
+            self.db.execute("DELETE FROM removed WHERE url = ?", (url,))
 
     # ---------- admin: browse / curate the DB ----------
     def list_docs(self, query: str = "", limit: int = 100, offset: int = 0) -> dict:
@@ -241,6 +203,7 @@ class NewsStore:
 
     def delete_doc(self, doc_id: int) -> bool:
         with self.db:
+            self.db.execute("INSERT OR IGNORE INTO removed(url) SELECT url FROM docs WHERE id = ?", (doc_id,))
             self.db.execute("DELETE FROM chunks WHERE doc_id = ?", (doc_id,))
             cur = self.db.execute("DELETE FROM docs WHERE id = ?", (doc_id,))
         if cur.rowcount:
@@ -259,9 +222,7 @@ class NewsStore:
         docs = self.db.execute("SELECT COUNT(*) FROM docs").fetchone()[0]
         chunks = self.db.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
         by_source = dict(self.db.execute("SELECT source, COUNT(*) FROM docs GROUP BY source ORDER BY 2 DESC"))
-        last = self.db.execute("SELECT value FROM meta WHERE key = 'last_refresh'").fetchone()
-        return {"docs": docs, "chunks": chunks, "sources": by_source,
-                "last_refresh": float(last[0]) if last else None}
+        return {"docs": docs, "chunks": chunks, "sources": by_source}
 
     async def embed(self, texts: list[str]) -> list[np.ndarray]:
         """Public: unit-normalized embeddings for arbitrary texts."""
@@ -328,59 +289,6 @@ class NewsStore:
         title = html.unescape(re.sub(r"\s+", " ", m.group(1))).strip() if m else ""
         return str(r.url), text or "", title
 
-    async def refresh(self, max_age_days: int = 14, concurrency: int = 8) -> dict:
-        async with self._refresh_lock:
-            t0 = time.time()
-            cutoff = t0 - max_age_days * 86400
-            limits = httpx.Limits(max_connections=concurrency)
-            async with httpx.AsyncClient(headers={"User-Agent": UA}, timeout=25, follow_redirects=True, limits=limits) as http:
-                feeds = await asyncio.gather(*(http.get(u) for u in self.feeds.values()), return_exceptions=True)
-                candidates: list[dict] = []
-                seen: set[str] = set()
-                for source, res in zip(self.feeds, feeds):
-                    if isinstance(res, Exception):
-                        log.warning("feed %s failed: %s", source, res)
-                        continue
-                    entries = _sitemap_entries(res.content) if b"<urlset" in res.content[:600] else feedparser.parse(res.content).entries
-                    for e in entries:
-                        link = (e.get("link") or "").strip()
-                        if "*http" in link:  # folha redirector
-                            link = "http" + link.split("*http", 1)[1]
-                        pub = _published(e)
-                        if not link or link in seen or (pub and pub < cutoff) or self.has_url(link):
-                            continue
-                        seen.add(link)
-                        candidates.append({"url": link, "source": source, "title": (e.get("title") or "").strip(),
-                                           "published": pub, "kind": "feed", "summary": e.get("summary") or ""})
-                sem = asyncio.Semaphore(concurrency)
-
-                async def grab(c: dict) -> dict | None:
-                    async with sem:
-                        try:
-                            _, text, page_title = await self._fetch_page(http, c["url"])
-                        except Exception as ex:  # noqa: BLE001
-                            log.debug("article %s failed: %s", c["url"], ex)
-                            text, page_title = "", ""
-                    if len(text) < 200:
-                        text = trafilatura.html2txt(c["summary"]) if c["summary"] else ""
-                    if len(text) < 120:
-                        return None
-                    if not c["title"]:
-                        c["title"] = (page_title or text.split("\n", 1)[0])[:160]
-                    c["text"] = text
-                    return c
-
-                fetched = [d for d in await asyncio.gather(*(grab(c) for c in candidates)) if d]
-            inserted = 0
-            for i in range(0, len(fetched), 40):
-                inserted += await self._insert_docs(fetched[i:i + 40])
-            with self.db:
-                self.db.execute("INSERT OR REPLACE INTO meta(key, value) VALUES ('last_refresh', ?)", (str(time.time()),))
-            result = {"candidates": len(candidates), "docs_added": len(fetched), "chunks_added": inserted,
-                      "seconds": round(time.time() - t0, 1), **self.stats()}
-            log.info("news refresh: %s", result)
-            return result
-
     async def add_url(self, url: str, title: str = "", source: str = "web", fallback_text: str = "") -> bool:
         """Write-back for pages discovered by web search fallback.
 
@@ -426,7 +334,7 @@ class NewsStore:
         return out
 
 
-def _cli() -> None:  # python -m app.news refresh|stats|search "query"
+def _cli() -> None:  # python -m app.news stats|search "query"
     import json
     import sys
 
@@ -437,10 +345,7 @@ def _cli() -> None:  # python -m app.news refresh|stats|search "query"
     client = AsyncOpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url or None)
     store = NewsStore(client, settings.news_db_file, settings.embedding_model)
     cmd = sys.argv[1] if len(sys.argv) > 1 else "stats"
-    if cmd == "refresh":
-        days = int(sys.argv[2]) if len(sys.argv) > 2 else settings.news_max_age_days
-        print(json.dumps(asyncio.run(store.refresh(days)), ensure_ascii=False, indent=2))
-    elif cmd == "search":
+    if cmd == "search":
         for ev in asyncio.run(store.search(" ".join(sys.argv[2:]))):
             print(f"{ev.score:.3f} [{ev.source}] {ev.title}\n   {ev.url}\n   {ev.text[:160]!r}")
     else:

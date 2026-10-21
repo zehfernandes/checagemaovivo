@@ -249,11 +249,14 @@ button { font: inherit; }
 /* ---- /admin ---- */
 .admin { --row-h: 44px; --panel-w: 400px; --side-w: 220px; }
 .admin--center { height: 100%; display: grid; place-items: center; }
-.admin__login { display: grid; gap: 12px; width: 300px; }
-.admin__login h1 { font-size: 16px; font-weight: 600; margin: 0 0 8px; }
+.admin__login {
+  display: grid; gap: 14px; width: min(340px, calc(100vw - 32px)); padding: 32px 28px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 16px; text-align: center;
+}
+.admin__login h1 { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 18px; font-weight: 600; margin: 0; }
 .admin__login input { font: inherit; font-size: 14px; background: #14161a; color: inherit; border: 1px solid #2a2d33; border-radius: 6px; padding: 10px 12px; }
 .admin__login input.error { border-color: var(--fake); }
-.admin__error { margin: -4px 0 0; color: var(--fake); font-size: 12px; }
+.admin__error { margin: 0; color: var(--fake); font-size: 12px; }
 .spacer { flex: 1; }
 
 /* shell */
@@ -490,8 +493,9 @@ a.row__title:hover { text-decoration: underline; text-underline-offset: 3px; }
 }
 
 /* ---- access: Google sign-in, who is signed in, users ---- */
-.admin__login-hint { margin: 0; font-size: 13px; text-align: center; }
-.admin__google { display: flex; justify-content: center; min-height: 44px; }
+.admin__login-hint { margin: 0 0 6px; font-size: 13px; line-height: 1.5; text-wrap: balance; }
+/* GSI iframe is light-scheme; matching it stops the browser painting an opaque white backdrop */
+.admin__google { display: flex; justify-content: center; min-height: 44px; color-scheme: light; }
 .admin__login-form { display: contents; }
 .sidebar__user { display: flex; align-items: center; gap: 10px; padding: 8px 12px; font-size: 12px; min-width: 0; }
 .sidebar__user img, .sidebar__avatar { width: 26px; height: 26px; border-radius: 50%; flex: none; }

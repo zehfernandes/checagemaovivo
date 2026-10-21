@@ -3,6 +3,7 @@ import App from './App.tsx'
 
 const Admin = lazy(() => import('./Admin.tsx').then((m) => ({ default: m.Admin })))
 const Review = lazy(() => import('./Review.tsx').then((m) => ({ default: m.Review })))
+const Compact = lazy(() => import('./Compact.tsx').then((m) => ({ default: m.Compact })))
 
 export function Root() {
   const [hash, setHash] = useState(location.hash)
@@ -11,7 +12,9 @@ export function Root() {
     window.addEventListener('hashchange', on)
     return () => window.removeEventListener('hashchange', on)
   }, [])
-  if (location.pathname.replace(/\/+$/, '') === '/admin') return <Suspense fallback={null}><Admin /></Suspense>
+  const path = location.pathname.replace(/\/+$/, '')
+  if (path === '/admin') return <Suspense fallback={null}><Admin /></Suspense>
+  if (path === '/sem-video') return <Suspense fallback={null}><Compact /></Suspense>
   if (hash.startsWith('#review')) return <Suspense fallback={null}><Review /></Suspense>
   return <App />
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Claim, Verdict } from '../types'
-import { VERDICT_LABEL } from '../types'
+import { PUBLIC_VERDICT } from './feedData'
 
 const LANES = 7
 const SPEED_PX_S = 120
@@ -136,7 +136,7 @@ export function Danmu({ claims, isLive, currentTime, enabled }: Props) {
         >
           <span className="danmu__badge">
             {b.verdict === 'pending' && <span className="spinner" />}
-            {VERDICT_LABEL[b.verdict]}
+            {PUBLIC_VERDICT[b.verdict]}
           </span>
           {b.text}
         </div>

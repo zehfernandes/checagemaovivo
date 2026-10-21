@@ -88,24 +88,15 @@ button { font: inherit; }
 .banner--error { background: #2a1010; color: #fecaca; }
 
 /* ---- stage ---- */
-.layout { display: grid; grid-template-columns: 1fr 400px; flex: 1; min-height: 0; border-top: 1px solid var(--border); }
-@media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
-.layout--collapsed { grid-template-columns: 1fr; }
-.side-toggle {
-  position: absolute; top: 10px; right: 10px; z-index: 5; display: inline-flex; align-items: center; gap: 6px;
-  background: rgba(0,0,0,.55); color: var(--text); border: 1px solid rgba(255,255,255,.12); border-radius: 999px;
-  width: 28px; height: 28px; justify-content: center; font-size: 18px; line-height: 1; cursor: pointer; opacity: .6; backdrop-filter: blur(4px);
-}
-.side-toggle:hover { opacity: 1; }
-.side-toggle__count { font-size: 11px; font-weight: 600; }
-.layout--collapsed .side-toggle { width: auto; padding: 0 10px 0 8px; }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) clamp(356px, 40vw, 570px); flex: 1; min-height: 0; }
 
 .stage { position: relative; background: black; display: flex; flex-direction: column; min-height: 0; }
+.stage__video { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .player { flex: 1; min-height: 0; }
 .player iframe { width: 100%; height: 100%; display: block; }
 .player--empty { display: grid; place-items: center; color: var(--muted); }
 
-.danmu { position: absolute; inset: 0 0 40px 0; overflow: hidden; pointer-events: none; }
+.danmu { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .danmu__item {
   position: absolute; left: 100%; white-space: nowrap; pointer-events: auto; cursor: default;
   display: inline-flex; align-items: center; gap: 8px;
@@ -128,14 +119,36 @@ button { font: inherit; }
 .danmu__item--inconclusive .danmu__badge { background: var(--inconclusive); color: #431407; }
 .danmu__item--pending { opacity: .8; }
 
-.scoreboard { display: flex; gap: 16px; padding: 10px 16px; font-size: 12px; color: var(--muted); background: var(--bg); }
-.score strong { color: var(--text); font-variant-numeric: tabular-nums; }
-.score--fake strong { color: var(--fake); }
-.score--valid strong { color: var(--valid); }
-.score--inconclusive strong { color: var(--inconclusive); }
 
 /* ---- sidebar ---- */
-.side { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--border); background: var(--bg); }
+.side { display: flex; flex-direction: column; min-height: 0; background: var(--bg); }
+.side .flist { padding: 12px 12px 24px; }
+
+/* ---- desktop: the room's name and status over the video; the feed ("N checagens" + filters, the cards) takes the
+   whole height on the right, its count on the same line as the header ---- */
+@media (min-width: 901px) {
+  .app { display: grid; grid-template-columns: minmax(0, 1fr) clamp(356px, 40vw, 570px); grid-template-rows: auto auto minmax(0, 1fr); }
+  .app > .topbar { grid-column: 1; grid-row: 1; }
+  .app > .banner { grid-column: 1; grid-row: 2; }
+  .app > .layout { display: contents; }
+  .app .stage { grid-column: 1; grid-row: 3; padding: 12px 16px 16px 20px; background: var(--bg); } /* video top = the first card on the right */
+  .app .stage__video { border-radius: 20px; overflow: hidden; background: #000; }
+  .app .stage .fscore { padding: 16px 0 0; --fscore-pad: 16px; }
+  .app .side { grid-column: 2; grid-row: 1 / -1; }
+  .side .fcount { min-height: 64px; padding: 12px 12px 12px 16px; }
+  .topbar .controls { flex: none; }
+}
+
+/* ---- phone: one scrolling page — header, video, score, "N checagens", the cards ---- */
+@media (max-width: 900px) {
+  .app { height: auto; min-height: 100%; }
+  .layout { display: block; }
+  .stage { display: block; }
+  .stage__video { aspect-ratio: 16 / 9; flex: none; }
+  .stage .stage-notice { min-height: 220px; }
+  .side .flist { padding: 0 4px 24px; overflow: visible; }
+  .stage .fscore { padding-top: 20px; --fscore-pad: 36px; }
+}
 .tabs { display: flex; gap: 18px; padding: 0 16px; border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none; }
 .tabs button {
   flex: none; white-space: nowrap;
@@ -236,8 +249,6 @@ button { font: inherit; }
 .room-picker { flex: 1; min-width: 0; max-width: 420px; background: transparent; color: var(--text); border: 0; border-bottom: 1px solid var(--border); padding: 8px 0; font: inherit; font-size: 14px; outline: none; }
 .room-picker:focus { border-bottom-color: var(--muted); }
 .room-picker option { background: var(--panel); }
-.view-swap { margin-left: 10px; font-size: 12px; color: var(--muted); white-space: nowrap; text-decoration: none; }
-.view-swap:hover { color: var(--text); }
 
 /* FitSelect: the select and an invisible copy of its selected label share one grid cell */
 .fit-select { display: inline-grid; min-width: 0; max-width: 100%; }
@@ -464,6 +475,12 @@ a.row__title:hover { text-decoration: underline; text-underline-offset: 3px; }
 .form .review__quote { padding: 4px 6px; font-size: 18px; line-height: 1.45; font-weight: 500; background: none; border-color: transparent; }
 .form .review__speaker:hover, .form .review__quote:hover { border-color: var(--border); }
 .form .review__speaker:focus, .form .review__quote:focus { border-color: var(--muted); background: var(--panel); }
+.form .review__speaker--swap { display: inline-flex; align-items: center; gap: 7px; padding: 3px 10px 3px 3px; border: 1px solid var(--border);
+  border-radius: 999px; color: var(--text); cursor: pointer; font: inherit; font-size: 14px; font-weight: 700; }
+.review__speaker--swap .speaker__photo { width: 22px; height: 22px; }
+.review__swap { color: var(--muted); font-weight: 400; }
+.review__speaker--swap:hover .review__swap { color: var(--text); }
+select.review__speaker { cursor: pointer; padding-right: 20px; }
 .review__verdict .segmented__opt { font-size: 14px; font-weight: 600; padding: 8px 16px; }
 .review__details > summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px; }
 .review__details > summary::before { content: '▸'; color: var(--muted); transition: transform .12s; }
@@ -542,3 +559,19 @@ a.row__title:hover { text-decoration: underline; text-underline-offset: 3px; }
 .sidebar__dot[data-state="paused"] { background: var(--inconclusive); }
 .sidebar__room--new { color: var(--muted); padding-left: 14px; }
 .sidebar__room--new:hover { color: var(--text); }
+
+/* ---- room speakers (Dados) ---- */
+.speakers__head { display: flex; align-items: center; }
+.speakers { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.speaker { display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; border-radius: 999px; border: 1px solid var(--border);
+  background: var(--panel); color: var(--text); font-size: 13px; cursor: pointer; }
+.speaker:hover { border-color: var(--muted); }
+.speaker__photo { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; flex: none; }
+.speaker__photo--empty { display: inline-grid; place-items: center; background: var(--panel-2); color: var(--muted); font-size: 10px; font-weight: 700; }
+.speaker-edit { display: flex; align-items: center; gap: 16px; }
+.speaker-edit__photo { width: 72px; height: 72px; flex: none; border-radius: 14px; overflow: hidden; border: 1px dashed var(--border); background: var(--panel-2);
+  color: var(--muted); font-size: 12px; cursor: pointer; display: grid; place-items: center; padding: 0; }
+.speaker-edit__photo img { width: 100%; height: 100%; object-fit: cover; }
+.speaker-edit__actions { display: flex; align-items: center; gap: 12px; }
+.field__hint--error { color: var(--fake); margin: 0; }
+

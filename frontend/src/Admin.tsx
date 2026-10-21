@@ -2,7 +2,8 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormE
 import { createPortal } from 'react-dom'
 import { adminHeaders, clearAdminToken, loadGoogle, reviewerName, setAdminToken, setReviewerName, type AdminUser, type AuthMode } from './admin'
 import { useSession } from './useSession'
-import type { Claim, NewsStats, ReviewStatus, Room as PublicRoom, Source, TranscriptSegment, UsageSummary, Verdict } from './types'
+import { rosterMatcher } from './components/feedData'
+import type { Claim, NewsStats, ReviewStatus, Room as PublicRoom, Source, Speaker, TranscriptSegment, UsageSummary, Verdict } from './types'
 import { VERDICT_LABEL } from './types'
 
 type Final = Exclude<Verdict, 'pending'>
@@ -418,6 +419,9 @@ function RoomDetails({ room: r, busy, run, save, onSave, onDeleted, control }: {
   const [url, setUrl] = useState(r.url)
   const [kind, setKind] = useState(r.kind)
   const [view, setView] = useState<'data' | 'logs'>('data')
+  const [editing, setEditing] = useState<number | 'new' | null>(null) // the speaker open in the dialog
+  const closeSpeaker = useCallback(() => setEditing(null), [])
+  const speakers = r.speakers ?? []
   const dirty = name !== r.name || url !== r.url || kind !== r.kind
   const patch = (body: object) => run(() => api(`/admin/rooms/${r.id}`, { method: 'PATCH', body: JSON.stringify(body) }))
   return (
@@ -450,6 +454,12 @@ function RoomDetails({ room: r, busy, run, save, onSave, onDeleted, control }: {
               : 'As checagens vão direto para o site e continuam na fila de revisão. Vale para as próximas.'} />
         </section>
       )}
+      {editing !== null && (
+        <SpeakerDialog initial={editing === 'new' ? null : speakers[editing]} onClose={closeSpeaker}
+          taken={speakers.filter((_, i) => i !== editing).map((s) => s.name)}
+          onSave={async (s) => { await patch({ speakers: editing === 'new' ? [...speakers, s] : speakers.map((x, i) => (i === editing ? s : x)) }); setEditing(null) }}
+          onRemove={editing === 'new' ? undefined : async () => { await patch({ speakers: speakers.filter((_, i) => i !== editing) }); setEditing(null) }} />
+      )}
       {view === 'data' && <form className={`panel__section form${r.processing ? ' form--locked' : ''}`} onSubmit={(e) => { e.preventDefault(); patch({ name, url, kind }) }} onKeyDown={cmdEnter}>
         {r.processing && <p className="muted form__note">Pare a checagem para editar a sala.</p>}
         <fieldset className="form__fieldset" disabled={r.processing}>
@@ -469,8 +479,112 @@ function RoomDetails({ room: r, busy, run, save, onSave, onDeleted, control }: {
         </footer>
         </fieldset>
       </form>}
+      {view === 'data' && (
+        <section className="panel__section">
+          <div className="speakers__head">
+            <span className="field__label">Falantes</span>
+            <span className="spacer" />
+            <button type="button" className="link" onClick={() => setEditing('new')}>+ Adicionar</button>
+          </div>
+          {speakers.length === 0 ? (
+            <p className="field__hint">Sem falantes cadastrados, o site mostra todo mundo que a máquina identificar. Cadastre os candidatos para mostrar só o que eles disserem, com foto.</p>
+          ) : (
+            <ul className="speakers">
+              {speakers.map((s, i) => (
+                <li key={`${s.name}-${i}`}>
+                  <button type="button" className="speaker" onClick={() => setEditing(i)} title="Editar">
+                    <SpeakerPhoto speaker={s} />
+                    <span className="speaker__name">{s.name}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
       </div>
     </aside>
+  )
+}
+
+function SpeakerPhoto({ speaker: s }: { speaker: Speaker }) {
+  return s.photo ? <img className="speaker__photo" src={s.photo} alt="" />
+    : <span className="speaker__photo speaker__photo--empty">{s.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}</span>
+}
+
+// a square crop (biased to the top, where the face usually is), small enough to travel inside the room's data
+async function squarePhoto(file: File, size = 192): Promise<string> {
+  const img = await createImageBitmap(file)
+  const side = Math.min(img.width, img.height)
+  const canvas = document.createElement('canvas')
+  canvas.width = canvas.height = size
+  canvas.getContext('2d')!.drawImage(img, (img.width - side) / 2, (img.height - side) * 0.25, side, side, 0, 0, size, size)
+  img.close()
+  return canvas.toDataURL('image/jpeg', 0.85)
+}
+
+function SpeakerDialog({ initial, taken, onClose, onSave, onRemove }: {
+  initial: Speaker | null; taken: string[]; onClose: () => void; onSave: (s: Speaker) => Promise<void>; onRemove?: () => Promise<void>
+}) {
+  const [name, setName] = useState(initial?.name ?? '')
+  const [photo, setPhoto] = useState<string | null>(initial?.photo ?? null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const file = useRef<HTMLInputElement>(null)
+  const clash = taken.some((t) => t.trim().toLowerCase() === name.trim().toLowerCase())
+  async function pick(f: File | undefined) {
+    if (!f) return
+    try { setPhoto(await squarePhoto(f)); setError('') } catch { setError('Não consegui ler esta imagem. Tente um JPG ou PNG.') }
+  }
+  async function act(fn: () => Promise<void>) {
+    setBusy(true)
+    try { await fn() } finally { setBusy(false) }
+  }
+  return (
+    <Dialog title={initial ? 'Editar falante' : 'Novo falante'} onClose={onClose}>
+      <form className="form" onKeyDown={cmdEnter} onSubmit={(e) => { e.preventDefault(); act(() => onSave({ name: name.trim(), photo })) }}>
+        <div className="speaker-edit">
+          <button type="button" className="speaker-edit__photo" onClick={() => file.current?.click()} title="Escolher foto">
+            {photo ? <img src={photo} alt="" /> : <span>Foto</span>}
+          </button>
+          <div className="speaker-edit__actions">
+            <button type="button" className="btn btn--ghost" onClick={() => file.current?.click()}>{photo ? 'Trocar foto' : 'Escolher foto'}</button>
+            {photo && <button type="button" className="link" onClick={() => setPhoto(null)}>Tirar foto</button>}
+          </div>
+          <input ref={file} type="file" accept="image/*" hidden onChange={(e) => { pick(e.target.files?.[0]); e.target.value = '' }} />
+        </div>
+        {error && <p className="field__hint field__hint--error">{error}</p>}
+        <Field label="Nome" hint={clash ? 'Já existe um falante com esse nome nesta sala.' : 'Como aparece no site. A máquina também reconhece variações (ex.: “João” para “João da Silva”).'}>
+          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="João" maxLength={80} required />
+        </Field>
+        <footer className="form__actions">
+          {onRemove && <button type="button" className="link link--danger room-delete" disabled={busy} onClick={() => act(onRemove)}>Remover</button>}
+          <button type="button" className="btn btn--ghost" onClick={onClose}>Cancelar</button>
+          <button type="submit" className="btn" disabled={busy || !name.trim() || clash}>{busy ? 'Salvando…' : 'Salvar'}</button>
+        </footer>
+      </form>
+    </Dialog>
+  )
+}
+
+// who said it, from the room's speakers: with two, one click swaps to the other; with one or more than two, a list
+function SpeakerPicker({ value, onChange, roster }: { value: string; onChange: (name: string) => void; roster: Speaker[] }) {
+  const current = rosterMatcher(roster)(value) // the machine may have written a variation ("Flávio Bolsonaro" for "Flávio")
+  if (roster.length === 2) {
+    const next = current ? roster.find((s) => s !== current) ?? roster[0] : roster[0]
+    return (
+      <button type="button" className="review__speaker review__speaker--swap" onClick={() => onChange(next.name)} title={`Trocar para ${next.name}`}>
+        {current && <SpeakerPhoto speaker={current} />}
+        <span>{current?.name ?? (value || 'Quem falou')}</span>
+        <span className="review__swap" aria-hidden>⇄</span>
+      </button>
+    )
+  }
+  return (
+    <select className="review__speaker" value={current?.name ?? ''} onChange={(e) => onChange(e.target.value)} aria-label="Quem falou">
+      {!current && <option value="" disabled>{value || 'Quem falou'}</option>}
+      {roster.map((s) => <option key={s.name} value={s.name}>{s.name}</option>)}
+    </select>
   )
 }
 
@@ -684,7 +798,7 @@ function ClaimsPage({ room, notify, me, aside, reviewSlot, reviewSecondary }: {
       {aside}
       {claim && (
         <ReviewCard key={`${claim.id}-${claim.verdict === 'pending'}`} claim={claim} transcript={session.transcript} queue={ready}
-          onClose={close} onSkip={skip} onDecide={decide} onRecheck={session.recheck} />
+          onClose={close} onSkip={skip} onDecide={decide} onRecheck={session.recheck} roster={room.speakers ?? []} />
       )}
       {askName && <ReviewerDialog initial={reviewer} onClose={reviewer ? () => setAskName(false) : undefined}
         onSave={(n) => { setReviewerName(n); setTypedName(n); setAskName(false); afterName.current?.(); afterName.current = null }} />}
@@ -692,9 +806,10 @@ function ClaimsPage({ room, notify, me, aside, reviewSlot, reviewSecondary }: {
   )
 }
 
-function ReviewCard({ claim: live, transcript, queue, onClose, onSkip, onDecide, onRecheck }: {
+function ReviewCard({ claim: live, transcript, queue, onClose, onSkip, onDecide, onRecheck, roster }: {
   claim: Claim; transcript: TranscriptSegment[]; queue: number; onClose: () => void; onSkip: () => Promise<boolean>
   onDecide: (c: Claim, action: 'publish' | 'irrelevant', edits?: Edits) => Promise<boolean>; onRecheck: (id: string) => void
+  roster: Speaker[] // the room's registered speakers: who said it is picked from them instead of typed
 }) {
   useEscape(onClose)
   // while the card animates out, it keeps showing what was decided on (the live claim turns "published"
@@ -753,8 +868,9 @@ function ReviewCard({ claim: live, transcript, queue, onClose, onSkip, onDecide,
           {c.deep_pending && <p className="review__notice">Checagem profunda em andamento — o veredito pode mudar.</p>}
           <div className="field">
             <div className="review__said-box">
-              <input className="review__speaker" value={speaker} onChange={(e) => setSpeaker(e.target.value)} placeholder="Quem falou" aria-label="Quem falou"
-                size={Math.max(8, speaker.length + 1)} />
+              {roster.length > 0 ? <SpeakerPicker value={speaker} onChange={setSpeaker} roster={roster} />
+                : <input className="review__speaker" value={speaker} onChange={(e) => setSpeaker(e.target.value)} placeholder="Quem falou" aria-label="Quem falou"
+                  size={Math.max(8, speaker.length + 1)} />}
               <textarea className="review__quote" value={quote} onChange={(e) => setQuote(e.target.value)} aria-label="Frase como aparece no site"
                 rows={Math.min(5, Math.max(2, Math.ceil(quote.length / 60)))} />
             </div>

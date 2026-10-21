@@ -19,6 +19,7 @@ export interface Claim {
   reviewed_by?: string | null
   reviewed_at?: number | null
   rev?: number // bumped on every decision; a stale rev is refused
+  human_reviewed?: boolean // public: a person published or corrected it (vs. the machine's verdict as it came out)
   skipped_by?: string[] // reviewers who passed on it: not offered to them again
   verdict: Verdict
   confidence: number
@@ -104,6 +105,12 @@ export interface NewsStats {
   sources: Record<string, number>
 }
 
+// who speaks in a room (set in /admin): when the list is not empty the site shows only what they said
+export interface Speaker {
+  name: string
+  photo?: string | null // small square photo as a data: URL
+}
+
 export interface Room {
   id: string
   name: string
@@ -116,4 +123,5 @@ export interface Room {
   processing: boolean
   complete: boolean
   claims: number
+  speakers?: Speaker[]
 }

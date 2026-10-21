@@ -1,175 +1,64 @@
-/* /sem-video — fact-checks without the video. Mobile first; desktop gets "Agora" + feed side by side;
-   a TV (or ?tv=1) gets a big featured claim and the last few, sized to the screen, nothing needing a mouse. */
-.compact { --gap: 16px; --quote: 18px; --now-quote: 22px; min-height: 100%; display: flex; flex-direction: column; background: var(--bg); }
+/* /sem-video — fact-checks without the video. Mobile first (header, score bars, count, cards; the shared look is
+   in feed.css); desktop gets "Agora" + feed side by side; a TV (or ?tv=1) gets a big featured claim and the last
+   few, sized to the screen, nothing needing a mouse. */
+.compact { min-height: 100%; display: flex; flex-direction: column; }
 .compact button { color: inherit; }
 
-/* ---- bar: brand, room, live state, score ---- */
-.compact__bar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
-  padding: 12px 16px; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
-.compact__brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 14px; white-space: nowrap; }
-.compact__dot { width: 8px; height: 8px; border-radius: 50%; background: var(--fake); }
-.compact__room { min-width: 0; flex: 1 1 140px; max-width: 360px; font: inherit; font-size: 14px; color: var(--text); background: var(--panel);
-  border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; }
-.compact__room--static { background: none; border-color: transparent; padding-left: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.compact__state { font-size: 12px; font-weight: 600; letter-spacing: .02em; color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
-.compact__state::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.compact__state--live { color: var(--fake); }
-.compact__state--live::before { animation: compact-pulse 1.4s infinite; }
-.compact__state--listening { color: var(--text-2); }
-/* phone: brand + state on the first line, the room on its own full-width line, then the score */
-.compact__state { order: 2; margin-left: auto; }
-.compact__room { order: 3; flex-basis: 100%; max-width: none; }
-.compact__room-wrap { order: 3; }
-.compact__swap { order: 2; font-size: 12px; color: var(--muted); white-space: nowrap; text-underline-offset: 3px; }
-.compact__swap:hover { color: var(--text); }
-.compact__score { order: 4; flex-basis: 100%; display: flex; gap: 14px; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.compact__count strong { font-size: 15px; }
-.compact__count--fake strong { color: var(--fake); }
-.compact__count--valid strong { color: var(--valid); }
-.compact__count--inconclusive strong { color: var(--inconclusive); }
-@keyframes compact-pulse { 50% { opacity: .35; } }
+.compact__bar { position: sticky; top: 0; z-index: 2; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px); }
+.compact__desk { display: none; }
 
-.compact__empty { flex: 1; display: grid; place-items: center; padding: 32px 16px; color: var(--muted); text-align: center; font-size: 15px; }
-
-/* ---- main: feed only on a phone ---- */
+/* ---- main: score + feed on a phone ---- */
 .compact__main { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr); }
 .compact__now { display: none; }
-.compact__label { font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); }
-
 .compact__feed { min-width: 0; }
-.compact__filters { display: flex; gap: 6px; padding: 10px 16px; overflow-x: auto; scrollbar-width: none; }
-.compact__filters::-webkit-scrollbar { display: none; }
-.compact__chip { flex: none; display: inline-flex; gap: 6px; align-items: center; font-size: 13px; padding: 6px 12px; border-radius: 999px;
-  border: 1px solid var(--border); background: var(--panel); cursor: pointer; white-space: nowrap; }
-.compact__chip em { font-style: normal; color: var(--muted); font-variant-numeric: tabular-nums; }
-.compact__chip.active { background: var(--text); color: var(--bg); border-color: var(--text); }
-.compact__chip.active em { color: inherit; opacity: .7; }
-.compact__list { list-style: none; margin: 0; padding: 0 16px 32px; }
-.compact__item { border-bottom: 1px solid var(--border); }
-.compact__none { padding: 24px 0; color: var(--muted); }
-
-/* ---- a claim ---- */
-.cclaim { position: relative; padding: 16px 0 16px 14px; border-left: 3px solid var(--pending); }
-.cclaim--fake { border-left-color: var(--fake); }
-.cclaim--valid { border-left-color: var(--valid); }
-.cclaim--inconclusive { border-left-color: var(--inconclusive); }
-.cclaim--fresh { animation: cclaim-fresh 6s ease-out; }
-@keyframes cclaim-fresh { from { background: color-mix(in srgb, var(--text) 9%, transparent); } }
-.cclaim__head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 12px; }
-.cclaim__verdict { display: inline-flex; align-items: center; gap: 6px; font-weight: 800; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--pending); }
-.cclaim--fake .cclaim__verdict { color: var(--fake); }
-.cclaim--valid .cclaim__verdict { color: var(--valid); }
-.cclaim--inconclusive .cclaim__verdict { color: var(--inconclusive); }
-.cclaim__spin { width: 10px; height: 10px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; }
-.cclaim__deep { color: var(--inconclusive); }
-.cclaim__when { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.cclaim__quote { margin: 0; font-size: var(--quote); line-height: 1.4; font-weight: 500; letter-spacing: -.01em; text-wrap: pretty; }
-.cclaim__speaker { font-weight: 800; }
-/* a list item opens its details in a modal */
-.cclaim--link { cursor: pointer; border-radius: 0 8px 8px 0; transition: background-color .12s; }
-.cclaim--link:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
-.cclaim--link:focus-visible { outline: 2px solid var(--text-2); outline-offset: 2px; }
-.cclaim__why { margin: 10px 0 0; font-size: 15px; line-height: 1.6; color: var(--text-2); }
-.cclaim__sources { margin: 10px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
-.cclaim__sources a { color: var(--text-2); text-underline-offset: 3px; overflow-wrap: anywhere; }
-.cclaim__sources li::before { content: '↗ '; color: var(--muted); }
-
-/* ---- desktop: "Agora" on the left (sticky), feed on the right ---- */
-@media (min-width: 960px) {
-  .compact { --quote: 17px; --now-quote: clamp(24px, 2.2vw, 34px); }
-  .compact__bar { flex-wrap: nowrap; padding: 14px 28px; }
-  .compact__state, .compact__room, .compact__room-wrap, .compact__swap, .compact__score { order: 0; }
-  .compact__state { margin-left: 0; }
-  .compact__room { flex-basis: auto; max-width: 360px; }
-  .compact__score { flex-basis: auto; margin-left: auto; }
-  .compact__main { grid-template-columns: minmax(0, 1.15fr) minmax(360px, 1fr); }
-  .compact__now { display: flex; flex-direction: column; gap: 14px; position: sticky; top: 64px; align-self: start;
-    max-height: calc(100vh - 64px); overflow-y: auto; padding: 28px 32px 32px; border-right: 1px solid var(--border); }
-  .compact__item--featured { display: none; }
-  .compact__filters { padding: 14px 24px; }
-  .compact__list { padding: 0 24px 40px; }
-}
-.cclaim--featured { padding: 4px 0 4px 20px; border-left-width: 5px; }
-.cclaim--featured .cclaim__verdict { font-size: 15px; }
-.cclaim--featured .cclaim__quote { font-size: var(--now-quote); line-height: 1.3; font-weight: 600; }
-.cclaim--featured .cclaim__why { font-size: max(15px, calc(var(--now-quote) * .55)); }
-
-.compact__people { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; padding-top: 16px; border-top: 1px solid var(--border); }
-.compact__person { display: grid; grid-template-columns: 128px 1fr; align-items: center; gap: 12px; font-size: 13px; }
-.compact__person-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.compact__track { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.compact__bars { display: flex; flex: none; gap: 2px; height: 22px; border-radius: 6px; overflow: hidden; min-width: 22px; } /* width set inline: (track − room for the total) × share of the top speaker */
-.compact__person-total { font-size: 12px; font-weight: 700; color: var(--text-2); font-variant-numeric: tabular-nums; flex: none; }
-.compact__unnamed { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
-.compact__unnamed strong { color: var(--text-2); }
-.compact__seg { min-width: 22px; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #0a0b0f; font-variant-numeric: tabular-nums; }
-.compact__seg--fake { background: var(--fake); }
-.compact__seg--valid { background: var(--valid); }
-.compact__seg--inconclusive { background: var(--inconclusive); }
-
-/* ---- TV (big screen, or ?tv=1): sized to the screen; the featured claim dominates; only the last few listed ---- */
-.compact--tv { --quote: clamp(18px, 1.15vw, 30px); --now-quote: clamp(30px, 2.9vw, 76px); height: 100vh; overflow: hidden; }
-.compact--tv .compact__bar { flex-wrap: nowrap; padding: 1.2vw 2.4vw; }
-.compact--tv .compact__brand, .compact--tv .compact__room { font-size: clamp(15px, 1.05vw, 28px); }
-.compact--tv .compact__state, .compact--tv .compact__count { font-size: clamp(13px, .9vw, 24px); }
-.compact--tv .compact__count strong { font-size: clamp(16px, 1.3vw, 34px); }
-.compact--tv .compact__state, .compact--tv .compact__room, .compact--tv .compact__room-wrap, .compact--tv .compact__score { order: 0; }
-.compact--tv .compact__state { margin-left: 0; }
-.compact--tv .compact__room { flex-basis: auto; max-width: 30vw; }
-.compact--tv .compact__score { flex-basis: auto; margin-left: auto; }
-.compact--tv .compact__main { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); min-height: 0; }
-.compact--tv .compact__now { display: flex; flex-direction: column; position: static; max-height: none; height: 100%; overflow: hidden;
-  justify-content: center; gap: 1.4vw; padding: 2vw 3vw; border-right: 1px solid var(--border); }
-.compact--tv .compact__label { font-size: clamp(12px, .8vw, 22px); }
-.compact--tv .compact__feed { overflow: hidden; }
-.compact--tv .compact__filters { display: none; }
-.compact--tv .compact__list { padding: 1vw 2vw; }
-.compact--tv .compact__item--featured, .compact--tv .compact__item--more { display: none; }
-.compact--tv .cclaim { padding: 1vw 0 1vw 1vw; }
-.compact--tv .cclaim--featured { padding-left: 1.4vw; }
-.compact--tv .cclaim__head, .compact--tv .cclaim__verdict { font-size: clamp(12px, .8vw, 22px); }
-.compact--tv .cclaim--featured .cclaim__verdict { font-size: clamp(15px, 1.2vw, 32px); }
-.compact--tv .compact__person { grid-template-columns: 9vw 1fr; font-size: clamp(13px, .9vw, 24px); }
-.compact--tv .compact__bars { height: clamp(22px, 1.6vw, 44px); }
-.compact--tv .compact__person-total, .compact--tv .compact__unnamed { font-size: clamp(12px, .8vw, 22px); }
-.compact--tv .compact__seg { font-size: clamp(12px, .8vw, 22px); min-width: 2vw; }
-@media (prefers-reduced-motion: reduce) {
-  .cclaim--fresh, .compact__state--live::before, .cclaim__spin { animation: none; }
-}
-.compact--tv .cclaim__sources { font-size: clamp(13px, .75vw, 20px); gap: .3vw; }
+.compact__phone-score .fscore { padding-top: 8px; }
 
 /* "Assistindo em: Internet / TV" (lives only): Internet holds each claim a few seconds, TV shows it at once */
-.compact__watching { order: 2; display: inline-flex; align-items: center; gap: 2px; font-size: 12px; color: var(--muted); }
-.compact__watching > span { margin-right: 6px; }
-.compact__watching button { padding: 4px 10px; border: 1px solid var(--border); background: var(--panel); font-size: 12px; cursor: pointer; }
-.compact__watching button:first-of-type { border-radius: 999px 0 0 999px; }
-.compact__watching button:last-of-type { border-radius: 0 999px 999px 0; margin-left: -1px; }
-.compact__watching button.active { background: var(--text); color: var(--bg); border-color: var(--text); }
-@media (min-width: 960px) { .compact__watching { order: 0; } }
-.compact--tv .compact__watching { order: 0; font-size: clamp(12px, .8vw, 22px); }
-.compact--tv .compact__watching button { font-size: inherit; padding: .3vw .8vw; }
+.compact__watching { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--f-muted); }
+.compact__watching > span { margin-right: 4px; }
+.compact__watching .fopt { height: 32px; padding: 0 12px; font-size: 13px; }
+.fopts .compact__watching > span { display: none; }
+.fopts .compact__watching .fopt { height: 40px; padding: 0 14px; font-size: 15px; }
 
-/* ---- details modal: a bottom sheet on a phone, a centred card on bigger screens ---- */
-.cmodal { position: fixed; inset: 0; z-index: 10; display: flex; align-items: flex-end; justify-content: center;
-  background: rgba(0, 0, 0, .6); animation: cmodal-fade .14s ease-out; }
-.cmodal__box { position: relative; width: 100%; max-height: 88vh; overflow-y: auto; padding: 20px 20px 28px;
-  background: var(--panel); border-top: 1px solid var(--border); border-radius: 16px 16px 0 0; animation: cmodal-up .18s cubic-bezier(.2, .7, .3, 1); }
-.cmodal__close { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; border-radius: 50%; border: 0;
-  background: var(--panel-2); font-size: 22px; line-height: 1; cursor: pointer; }
-.cmodal__close:hover { background: var(--border); }
-/* inside the modal the claim reads like the featured one ("Agora"): same sizes, scaled to the screen */
-.cmodal { --now-quote: 24px; }
-.cclaim--detailed { padding-right: 44px; }
-.cclaim--detailed .cclaim__why { margin-top: 14px; }
-.cclaim--detailed .cclaim__sources { margin-top: 14px; font-size: max(13px, calc(var(--now-quote) * .45)); gap: 8px; }
-@keyframes cmodal-fade { from { opacity: 0; } }
-@keyframes cmodal-up { from { transform: translateY(24px); opacity: .6; } }
-@media (min-width: 640px) {
-  .cmodal { align-items: center; padding: 24px; }
-  .cmodal__box { max-width: 880px; border: 1px solid var(--border); border-radius: 14px; padding: 32px 32px 36px; }
+/* ---- desktop: "Agora" on the left under the header; the feed takes the whole height on the right, its count on the
+   header's line — the same columns, spacing and cards as / with video ---- */
+@media (min-width: 960px) {
+  .compact:not(.compact--tv) { height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) clamp(356px, 40vw, 570px); grid-template-rows: auto minmax(0, 1fr); }
+  .compact:not(.compact--tv) > .compact__bar { grid-column: 1; grid-row: 1; position: static; backdrop-filter: none; }
+  .compact:not(.compact--tv) > .compact__main { display: contents; }
+  .compact:not(.compact--tv) > .compact__empty { grid-column: 1 / -1; grid-row: 2; }
+  .compact:not(.compact--tv) .compact__now { grid-column: 1; grid-row: 2; overflow-y: auto; }
+  .compact:not(.compact--tv) .compact__feed { grid-column: 2; grid-row: 1 / -1; display: flex; flex-direction: column; min-height: 0; }
+  .compact:not(.compact--tv) .compact__feed .flist { flex: 1; min-height: 0; overflow-y: auto; padding: 12px 12px 24px; }
+  .compact:not(.compact--tv) .compact__feed .fcount { min-height: 64px; padding: 12px 12px 12px 16px; }
+  .compact__desk { display: inline-flex; }
+  .compact__now { display: flex; flex-direction: column; gap: 16px; padding: 12px 16px 32px 20px; } /* top = the first card on the right (count 64px + list 12px) */
+  .compact__now .fscore { padding: 0; }
+  .compact__phone-score { display: none; }
+  .compact__item--featured { display: none; }
+  .fcard--featured { padding: 24px 24px 20px; gap: 18px; }
+  .fcard--featured .fcard__quote { font-size: clamp(22px, 2vw, 30px); }
 }
-@media (min-width: 960px) { .cmodal { --now-quote: clamp(26px, 2.4vw, 38px); } }
-.compact--tv .cmodal { --now-quote: clamp(32px, 2.9vw, 76px); }
-.compact--tv .cmodal__box { max-width: 72vw; max-height: 90vh; padding: 2.4vw 2.8vw; }
-.compact--tv .cmodal__close { width: clamp(36px, 2.4vw, 64px); height: clamp(36px, 2.4vw, 64px); font-size: clamp(22px, 1.6vw, 44px); }
-@media (prefers-reduced-motion: reduce) { .cmodal, .cmodal__box { animation: none; } }
+
+/* ---- TV (big screen, or ?tv=1): sized to the screen; the featured claim dominates; only the last few listed ---- */
+.compact--tv { height: 100vh; overflow: hidden; }
+.compact--tv .compact__bar { padding: 1.2vw 2.4vw; }
+.compact--tv .fhead__title { font-size: clamp(17px, 1.2vw, 32px); }
+.compact--tv .flive { font-size: clamp(15px, .9vw, 26px); height: auto; padding: .5vw 1vw; }
+.compact--tv .compact__main { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); min-height: 0; }
+.compact--tv .compact__now { display: flex; position: static; max-height: none; height: 100%; overflow: hidden; justify-content: center; gap: 1.6vw; padding: 2vw 2vw 2vw 3vw; }
+.compact--tv .compact__phone-score, .compact--tv .fcount__filter { display: none; }
+.compact--tv .compact__feed { overflow: hidden; }
+.compact--tv .compact__feed .flist { padding: 0 2vw 1vw 0; gap: .5vw; }
+.compact--tv .compact__item--featured, .compact--tv .compact__item--more { display: none; }
+.compact--tv .fcard { border-radius: 1.4vw; padding: 1vw 1.1vw; gap: .8vw; }
+.compact--tv .fcard__name { font-size: clamp(17px, 1vw, 28px); }
+.compact--tv .fcard__quote { font-size: clamp(16px, 1.05vw, 30px); }
+.compact--tv .fcard--featured { padding: 1.8vw; gap: 1.2vw; }
+.compact--tv .fcard--featured .fcard__quote { font-size: clamp(30px, 2.6vw, 72px); }
+.compact--tv .fcard--featured .fcard__why { font-size: clamp(15px, 1.15vw, 32px); }
+.compact--tv .fpill, .compact--tv .fchip { font-size: clamp(15px, .9vw, 26px); height: auto; padding: .4vw .8vw; }
+.compact--tv .fcount__n { font-size: clamp(17px, 1vw, 28px); }
+.compact--tv .fscore__seg { height: clamp(32px, 2vw, 56px); font-size: clamp(15px, .9vw, 26px); }
+.compact--tv .fscore .favatar { width: clamp(32px, 2vw, 56px); height: clamp(32px, 2vw, 56px); } /* as tall as the bars */
+.compact--tv .fcard__chev { display: none; }

@@ -5,6 +5,7 @@ starts/stops processing for it from /admin. Stored in the shared cache DB (table
 """
 from __future__ import annotations
 
+import json
 import secrets
 import sqlite3
 import time
@@ -19,7 +20,7 @@ CREATE TABLE IF NOT EXISTS rooms (
 );
 """
 # columns added after the table existed: (name, declaration)
-MIGRATIONS = [("human_review", "INTEGER DEFAULT 1")]
+MIGRATIONS = [("human_review", "INTEGER DEFAULT 1"), ("speakers", "TEXT DEFAULT '[]'")]
 
 
 class RoomStore:
@@ -52,12 +53,14 @@ class RoomStore:
         return self.get(room_id)  # type: ignore[return-value]
 
     def update(self, room_id: str, **fields) -> dict | None:
-        allowed = {k: v for k, v in fields.items() if k in ("name", "url", "kind", "active", "human_review") and v is not None}
+        allowed = {k: v for k, v in fields.items() if k in ("name", "url", "kind", "active", "human_review", "speakers") and v is not None}
         if "url" in allowed:
             allowed["video_id"] = audio.extract_video_id(allowed["url"]) or allowed["url"]
         for flag in ("active", "human_review"):
             if flag in allowed:
                 allowed[flag] = int(bool(allowed[flag]))
+        if "speakers" in allowed:
+            allowed["speakers"] = json.dumps(allowed["speakers"], ensure_ascii=False)
         if allowed:
             allowed["updated"] = time.time()
             sets = ", ".join(f"{k} = ?" for k in allowed)

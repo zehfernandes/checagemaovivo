@@ -39,6 +39,7 @@ button { font: inherit; }
 }
 .btn:disabled { opacity: .5; cursor: default; }
 .btn--stop { background: transparent; color: var(--text); border: 1px solid var(--border); }
+.btn--danger { background: var(--fake); color: #fff; }
 .link {
   background: none; border: 0; padding: 0 2px; color: var(--muted); cursor: pointer; font-size: inherit; text-decoration: underline;
   text-underline-offset: 3px; text-decoration-color: var(--border);
@@ -235,6 +236,15 @@ button { font: inherit; }
 .room-picker { flex: 1; min-width: 0; max-width: 420px; background: transparent; color: var(--text); border: 0; border-bottom: 1px solid var(--border); padding: 8px 0; font: inherit; font-size: 14px; outline: none; }
 .room-picker:focus { border-bottom-color: var(--muted); }
 .room-picker option { background: var(--panel); }
+.view-swap { margin-left: 10px; font-size: 12px; color: var(--muted); white-space: nowrap; text-decoration: none; }
+.view-swap:hover { color: var(--text); }
+
+/* FitSelect: the select and an invisible copy of its selected label share one grid cell */
+.fit-select { display: inline-grid; min-width: 0; max-width: 100%; }
+.fit-select > * { grid-area: 1 / 1; min-width: 0; }
+.fit-select > select { width: 0; min-width: 100%; max-width: none; } /* the sizer alone sets the width, not the longest option */
+.fit-select__sizer { visibility: hidden; white-space: pre; overflow: hidden; }
+.fit-select__arrow { display: inline-block; width: 22px; }
 
 /* ---- /admin ---- */
 .admin { --row-h: 44px; --panel-w: 400px; --side-w: 220px; }
@@ -258,6 +268,7 @@ button { font: inherit; }
 }
 .sidebar__item:hover { color: var(--text); background: rgba(255,255,255,.04); }
 .sidebar__item.active { color: var(--text); background: rgba(255,255,255,.07); }
+.sidebar__item--label, .sidebar__item--label:hover { cursor: default; background: none; color: var(--muted); }
 .sidebar__count { margin-left: auto; font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .sidebar__count--live { color: var(--valid); }
 .shell__main { flex: 1; min-width: 0; display: flex; }
@@ -321,16 +332,20 @@ a.row__title:hover { text-decoration: underline; text-underline-offset: 3px; }
 .panel__heading { display: flex; flex-direction: column; min-width: 0; }
 .panel__title { font-size: 14px; font-weight: 600; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .panel__body { flex: 1; overflow-y: auto; min-height: 0; }
+.panel > .toolbar { padding: 10px 20px; min-height: 50px; } /* same line as the checks toolbar, which has the search box */
+.panel > .toolbar .btn { padding: 5px 14px; font-size: 13px; }
 .panel__section { padding: 18px 20px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; }
 .panel__section:last-child { border-bottom: 0; }
 .panel__status { margin: 0; font-size: 13px; line-height: 1.5; }
-.panel__links { display: flex; gap: 16px; font-size: 13px; }
 .panel__footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--border); font-size: 13px; }
 .facts { display: flex; gap: 24px; margin: 0; }
 .facts div { display: flex; flex-direction: column; gap: 2px; }
 .facts dt { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .facts dd { margin: 0; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .activity { list-style: none; margin: 0; padding: 0; max-height: 420px; overflow-y: auto; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.panel__body--logs { display: flex; flex-direction: column; overflow: hidden; } /* the log list takes the rest and scrolls */
+.panel__section--fill { flex: 1; min-height: 0; }
+.panel__section--fill .activity { flex: 1; min-height: 0; max-height: none; }
 .activity__line { display: grid; grid-template-columns: auto auto 1fr; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--border); color: var(--text-2); }
 .activity__line time { color: var(--muted); font-variant-numeric: tabular-nums; }
 .activity__src { color: var(--muted); }
@@ -351,6 +366,9 @@ a.row__title:hover { text-decoration: underline; text-underline-offset: 3px; }
 .field__hint { font-size: 12px; color: var(--muted); line-height: 1.45; }
 .form input, .form textarea, .list-edit input { font: inherit; font-size: 13px; background: var(--panel); color: inherit; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; min-width: 0; width: 100%; }
 .form textarea { resize: vertical; line-height: 1.5; }
+.form__fieldset { display: contents; }
+.form--locked .field, .form--locked .switch, .form--locked .form__actions { opacity: .5; }
+.form__note { margin: 0; font-size: 12px; }
 .form__actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
 .kbd-hint { font-size: 12px; color: var(--muted); margin: 0 auto 0 0; }
 .segmented { display: inline-flex; background: var(--panel); border: 1px solid var(--border); border-radius: 7px; padding: 2px; gap: 2px; align-self: flex-start; }
@@ -420,7 +438,6 @@ a.row__title:hover { text-decoration: underline; text-underline-offset: 3px; }
 .chip--draft { color: var(--inconclusive); border-color: color-mix(in srgb, var(--inconclusive) 40%, transparent); }
 .chip--published { color: var(--valid); border-color: color-mix(in srgb, var(--valid) 35%, transparent); }
 .chip--held { color: var(--text); border-style: dashed; }
-.search--select { width: auto; flex: none; }
 .dialog__backdrop--review { place-items: center; padding: 24px 16px; }
 .dialog--review { width: 760px; max-height: calc(100vh - 48px); display: flex; flex-direction: column; border-top: 3px solid var(--pending); }
 .dialog--review.claim--fake { border-top-color: var(--fake); }
@@ -487,3 +504,36 @@ a.row__title:hover { text-decoration: underline; text-underline-offset: 3px; }
 .users__avatar { width: 28px; height: 28px; border-radius: 50%; flex: none; }
 .users__remove { width: 64px; text-align: right; flex: none; }
 .chip--owner { color: var(--text); }
+
+
+/* ---- a room: full-width bar, then checks | room data ---- */
+.roomview { flex: 1; min-width: 0; display: flex; flex-direction: column; min-height: 0; }
+.roomview__bar { position: static; }
+.roomview__name { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.roomview .state { width: auto; flex: none; }
+.roomview__sep { width: 1px; height: 16px; background: var(--border); flex: none; margin: 0 4px; }
+.roomview__viewers { font-size: 12px; white-space: nowrap; flex: none; }
+.roomview__viewers b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.roomview__status { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
+.roomview__body { flex: 1; display: flex; min-height: 0; }
+.roomview__body .page__content { min-height: 0; }
+/* room data on the left, checks on the right */
+.roomview__body .panel { order: -1; border-left: 0; border-right: 1px solid var(--border); }
+.room-delete { margin-right: auto; font-size: 13px; }
+.roomview__review { display: contents; }
+
+/* sidebar: the rooms under "Salas" */
+.sidebar__rooms { display: flex; flex-direction: column; gap: 1px; margin: 2px 0 6px; }
+.sidebar__room { display: flex; align-items: center; gap: 9px; width: 100%; padding: 6px 10px 6px 14px; border: 0; border-radius: 6px;
+  background: none; color: var(--muted); font: inherit; font-size: 13px; text-align: left; cursor: pointer; min-width: 0; }
+.sidebar__room:hover { color: var(--text); background: rgba(255,255,255,.04); }
+.sidebar__room.active { color: var(--text); background: rgba(255,255,255,.07); }
+.sidebar__room--hidden .sidebar__room-name { opacity: .6; }
+.sidebar__room-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.sidebar__dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--pending); }
+.sidebar__dot[data-state="live"] { background: var(--valid); animation: pulse 1.4s infinite; }
+.sidebar__dot[data-state="done"] { background: var(--text); }
+.sidebar__dot[data-state="error"] { background: var(--fake); }
+.sidebar__dot[data-state="paused"] { background: var(--inconclusive); }
+.sidebar__room--new { color: var(--muted); padding-left: 14px; }
+.sidebar__room--new:hover { color: var(--text); }

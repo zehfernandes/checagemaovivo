@@ -1,6 +1,7 @@
 import { useCallback, useRef, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { ClaimCard } from './components/ClaimCard'
 import { Danmu } from './components/Danmu'
+import { FitSelect } from './components/FitSelect'
 import { Player } from './components/Player'
 import { useSession } from './useSession'
 import type { Room, Verdict } from './types'
@@ -218,11 +219,12 @@ export default function App() {
       <header className="topbar">
         <form className="controls" onSubmit={onSubmit}>
           <span className="logo" aria-hidden>●</span>
-          {rooms && rooms.length > 0 ? (
-            <select className="room-picker" value={room?.id ?? ''} onChange={(e) => pickRoom(e.target.value)} title="Transmissão">
+          {rooms && rooms.length > 0 ? (<>
+            <FitSelect className="room-picker" label={room?.name ?? ''} value={room?.id ?? ''} onChange={(e) => pickRoom(e.target.value)} title="Transmissão">
               {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-            </select>
-          ) : (
+            </FitSelect>
+            {room && <a className="view-swap" href={`/sem-video?room=${room.id}`}>Ver sem vídeo</a>}
+          </>) : (
             <input
               type="url"
               value={url}

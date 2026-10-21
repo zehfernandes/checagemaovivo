@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import './compact.css'
 import { useSession } from './useSession'
+import { FitSelect } from './components/FitSelect'
 import type { Claim, Room, Verdict } from './types'
 import { VERDICT_LABEL, speakerLabel } from './types'
 
@@ -144,7 +145,7 @@ export function Compact() {
 
   // what a viewer needs to know: is this happening now? (a recording's run being paused is a newsroom detail)
   const status = session.state === 'error' ? 'Aguardando' : session.state === 'resolving' || session.state === 'connecting' ? 'Conectando'
-    : live ? (session.state === 'listening' ? 'Ao vivo' : 'Ao vivo · pausado') : 'Gravação'
+    : live ? (session.state === 'listening' ? 'Ao vivo' : 'Ao vivo · pausado') : 'Gravado'
   const empty = session.state === 'error' ? session.statusText || 'A checagem desta transmissão ainda não começou.'
     : session.state === 'connecting' || session.state === 'resolving' ? 'Conectando…' : 'Aguardando as primeiras falas…'
 
@@ -153,11 +154,13 @@ export function Compact() {
       <header className="compact__bar">
         <span className="compact__brand"><span className="compact__dot" aria-hidden />Checagem ao vivo</span>
         {rooms && rooms.length > 1 ? (
-          <select className="compact__room" value={room?.id ?? ''} onChange={(e) => pickRoom(e.target.value)} aria-label="Transmissão">
+          <FitSelect className="compact__room" wrapClassName="compact__room-wrap" label={room?.name ?? ''} value={room?.id ?? ''}
+            onChange={(e) => pickRoom(e.target.value)} aria-label="Transmissão">
             {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-          </select>
+          </FitSelect>
         ) : <span className="compact__room compact__room--static">{room?.name ?? ''}</span>}
         <span className={`compact__state compact__state--${live && session.state === 'listening' ? 'live' : session.state}`}>{status}</span>
+        {room && !tv && <a className="compact__swap" href={`/?room=${room.id}`}>Ver com vídeo</a>}
         {live && (
           <div className="compact__watching" role="group" aria-label="Assistindo em">
             <span>Assistindo em:</span>

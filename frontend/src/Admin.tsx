@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { adminHeaders, clearAdminToken, loadGoogle, reviewerName, setAdminToken, setReviewerName, type AdminUser, type AuthMode } from './admin'
 import { useSession } from './useSession'
 import type { Claim, NewsStats, ReviewStatus, Room as PublicRoom, Source, TranscriptSegment, UsageSummary, Verdict } from './types'
 import { VERDICT_LABEL } from './types'
 
 type Final = Exclude<Verdict, 'pending'>
-type Tab = 'rooms' | 'claims' | 'news' | 'glossary' | 'users'
+type Tab = 'rooms' | 'news' | 'glossary' | 'users'
 
 interface Room extends PublicRoom {
   created: number; viewers: number; processed_to: number; state: string; message: string; usage: UsageSummary | null
@@ -15,8 +16,9 @@ interface Fix { from: string; to: string }
 interface ActivityLine { t: number; level: string; src: string; msg: string }
 interface Activity { mode: string; in_flight: number; verifying: number; activity: ActivityLine[] }
 
-const TABS: [Tab, string][] = [['rooms', 'Salas'], ['claims', 'Checagens'], ['news', 'Base de notícias'], ['glossary', 'Glossário'], ['users', 'Usuários']]
-const CHECKER_TABS: Tab[] = ['claims', 'news', 'glossary'] // checkers: no rooms (create/start/stop) and no users
+const TABS: [Tab, string][] = [['rooms', 'Salas'], ['news', 'Base de notícias'], ['glossary', 'Glossário'], ['users', 'Usuários']]
+// checkers enter rooms to fact-check, but can't create, configure, start or stop them, and don't manage users
+const CHECKER_TABS: Tab[] = ['rooms', 'news', 'glossary']
 const KINDS: [string, string][] = [['debate', 'Debate'], ['entrevista', 'Entrevista'], ['outro', 'Outro']]
 const KIND_LABEL = Object.fromEntries(KINDS)
 const METHOD_PT: Record<string, string> = { cache: 'memória', db: 'base', web: 'web', deep: 'profunda', human: 'humano' }
@@ -52,27 +54,6 @@ function PageHeader({ title, meta, children }: { title: ReactNode; meta?: ReactN
       <span className="spacer" />
       {children}
     </header>
-  )
-}
-
-function Panel({ title, meta, onClose, actions, footer, children }: {
-  title: ReactNode; meta?: ReactNode; onClose: () => void; actions?: ReactNode; footer?: ReactNode; children: ReactNode
-}) {
-  useEscape(onClose)
-  return (
-    <aside className="panel">
-      <header className="panel__header">
-        <div className="panel__heading">
-          <h2 className="panel__title">{title}</h2>
-          {meta && <span className="muted">{meta}</span>}
-        </div>
-        <span className="spacer" />
-        {actions}
-        <button type="button" className="icon-btn" onClick={onClose} title="Fechar (Esc)" aria-label="Fechar">×</button>
-      </header>
-      <div className="panel__body">{children}</div>
-      {footer && <footer className="panel__footer">{footer}</footer>}
-    </aside>
   )
 }
 
@@ -203,11 +184,12 @@ function Shell({ me, onLogout }: { me: AdminUser; onLogout: () => void }) {
   const params = new URLSearchParams(location.search)
   const owner = me.role === 'owner'
   const tabs = TABS.filter(([t]) => owner || CHECKER_TABS.includes(t))
-  const asked = params.get('tab') as Tab
+  const asked = (params.get('tab') === 'claims' ? 'rooms' : params.get('tab')) as Tab // old "Checagens" links
   const [tab, setTab] = useState<Tab>(tabs.some(([t]) => t === asked) ? asked : tabs[0][0])
   const [rooms, setRooms] = useState<Room[]>([])
   const [roomId, setRoomId] = useState<string>(params.get('room') || '')
   const [toast, setToast] = useState<string | null>(null)
+  const [creating, setCreating] = useState(false)
   const notify = useCallback((msg: string) => { setToast(msg); setTimeout(() => setToast(null), 4000) }, [])
 
   async function loadRooms() {
@@ -226,7 +208,7 @@ function Shell({ me, onLogout }: { me: AdminUser; onLogout: () => void }) {
     if (roomId) p.set('room', roomId)
     history.replaceState(null, '', `/admin?${p}`)
   }, [tab, roomId])
-  const room = rooms.find((r) => r.id === roomId) ?? rooms.find((r) => r.processing || r.claims > 0) ?? rooms[0]
+  const room = rooms.find((r) => r.id === roomId) // the room open inside "Salas" (none = the list)
   const live = rooms.filter((r) => r.processing).length
 
   return (
@@ -235,15 +217,29 @@ function Shell({ me, onLogout }: { me: AdminUser; onLogout: () => void }) {
         <div className="sidebar__brand"><span className="logo">●</span> Checagem ao vivo</div>
         <div className="sidebar__nav">
           {tabs.map(([t, label]) => (
-            <button key={t} className={`sidebar__item${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
-              {label}
-              {t === 'rooms' && live > 0 && <span className="sidebar__count sidebar__count--live">{live} ao vivo</span>}
-              {t === 'rooms' && live === 0 && rooms.length > 0 && <span className="sidebar__count">{rooms.length}</span>}
-            </button>
+            <Fragment key={t}>
+              {t === 'rooms'
+                ? <div className="sidebar__item sidebar__item--label">
+                    {label}
+                    {live > 0 && <span className="sidebar__count sidebar__count--live">{live} ao vivo</span>}
+                  </div>
+                : <button className={`sidebar__item${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>{label}</button>}
+              {t === 'rooms' && (
+                <div className="sidebar__rooms">
+                  {rooms.map((r) => (
+                    <button key={r.id} type="button" className={`sidebar__room${tab === 'rooms' && room?.id === r.id ? ' active' : ''}${r.active ? '' : ' sidebar__room--hidden'}`}
+                      onClick={() => { setTab('rooms'); setRoomId(r.id) }} title={`${r.name} · ${roomState(r).word}${r.active ? '' : ' · oculta'}`}>
+                      <span className="sidebar__dot" data-state={roomState(r).cls} aria-hidden />
+                      <span className="sidebar__room-name">{r.name}</span>
+                    </button>
+                  ))}
+                  {owner && <button type="button" className="sidebar__room sidebar__room--new" onClick={() => setCreating(true)}>+ Nova sala</button>}
+                </div>
+              )}
+            </Fragment>
           ))}
         </div>
         <div className="sidebar__foot">
-          <a className="sidebar__item" href="/" target="_blank" rel="noreferrer">Ver como espectador ↗</a>
           <a className="sidebar__item" href="/#review">Revisão offline</a>
           <div className="sidebar__user" title={me.email}>
             {me.picture ? <img src={me.picture} alt="" referrerPolicy="no-referrer" /> : <span className="sidebar__avatar">{(me.name || me.email)[0]?.toUpperCase()}</span>}
@@ -253,12 +249,16 @@ function Shell({ me, onLogout }: { me: AdminUser; onLogout: () => void }) {
         </div>
       </nav>
       <main className="shell__main">
-        {tab === 'rooms' && <RoomsPage rooms={rooms} reload={loadRooms} notify={notify} openClaims={(id) => { setRoomId(id); setTab('claims') }} />}
-        {tab === 'claims' && <ClaimsPage rooms={rooms} room={room} onPick={setRoomId} reload={loadRooms} notify={notify} owner={owner} me={me} />}
+        {tab === 'rooms' && (room
+          ? <RoomView key={room.id} room={room} reload={loadRooms} notify={notify} owner={owner} me={me} onBack={() => setRoomId('')} />
+          : <RoomsPage rooms={rooms} reload={loadRooms} notify={notify} owner={owner} onOpen={setRoomId} loading={!!roomId} />)}
         {tab === 'news' && <NewsPage notify={notify} />}
         {tab === 'glossary' && <GlossaryPage notify={notify} />}
         {tab === 'users' && owner && <UsersPage me={me} notify={notify} />}
       </main>
+      {creating && <NewRoomDialog onClose={() => setCreating(false)}
+        onCreated={(id) => { setCreating(false); setTab('rooms'); setRoomId(id) }}
+        run={async (_k, fn) => { try { await fn(); await loadRooms() } catch (e) { notify((e as Error).message) } }} />}
       {toast && <div className="toast" onClick={() => setToast(null)}>{toast}</div>}
     </div>
   )
@@ -273,33 +273,32 @@ function roomState(r: Room): { word: string; cls: string } {
   return { word: 'Não iniciado', cls: 'idle' }
 }
 
-function RoomsPage({ rooms, reload, notify, openClaims }: { rooms: Room[]; reload: () => Promise<void>; notify: (m: string) => void; openClaims: (id: string) => void }) {
-  const [selected, setSelected] = useState<string | null>(null)
+function RoomsPage({ rooms, reload, notify, owner, onOpen, loading }: {
+  rooms: Room[]; reload: () => Promise<void>; notify: (m: string) => void; owner: boolean; onOpen: (id: string) => void; loading: boolean
+}) {
   const [creating, setCreating] = useState(false)
-  const [busy, setBusy] = useState<string | null>(null)
-  const room = rooms.find((r) => r.id === selected)
-  async function run(key: string, fn: () => Promise<unknown>) {
-    setBusy(key)
-    try { await fn(); await reload() } catch (e) { notify((e as Error).message) } finally { setBusy(null) }
+  async function run(_key: string, fn: () => Promise<unknown>) {
+    try { await fn(); await reload() } catch (e) { notify((e as Error).message) }
   }
+  if (loading && rooms.length === 0) return <div className="page"><div className="page__content"><Empty><p className="muted">Carregando…</p></Empty></div></div>
   return (
     <div className="page">
       <div className="page__content">
         <PageHeader title="Salas" meta={rooms.length > 0 && `${rooms.length} ${rooms.length === 1 ? 'sala' : 'salas'}`}>
-          <button type="button" className="btn" onClick={() => setCreating(true)}>Nova sala</button>
+          {owner && <button type="button" className="btn" onClick={() => setCreating(true)}>Nova sala</button>}
         </PageHeader>
         {rooms.length === 0 ? (
           <Empty>
             <p>Nenhuma sala ainda.</p>
             <p className="muted">Uma sala liga um vídeo ou live (YouTube, g1/Globo) à checagem que todos os espectadores veem.</p>
-            <button type="button" className="btn" onClick={() => setCreating(true)}>Criar a primeira sala</button>
+            {owner && <button type="button" className="btn" onClick={() => setCreating(true)}>Criar a primeira sala</button>}
           </Empty>
         ) : (
           <div className="rows">
             {rooms.map((r) => {
               const st = roomState(r)
               return (
-                <button key={r.id} type="button" className={`row${selected === r.id ? ' active' : ''}${r.active ? '' : ' row--dim'}`} onClick={() => setSelected(r.id)}>
+                <button key={r.id} type="button" className={`row${r.active ? '' : ' row--dim'}`} onClick={() => onOpen(r.id)}>
                   <span className={`state state--${st.cls}`}><span className="state__dot" />{st.word}</span>
                   <span className="row__main">
                     <span className="row__title">{r.name}</span>
@@ -315,8 +314,7 @@ function RoomsPage({ rooms, reload, notify, openClaims }: { rooms: Room[]; reloa
           </div>
         )}
       </div>
-      {room && <RoomPanel key={room.id} room={room} busy={busy} run={run} onClose={() => setSelected(null)} openClaims={() => openClaims(room.id)} />}
-      {creating && <NewRoomDialog onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); setSelected(id) }} run={run} />}
+      {creating && <NewRoomDialog onClose={() => setCreating(false)} onCreated={(id) => { setCreating(false); onOpen(id) }} run={run} />}
     </div>
   )
 }
@@ -356,72 +354,115 @@ function NewRoomDialog({ onClose, onCreated, run }: { onClose: () => void; onCre
   )
 }
 
-function RoomPanel({ room: r, busy, run, onClose, openClaims }: {
-  room: Room; busy: string | null; run: (k: string, fn: () => Promise<unknown>) => Promise<void>; onClose: () => void; openClaims: () => void
+function roomStatusText(r: Room): string {
+  if ((r.processing || r.state === 'error') && r.message) return r.message
+  if (r.complete) return 'Gravação processada por completo; os espectadores recebem tudo do cache.'
+  if (r.processed_to > 0) return `Processado até ${fmt(r.processed_to)}.`
+  return 'A checagem ainda não começou para esta sala.'
+}
+
+// Inside a room: a full-width bar (name, status, viewers, Revisar), then — for owners — the room's
+// data/logs on the left (with start/stop) and its checks on the right. Checkers only see the checks.
+function RoomView({ room: r, reload, notify, owner, me, onBack }: {
+  room: Room; reload: () => Promise<void>; notify: (m: string) => void; owner: boolean; me: AdminUser; onBack: () => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const [save, setSave] = useState(false) // "modo econômico", set in the room data, used by the start button
+  const [reviewSlot, setReviewSlot] = useState<HTMLSpanElement | null>(null) // where the checks put "Revisar"
+  async function run(fn: () => Promise<unknown>) {
+    setBusy(true)
+    try { await fn(); await reload() } catch (e) { notify((e as Error).message) } finally { setBusy(false) }
+  }
+  const st = roomState(r)
+  const control = !owner ? null : r.processing
+    ? <button type="button" className="btn btn--danger" disabled={busy} onClick={() => run(() => api(`/admin/rooms/${r.id}/stop`, { method: 'POST', body: '{}' }))}>{busy ? 'Parando…' : 'Parar checagem'}</button>
+    : !r.complete && (
+      <button type="button" className="btn" disabled={busy} onClick={() => run(() => api(`/admin/rooms/${r.id}/start`, { method: 'POST', body: JSON.stringify({ save }) }))}>
+        {busy ? 'Abrindo…' : r.processed_to > 0 && !r.is_live ? 'Religar checagem' : 'Iniciar checagem'}
+      </button>
+    )
+  return (
+    <div className="roomview">
+      <header className="page__header roomview__bar">
+        <h1 className="page__title roomview__name">{r.name}</h1>
+        <span className="roomview__sep" aria-hidden />
+        <span className={`state state--${st.cls}`}><span className="state__dot" />{st.word}</span>
+        <span className="muted roomview__status" title={roomStatusText(r)}>{roomStatusText(r)}</span>
+        <span className="roomview__sep" aria-hidden />
+        <span className="muted roomview__viewers" title="Espectadores conectados agora">
+          <b>{r.viewers}</b> assistindo
+        </span>
+        <span className="spacer" />
+        <a className="icon-btn roomview__watch" href={`/?room=${r.id}`} target="_blank" rel="noreferrer"
+          title="Abrir a transmissão da sala em nova aba" aria-label="Abrir a transmissão da sala em nova aba">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <rect x="1.5" y="4.5" width="15" height="10" rx="2" /><path d="M6 1.5 9 4.5l3-3M6 17h6" />
+          </svg>
+        </a>
+        <span ref={setReviewSlot} className="roomview__review" />
+      </header>
+      <div className="roomview__body">
+        <ClaimsPage room={r} notify={notify} me={me} reviewSlot={reviewSlot} reviewSecondary={owner}
+          aside={owner && <RoomDetails room={r} busy={busy} run={run} save={save} onSave={setSave} onDeleted={onBack} control={control} />} />
+      </div>
+    </div>
+  )
+}
+
+function RoomDetails({ room: r, busy, run, save, onSave, onDeleted, control }: {
+  room: Room; busy: boolean; run: (fn: () => Promise<unknown>) => Promise<void>; save: boolean; onSave: (v: boolean) => void; onDeleted: () => void
+  control: ReactNode // start / restart / stop, at the right of the Dados/Logs tabs
 }) {
   const [name, setName] = useState(r.name)
   const [url, setUrl] = useState(r.url)
   const [kind, setKind] = useState(r.kind)
-  const [save, setSave] = useState(false)
+  const [view, setView] = useState<'data' | 'logs'>('data')
   const dirty = name !== r.name || url !== r.url || kind !== r.kind
-  const st = roomState(r)
-  const working = busy === r.id
-  const patch = (body: object) => run(r.id, () => api(`/admin/rooms/${r.id}`, { method: 'PATCH', body: JSON.stringify(body) }))
-
-  const primary = r.processing
-    ? <button type="button" className="btn btn--stop" disabled={working} onClick={() => run(r.id, () => api(`/admin/rooms/${r.id}/stop`, { method: 'POST', body: '{}' }))}>Parar</button>
-    : !r.complete && (
-      <button type="button" className="btn" disabled={working} onClick={() => run(r.id, () => api(`/admin/rooms/${r.id}/start`, { method: 'POST', body: JSON.stringify({ save }) }))}>
-        {working ? 'Abrindo…' : r.processed_to > 0 && !r.is_live ? 'Continuar checagem' : 'Iniciar checagem'}
-      </button>
-    )
-
+  const patch = (body: object) => run(() => api(`/admin/rooms/${r.id}`, { method: 'PATCH', body: JSON.stringify(body) }))
   return (
-    <Panel title={r.name} meta={KIND_LABEL[r.kind] ?? r.kind} onClose={onClose} actions={primary}
-      footer={
-        <>
-          <Switch label="Visível para o público" checked={r.active} onChange={(v) => patch({ active: v })} />
-          <button type="button" className="link link--danger" onClick={() => { if (confirm(`Excluir a sala "${r.name}"? As checagens ficam no cache.`)) run(r.id, () => api(`/admin/rooms/${r.id}`, { method: 'DELETE' })).then(onClose) }}>Excluir sala</button>
-        </>
-      }>
-      <section className="panel__section">
-        <div className={`state state--${st.cls} state--big`}><span className="state__dot" />{st.word}</div>
-        <p className="muted panel__status">
-          {r.processing && r.message ? r.message : r.state === 'error' && r.message ? r.message : r.complete ? 'Gravação processada por completo; os espectadores recebem tudo do cache.' : r.processed_to > 0 ? `Processado até ${fmt(r.processed_to)}.` : 'A checagem ainda não começou para esta sala.'}
-        </p>
-        <dl className="facts">
-          <div><dt>Afirmações</dt><dd>{r.claims}</dd></div>
-          <div><dt>Assistindo</dt><dd>{r.viewers}</dd></div>
-          {r.usage && <div><dt>Custo</dt><dd>≈ US${r.usage.usd.toFixed(2)}</dd></div>}
-        </dl>
-        {!r.processing && !r.complete && (
-          <Switch label="Modo econômico" hint="Menos chamadas de IA: sem checagem profunda automática, no máximo 6 afirmações/min." checked={save} onChange={setSave} />
-        )}
-        {r.usage && (
+    <aside className="panel" aria-label="Dados da sala">
+      <div className="toolbar">
+        <div className="pills" role="tablist">
+          {([['data', 'Dados'], ['logs', 'Logs']] as const).map(([v, label]) => (
+            <button key={v} type="button" role="tab" aria-selected={view === v} className={`pill${view === v ? ' active' : ''}`} onClick={() => setView(v)}>{label}</button>
+          ))}
+        </div>
+        <span className="spacer" />
+        {control}
+      </div>
+      <div className={`panel__body${view === 'logs' ? ' panel__body--logs' : ''}`}>
+      {view === 'logs' && r.usage && (
+        <section className="panel__section">
           <dl className="facts">
+            <div><dt>Custo</dt><dd>≈ US${r.usage.usd.toFixed(2)}</dd></div>
             <div><dt>Chamadas IA</dt><dd>{r.usage.calls}</dd></div>
             <div><dt>Buscas web</dt><dd>{r.usage.searches}</dd></div>
             <div><dt>Áudio</dt><dd>{fmt(r.usage.audio_seconds)}</dd></div>
           </dl>
-        )}
-        <div className="panel__links">
-          <button type="button" className="link" onClick={openClaims}>Abrir checagens →</button>
-          <a className="link" href={`/?room=${r.id}`} target="_blank" rel="noreferrer">Ver como espectador ↗</a>
-        </div>
-      </section>
-      <ActivitySection roomId={r.id} live={r.processing} />
-      <form className="panel__section form" onSubmit={(e) => { e.preventDefault(); patch({ name, url, kind }) }} onKeyDown={cmdEnter}>
+        </section>
+      )}
+      {view === 'logs' && <ActivitySection roomId={r.id} live={r.processing} />}
+      {view === 'data' && <form className={`panel__section form${r.processing ? ' form--locked' : ''}`} onSubmit={(e) => { e.preventDefault(); patch({ name, url, kind }) }} onKeyDown={cmdEnter}>
+        {r.processing && <p className="muted form__note">Pare a checagem para editar a sala.</p>}
+        <fieldset className="form__fieldset" disabled={r.processing}>
         <Field label="Nome"><input value={name} onChange={(e) => setName(e.target.value)} required /></Field>
         <Field label="Link da transmissão"><input type="url" value={url} onChange={(e) => setUrl(e.target.value)} required /></Field>
         <Field label="Tipo"><Segmented value={kind} options={KINDS} onChange={setKind} /></Field>
-        {dirty && (
-          <footer className="form__actions">
-            <button type="button" className="btn btn--ghost" onClick={() => { setName(r.name); setUrl(r.url); setKind(r.kind) }}>Descartar</button>
-            <button type="submit" className="btn" disabled={working}>Salvar</button>
-          </footer>
+        {!r.complete && (
+          <Switch label="Modo econômico" hint="Menos chamadas de IA: sem checagem profunda automática, no máximo 6 afirmações/min." checked={save} onChange={onSave} />
         )}
-      </form>
-    </Panel>
+        <Switch label="Visível para o público" checked={r.active} onChange={(v) => patch({ active: v })} />
+        <footer className="form__actions">
+          <button type="button" className="link link--danger room-delete" onClick={() => { if (confirm(`Excluir a sala "${r.name}"? As checagens ficam no cache.`)) run(() => api(`/admin/rooms/${r.id}`, { method: 'DELETE' })).then(onDeleted) }}>Excluir sala</button>
+          {dirty && <>
+            <button type="button" className="btn btn--ghost" onClick={() => { setName(r.name); setUrl(r.url); setKind(r.kind) }}>Descartar</button>
+            <button type="submit" className="btn" disabled={busy}>Salvar</button>
+          </>}
+        </footer>
+        </fieldset>
+      </form>}
+      </div>
+    </aside>
   )
 }
 
@@ -439,10 +480,12 @@ function ActivitySection({ roomId, live }: { roomId: string; live: boolean }) {
     const t = live ? setInterval(load, 2000) : undefined
     return () => { alive = false; clearInterval(t) }
   }, [roomId, live])
-  if (!a || (!a.mode && a.activity.length === 0)) return null
+  if (!a || (!a.mode && a.activity.length === 0)) {
+    return <section className="panel__section muted">{a ? 'Nenhum log ainda: eles aparecem quando a checagem roda.' : 'Carregando…'}</section>
+  }
   const lines = a.activity.filter((l) => !errorsOnly || l.level !== 'INFO').reverse()
   return (
-    <section className="panel__section">
+    <section className="panel__section panel__section--fill">
       <dl className="facts">
         <div><dt>Transcrição</dt><dd>{a.mode === 'realtime' ? 'tempo real' : 'blocos'}</dd></div>
         <div><dt>Em extração</dt><dd>{a.in_flight}</dd></div>
@@ -486,10 +529,12 @@ function ReviewerDialog({ initial, onSave, onClose }: { initial: string; onSave:
   )
 }
 
-function ClaimsPage({ rooms, room, onPick, reload, notify, owner, me }: { rooms: Room[]; room: Room | undefined; onPick: (id: string) => void; reload: () => Promise<void>; notify: (m: string) => void; owner: boolean; me: AdminUser }) {
+function ClaimsPage({ room, notify, me, aside, reviewSlot, reviewSecondary }: {
+  room: Room; notify: (m: string) => void; me: AdminUser; aside?: ReactNode
+  reviewSlot?: HTMLElement | null; reviewSecondary?: boolean // "Revisar" goes in the room bar, secondary next to an owner's room control
+}) {
   const session = useSession()
   const [status, setStatus] = useState<ReviewStatus | 'all'>('draft')
-  const [verdictFilter, setVerdictFilter] = useState<'all' | Verdict>('all')
   const [q, setQ] = useState('')
   // with Google sign-in the reviewer is the signed-in person; otherwise (password/open) a name typed once per browser
   const google = me.mode === 'google'
@@ -513,11 +558,10 @@ function ClaimsPage({ rooms, room, onPick, reload, notify, owner, me }: { rooms:
     const needle = q.trim().toLowerCase()
     return session.claims
       .filter((c) => status === 'all' || statusOf(c) === status)
-      .filter((c) => verdictFilter === 'all' || c.verdict === verdictFilter)
-      .filter((c) => !needle || c.text.toLowerCase().includes(needle) || c.explanation.toLowerCase().includes(needle) || (c.speaker ?? '').toLowerCase().includes(needle))
+      .filter((c) => !needle || c.text.toLowerCase().includes(needle) || (c.quote ?? '').toLowerCase().includes(needle) || c.explanation.toLowerCase().includes(needle) || (c.speaker ?? '').toLowerCase().includes(needle))
       // the queue in speaking order (same order and tie-break as the server's "next"); history newest first
       .sort((a, b) => (status === 'draft' ? a.start - b.start || (a.id < b.id ? -1 : 1) : b.start - a.start))
-  }, [session.claims, status, verdictFilter, q])
+  }, [session.claims, status, q])
   const counts = useMemo(() => {
     const c: Record<ReviewStatus, number> = { draft: 0, published: 0, irrelevant: 0 }
     for (const cl of session.claims) c[statusOf(cl)]++
@@ -586,34 +630,17 @@ function ClaimsPage({ rooms, room, onPick, reload, notify, owner, me }: { rooms:
     return () => clearInterval(t)
   }, [openId, url, reviewer, notify])
 
-  async function toggle() {
-    if (!room) return
-    try {
-      await api(`/admin/rooms/${room.id}/${room.processing ? 'stop' : 'start'}`, { method: 'POST', body: '{}' })
-      await reload()
-    } catch (e) { notify((e as Error).message) }
-  }
-  const st = room && roomState(room)
+  // leaving the room (← Salas) unmounts this page: give back the card that was open
+  const openRef = useRef<string | null>(null)
+  openRef.current = openId
+  useEffect(() => () => { if (openRef.current) release(openRef.current) }, []) // oxlint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="page">
       <div className="page__content">
-        <PageHeader
-          title={rooms.length > 1 ? (
-            <select className="title-select" value={room?.id ?? ''} onChange={(e) => { close(); onPick(e.target.value) }}>
-              {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
-            </select>
-          ) : room?.name ?? 'Checagens'}
-          meta={<>
-            {st && <span className={`state state--${st.cls}`}><span className="state__dot" />{st.word}</span>}
-            {google ? <span className="muted">revisando como {reviewer}</span>
-              : reviewer && <button type="button" className="link" onClick={() => setAskName(true)} title="Trocar o nome">revisando como {reviewer}</button>}
-          </>}>
-          {room && <button type="button" className="btn" onClick={() => next()} disabled={ready === 0}>Revisar{ready > 0 && ` (${ready})`}</button>}
-          {owner && room && !room.complete && (
-            <button type="button" className="btn btn--stop" onClick={toggle}>{room.processing ? 'Parar' : 'Iniciar checagem'}</button>
-          )}
-        </PageHeader>
+        {reviewSlot && createPortal(
+          <button type="button" className={reviewSecondary ? 'btn btn--stop' : 'btn'} onClick={() => next()} disabled={ready === 0}>Revisar{ready > 0 && ` (${ready})`}</button>,
+          reviewSlot)}
         <div className="toolbar">
           <div className="pills">
             {STATUS_FILTERS.map(([f, label]) => (
@@ -622,14 +649,9 @@ function ClaimsPage({ rooms, room, onPick, reload, notify, owner, me }: { rooms:
               </button>
             ))}
           </div>
-          <select className="search search--select" value={verdictFilter} onChange={(e) => setVerdictFilter(e.target.value as typeof verdictFilter)} title="Veredito da máquina">
-            <option value="all">Todos os vereditos</option>
-            {(['fake', 'valid', 'inconclusive', 'pending'] as const).map((v) => <option key={v} value={v}>{VERDICT_LABEL[v]}</option>)}
-          </select>
           <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar…" />
         </div>
-        {!room && <Empty><p>Crie uma sala primeiro.</p></Empty>}
-        {room && visible.length === 0 && (
+        {visible.length === 0 && (
           <Empty><p className="muted">{session.claims.length === 0 ? 'Nenhuma afirmação ainda — as análises da máquina aparecem aqui em tempo real.'
             : status === 'draft' ? 'Nada aguardando revisão.' : 'Nada com esse filtro.'}</p></Empty>
         )}
@@ -640,7 +662,7 @@ function ClaimsPage({ rooms, room, onPick, reload, notify, owner, me }: { rooms:
             return (
               <button key={c.id} type="button" className={`row row--claim claim--${c.verdict} row--${s}${openId === c.id ? ' active' : ''}${other ? ' row--held' : ''}`} onClick={() => openClaim(c)}>
                 <span className="claim__badge">{c.verdict === 'pending' && <span className="spinner" aria-hidden />}{VERDICT_LABEL[c.verdict]}</span>
-                <span className="row__main"><span className="row__title row__title--normal">{c.speaker && <strong>{c.speaker}: </strong>}{c.text}</span></span>
+                <span className="row__main"><span className="row__title row__title--normal">{c.speaker && <strong>{c.speaker}: </strong>}“{c.quote || c.text}”</span></span>
                 {other ? <span className="chip chip--held" title="Está com o card aberto">✎ {c.claimed_by}</span>
                   : <span className={`chip chip--${s}`} title={c.reviewed_by ? `por ${c.reviewed_by}` : undefined}>{STATUS_PT[s]}{c.method === 'human' && ' · editada'}{s === 'draft' && skippedByMe(c) && ' · você pulou'}</span>}
                 <span className="row__meta">{c.verdict !== 'pending' && `${Math.round(c.confidence * 100)}% · `}{fmt(c.start)}</span>
@@ -650,6 +672,7 @@ function ClaimsPage({ rooms, room, onPick, reload, notify, owner, me }: { rooms:
           })}
         </div>
       </div>
+      {aside}
       {claim && (
         <ReviewCard key={`${claim.id}-${claim.verdict === 'pending'}`} claim={claim} transcript={session.transcript} queue={ready}
           onClose={close} onSkip={skip} onDecide={decide} onRecheck={session.recheck} />

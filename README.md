@@ -61,6 +61,15 @@ every `NEWS_REFRESH_MINUTES`. `backend/data/` is gitignored — every clone star
 
 ## Admin (`/admin`)
 
+**Access.** With `GOOGLE_CLIENT_ID` set, people sign in with Google and get in only if their verified e-mail
+is listed: **owners** (`OWNER_EMAILS`) can do everything; **checkers**, added by an owner in *Usuários*, see
+*Checagens* (correct, re-check, review labels), *Base de notícias* and *Glossário* — no rooms, start/stop, exports or users.
+The role is checked on every request, so removing someone cuts them off at once. Endpoints: `GET /admin/auth`,
+`POST /admin/login/google`, `GET /admin/me`, `GET/POST /admin/users`, `DELETE /admin/users/{email}`.
+Google Cloud Console → *APIs & Services* → *Credentials* → *OAuth client ID* (Web application); authorized
+JavaScript origins: `http://localhost:5173`, `https://www.checagemaovivo.org`, `https://debate-fact-check.fly.dev`.
+Without `GOOGLE_CLIENT_ID` the shared `ADMIN_PASSWORD` still works (as an owner); with neither, everyone is an owner (dev).
+
 The viewer UI has no admin controls; everything operational lives at `/admin` (password =
 `ADMIN_PASSWORD`, sent as the `x-admin-password` header / `admin` field on the WebSocket).
 
@@ -72,10 +81,20 @@ The viewer UI has no admin controls; everything operational lives at `/admin` (p
   method and time, errors and realtime reconnects.
   Endpoints: `GET /rooms` (public, active only), `GET/POST /admin/rooms`, `PATCH/DELETE /admin/rooms/{id}`,
   `POST /admin/rooms/{id}/start|stop`.
-- **Checagens** — the fact-check cache of a room, live: filter by verdict, search, change the verdict,
-  rewrite the explanation, add/edit/remove source links (pushed to every connected viewer at once as a
-  human correction), **Rechecar** with the deep model, or delete a claim (`claim_removed` fan-out).
-  Endpoints: `GET /admin/claims?url=`, `POST /admin/claim`, `DELETE /admin/claims/{video_id}/{claim_id}`.
+- **Checagens** — the newsroom review queue. With `HUMAN_REVIEW=true` (default) every machine analysis is
+  a **draft** that the public site never sees; a person opens it, adjusts it if needed and **Publica** (now
+  on the site) or marks it **Irrelevante** (never on the site), and the next card opens by itself.
+  **Revisar** opens the oldest draft the machine has finished. Filters: Aguardando / Publicadas /
+  Irrelevantes / Todas, verdict, search. A published claim can be corrected or taken off the site later.
+  Several people review at once: opening a card *leases* it for 120 s (renewed every 45 s while open), so
+  nobody else can open it and **Revisar** skips it; the list shows who has it ("✎ Ana"). A decision carries
+  the version (`rev`) the reviewer loaded, so it is refused (409) if someone changed the claim meanwhile.
+  Late machine updates (a deep check finishing) never overwrite a claim a person decided. Reviewer names
+  (asked once per browser) are newsroom-only: the public feed carries no review fields. Leases live in the
+  backend process (one machine on Fly), not in the DB. Claims cached before the queue existed count as published.
+  Endpoints: `GET /admin/claims?url=`, `POST /admin/review/next`, `POST /admin/review/{claim_id}/lease|release|decide`,
+  `POST /admin/claim` (direct correction, publishes), `DELETE /admin/claims/{video_id}/{claim_id}`;
+  the admin WebSocket sends `"review": true` on `start` to also receive drafts.
 - **Base de notícias** — browse/search the evidence DB, add an article by URL (extracted + embedded) or by
   pasted text, delete documents, refresh the feeds. Endpoints: `GET/POST /admin/news/docs`,
   `DELETE /admin/news/docs/{id}`, `POST /news/refresh`.
@@ -117,6 +136,7 @@ no Fly account or production secrets required. Production secrets (`OPENAI_API_K
 | `TRANSCRIBE_MODEL` | `gpt-4o-mini-transcribe` | speech-to-text model |
 | `FACTCHECK_MODEL` | `gpt-4.1-mini` | model for claim extraction and verification |
 | `DEEP_MODEL` | `gpt-5-mini` | reasoning model for the deep check (third level / Rechecar in `/admin`); `reasoning.effort=low`, no `temperature` |
+| `HUMAN_REVIEW` | `true` | machine analyses wait as drafts until a person publishes them in `/admin` → *Checagens*; `false` publishes them at once (the old behaviour) |
 | `CANDIDATES_ONLY` | `true` | only fact-check candidates/interviewees: claims the extractor attributes to moderators, presenters or journalists (e.g. a question's premise) are dropped; set `false` for news broadcasts |
 | `DEEP_CHECK` | `true` | automatically run the deep check on claims the fast pass left inconclusive |
 | `DECIDER` | `openai` | `jev`: TypeSafe Jev decision model via Vercel AI Gateway decides from DB evidence in ~0.3 s and gates non-checkable claims; falls back to OpenAI on low confidence/error |
@@ -131,6 +151,9 @@ no Fly account or production secrets required. Production secrets (`OPENAI_API_K
 | `LANGUAGE` | `pt` | transcription language hint (ISO-639-1), empty for auto |
 | `CORS_ORIGINS` | `http://localhost:5173` | allowed frontend origins |
 | `CANONICAL_HOST` | | if set, HTTP requests for other hosts 301 to it (prod: `www.checagemaovivo.org`) |
+| `GOOGLE_CLIENT_ID` | | Google sign-in for `/admin` (OAuth client id, type *Web application*). When set, `ADMIN_PASSWORD` stops working and only listed e-mails get in |
+| `OWNER_EMAILS` | | comma-separated Google e-mails with full access (rooms, exports, users, plus everything checkers do); fixed here, cannot be removed in the UI |
+| `SESSION_SECRET` | | signs admin sessions (7 days); set it in production or everyone is signed out on each restart |
 | `ADMIN_PASSWORD` | | password for `/admin` and admin WebSocket actions; **empty = everyone is admin** (dev only) |
 | `DEFAULT_ROOM_URL` / `DEFAULT_ROOM_NAME` | Band debate | room created on an empty DB; empty URL = none |
 | `VIDEO_CLIPS` | | only process a slice of recordings: `VIDEO_ID=start-end,...` (seconds) |

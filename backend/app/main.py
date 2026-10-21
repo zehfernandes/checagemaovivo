@@ -1,5 +1,4 @@
 import asyncio
-import hmac
 from typing import Literal
 import json
 import logging
@@ -23,6 +22,7 @@ from .pipeline import Pipeline
 from .review import LABELS, ReviewStore, run_eval
 from .rooms import RoomStore
 from .admin import make_router as make_admin_router
+from .auth import Access, User, UserStore, make_token, verify_google
 from .transcribe import make_transcriber
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -89,25 +89,96 @@ async def _startup() -> None:
         t.add_done_callback(_bg_tasks.discard)
 
 
-def is_admin(password: str | None) -> bool:
-    return not settings.admin_password or hmac.compare_digest(password or "", settings.admin_password)
+users = UserStore(settings.news_db_file.parent / Path(settings.cache_db_path).name)
+access = Access(users)
 
 
-def require_admin(x_admin_password: str = Header(default="")) -> None:
-    if not is_admin(x_admin_password):
-        raise HTTPException(403, "Senha de administrador inválida")
+def current_user(x_admin_token: str = Header(default=""), x_admin_password: str = Header(default="")) -> User:
+    """Any listed person (owner or checker). The old header still carries the password in password mode."""
+    user = access.user(x_admin_token or x_admin_password)
+    if user is None:
+        raise HTTPException(401, "Entre com uma conta autorizada")
+    return user
 
 
-app.include_router(make_admin_router(channels, store, rooms, require_admin))
+def require_owner(user: User = Depends(current_user)) -> User:
+    if not user.is_owner:
+        raise HTTPException(403, "Só owners podem fazer isso")
+    return user
+
+
+app.include_router(make_admin_router(channels, store, rooms, current_user, require_owner))
 
 
 class LoginRequest(BaseModel):
     password: str = ""
 
 
+@app.get("/admin/auth")
+async def admin_auth():
+    """How /admin signs people in: "google" (with the client id for the button), "password" or "open" (dev)."""
+    return {"mode": access.mode, "google_client_id": settings.google_client_id or None}
+
+
 @app.post("/admin/login")
 async def admin_login(req: LoginRequest):
-    return {"ok": is_admin(req.password), "open": not settings.admin_password}
+    """Password mode (no Google configured): the password itself is the credential."""
+    user = access.user(req.password) if access.mode != "google" else None
+    return {"ok": user is not None, "open": access.mode == "open", "mode": access.mode,
+            "token": req.password if user else None, "user": user.view() if user else None}
+
+
+class GoogleLogin(BaseModel):
+    credential: str
+
+
+@app.post("/admin/login/google")
+async def admin_login_google(req: GoogleLogin):
+    if access.mode != "google":
+        raise HTTPException(400, "Login com Google não está configurado")
+    try:
+        claims = await verify_google(req.credential)
+    except Exception as e:  # noqa: BLE001
+        log.info("google login refused: %s", e)
+        raise HTTPException(401, "Não foi possível confirmar sua conta Google")
+    user = users.get(claims["email"])
+    if user is None:
+        log.info("google login: %s is not on the list", claims["email"])
+        raise HTTPException(403, f"{claims['email']} não tem acesso. Peça a um owner para cadastrar seu e-mail.")
+    users.seen(user.email, claims.get("name", ""), claims.get("picture", ""))
+    user = users.get(user.email)
+    return {"token": make_token(user.email), "user": user.view()}
+
+
+@app.get("/admin/me")
+async def admin_me(user: User = Depends(current_user)):
+    return {**user.view(), "mode": access.mode}
+
+
+class UserIn(BaseModel):
+    email: str
+
+
+@app.get("/admin/users", dependencies=[Depends(require_owner)])
+async def admin_users():
+    return users.list()
+
+
+@app.post("/admin/users")
+async def admin_user_add(req: UserIn, owner: User = Depends(require_owner)):
+    try:
+        return users.add(req.email, owner.email)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.delete("/admin/users/{email}", dependencies=[Depends(require_owner)])
+async def admin_user_remove(email: str):
+    if email.strip().lower() in users.owners():
+        raise HTTPException(400, "Owners são definidos em OWNER_EMAILS e não podem ser removidos aqui")
+    if not users.remove(email):
+        raise HTTPException(404, "Usuário não encontrado")
+    return {"ok": True}
 
 
 class OverrideRequest(BaseModel):
@@ -120,7 +191,7 @@ class OverrideRequest(BaseModel):
     speaker: str | None = None  # who said it; None = unchanged, "" = unknown
 
 
-@app.post("/admin/claim", dependencies=[Depends(require_admin)])
+@app.post("/admin/claim", dependencies=[Depends(current_user)])
 async def admin_claim(req: OverrideRequest):
     """Human fact-check: overrides a claim's verdict for everyone watching and in the cache + verdict memory."""
     vid = audio.extract_video_id(req.url) or req.url
@@ -142,12 +213,12 @@ class GlossaryRequest(BaseModel):
     replacements: list[dict] = []
 
 
-@app.get("/admin/glossary", dependencies=[Depends(require_admin)])
+@app.get("/admin/glossary", dependencies=[Depends(current_user)])
 async def admin_glossary():
     return glossary.dump()
 
 
-@app.put("/admin/glossary", dependencies=[Depends(require_admin)])
+@app.put("/admin/glossary", dependencies=[Depends(current_user)])
 async def admin_glossary_save(req: GlossaryRequest):
     """Glossary (names the speech model must spell right) + term fixes applied to every new transcript."""
     return glossary.save(req.terms, {str(r.get("from", "")): str(r.get("to", "")) for r in req.replacements})
@@ -158,7 +229,7 @@ async def news_stats():
     return store.stats() if store else {"docs": 0, "chunks": 0, "sources": {}, "last_refresh": None}
 
 
-@app.post("/news/refresh", dependencies=[Depends(require_admin)])
+@app.post("/news/refresh", dependencies=[Depends(current_user)])
 async def news_refresh():
     if not store:
         return {"error": "news DB disabled (mock provider)"}
@@ -205,7 +276,7 @@ class LabelRequest(BaseModel):
     source_url: str = ""
 
 
-@app.post("/review/label", dependencies=[Depends(require_admin)])
+@app.post("/review/label", dependencies=[Depends(current_user)])
 async def review_label(req: LabelRequest):
     if req.label not in LABELS:
         raise HTTPException(400, f"label must be one of {LABELS}")
@@ -227,12 +298,12 @@ class MissedRequest(BaseModel):
     note: str = ""
 
 
-@app.post("/review/missed", dependencies=[Depends(require_admin)])
+@app.post("/review/missed", dependencies=[Depends(current_user)])
 async def review_missed(req: MissedRequest):
     return {"id": review.add_missed(req.run, req.start, req.segment, req.claim, req.note)}
 
 
-@app.delete("/review/missed/{mid}", dependencies=[Depends(require_admin)])
+@app.delete("/review/missed/{mid}", dependencies=[Depends(current_user)])
 async def review_missed_delete(mid: str):
     review.delete_missed(mid)
     return {"ok": True}
@@ -284,7 +355,11 @@ async def ws_endpoint(ws: WebSocket) -> None:
                 except ValidationError as e:
                     await ws.send_json({"type": "error", "message": e.errors()[0]["msg"]})
                     continue
-                admin = is_admin(data.get("admin"))
+                user = access.user(data.get("admin"))
+                admin = user is not None
+                if not (user and user.is_owner):  # checkers watch the newsroom view; only owners run pipelines
+                    req.fresh = False
+                    req.save = False
                 if not admin:
                     # visitors only watch shared results: no fresh/save runs, never start processing
                     req.fresh = False
@@ -307,11 +382,12 @@ async def ws_endpoint(ws: WebSocket) -> None:
                     await ws.send_json({"type": "status", "state": "error", "code": "resolve_failed",
                                         "message": f"Não foi possível abrir o vídeo: {e}"})
                     continue
-                queue = channel.subscribe()
-                for ev in channel.snapshot():
+                newsroom = admin and req.review
+                queue = channel.subscribe(newsroom)
+                for ev in channel.snapshot(newsroom):
                     await ws.send_json(ev)
                 sender = asyncio.create_task(pump(queue))
-                if not admin or req.watch:
+                if not admin or req.watch or not user.is_owner:
                     continue
                 await channel.ensure_running(req.language or settings.language or None,
                                              start_seconds=req.start_seconds if (req.fresh or len(channel.subscribers) <= 1) else None)
@@ -319,7 +395,7 @@ async def ws_endpoint(ws: WebSocket) -> None:
                 await leave()
                 await ws.send_json({"type": "status", "state": "idle", "message": "Parado"})
             elif kind == "recheck":
-                if channel and is_admin(data.get("admin")):
+                if channel and access.user(data.get("admin")):
                     await channel.recheck(str(data.get("claim_id", "")))
             elif kind == "ping":
                 await ws.send_json({"type": "pong"})

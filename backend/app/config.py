@@ -25,6 +25,8 @@ class Settings(BaseSettings):
     # Only fact-check what candidates / interviewees say; drop claims the extractor attributes to moderators,
     # presenters or journalists (e.g. the premise of a question). Turn off for news broadcasts.
     candidates_only: bool = True
+    # Newsroom review: machine analyses wait as drafts until a person publishes them in /admin (off = publish at once)
+    human_review: bool = True
     # Verdict model for the web-search pass; gpt-5 models take a reasoning effort instead of temperature.
     verdict_model: str = "gpt-5-mini"
     verdict_effort: str = "low"
@@ -42,6 +44,11 @@ class Settings(BaseSettings):
     # Empty = everyone is admin (dev). Set it in production: only admins can start processing,
     # re-check, refresh the news DB or edit verdicts; visitors only watch cached/ongoing runs.
     admin_password: str = ""
+    # Google sign-in for /admin (OAuth "Web application" client id). When set, the shared password stops working
+    # and only listed e-mails get in: OWNER_EMAILS (comma-separated, full access) + checkers added in /admin.
+    google_client_id: str = ""
+    owner_emails: str = ""
+    session_secret: str = ""  # signs admin sessions; set it in production or sessions end on every restart
     # First room created on an empty DB (viewers pick rooms instead of pasting URLs); empty = none
     default_room_url: str = "https://www.youtube.com/watch?v=Amwukq3hviM"
     default_room_name: str = "Debate Band — 2º turno"

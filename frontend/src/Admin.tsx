@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { adminHeaders, adminPassword } from './admin'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react'
+import { adminHeaders, clearAdminToken, loadGoogle, reviewerName, setAdminToken, setReviewerName, type AdminUser, type AuthMode } from './admin'
 import { useSession } from './useSession'
-import type { Claim, NewsStats, Room as PublicRoom, Source, UsageSummary, Verdict } from './types'
+import type { Claim, NewsStats, ReviewStatus, Room as PublicRoom, Source, TranscriptSegment, UsageSummary, Verdict } from './types'
 import { VERDICT_LABEL } from './types'
 
 type Final = Exclude<Verdict, 'pending'>
-type Tab = 'rooms' | 'claims' | 'news' | 'glossary'
+type Tab = 'rooms' | 'claims' | 'news' | 'glossary' | 'users'
 
 interface Room extends PublicRoom {
   created: number; viewers: number; processed_to: number; state: string; message: string; usage: UsageSummary | null
@@ -15,7 +15,8 @@ interface Fix { from: string; to: string }
 interface ActivityLine { t: number; level: string; src: string; msg: string }
 interface Activity { mode: string; in_flight: number; verifying: number; activity: ActivityLine[] }
 
-const TABS: [Tab, string][] = [['rooms', 'Salas'], ['claims', 'Checagens'], ['news', 'Base de notícias'], ['glossary', 'Glossário']]
+const TABS: [Tab, string][] = [['rooms', 'Salas'], ['claims', 'Checagens'], ['news', 'Base de notícias'], ['glossary', 'Glossário'], ['users', 'Usuários']]
+const CHECKER_TABS: Tab[] = ['claims', 'news', 'glossary'] // checkers: no rooms (create/start/stop) and no users
 const KINDS: [string, string][] = [['debate', 'Debate'], ['entrevista', 'Entrevista'], ['outro', 'Outro']]
 const KIND_LABEL = Object.fromEntries(KINDS)
 const METHOD_PT: Record<string, string> = { cache: 'memória', db: 'base', web: 'web', deep: 'profunda', human: 'humano' }
@@ -127,40 +128,83 @@ function Empty({ children }: { children: ReactNode }) {
 
 // ---- shell ------------------------------------------------------------------------------------
 export function Admin() {
-  const [auth, setAuth] = useState<'checking' | 'in' | 'out'>('checking')
+  const [me, setMe] = useState<AdminUser | null>(null)
+  const [auth, setAuth] = useState<{ mode: AuthMode; google_client_id: string | null } | null>(null)
+  const [checking, setChecking] = useState(true)
   useEffect(() => {
-    fetch('/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: adminPassword() }) })
-      .then((r) => r.json()).then((d) => setAuth(d.ok ? 'in' : 'out')).catch(() => setAuth('out'))
+    fetch('/admin/me', { headers: adminHeaders() })
+      .then(async (r) => {
+        if (r.ok) { setMe(await r.json()); return }
+        setAuth(await (await fetch('/admin/auth')).json())
+      })
+      .catch(() => setAuth({ mode: 'password', google_client_id: null }))
+      .finally(() => setChecking(false))
   }, [])
-  if (auth === 'checking') return <div className="admin admin--center muted">Carregando…</div>
-  if (auth === 'out') return <Login onOk={() => setAuth('in')} />
-  return <Shell onLogout={() => { localStorage.removeItem('admin'); setAuth('out') }} />
+  function logout() {
+    clearAdminToken()
+    window.google?.accounts.id.disableAutoSelect() // don't sign straight back in with the same Google account
+    location.reload()
+  }
+  if (checking) return <div className="admin admin--center muted">Carregando…</div>
+  if (!me) return <Login auth={auth} onOk={(token, user) => { setAdminToken(token); setMe({ mode: auth?.mode, ...user }) }} />
+  return <Shell me={me} onLogout={logout} />
 }
 
-function Login({ onOk }: { onOk: () => void }) {
+function Login({ auth, onOk }: { auth: { mode: AuthMode; google_client_id: string | null } | null; onOk: (token: string, user: AdminUser) => void }) {
   const [pwd, setPwd] = useState('')
-  const [error, setError] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const button = useRef<HTMLDivElement>(null)
+  const google = auth?.mode === 'google' && auth.google_client_id
+  useEffect(() => {
+    if (!google || !button.current) return
+    const el = button.current
+    loadGoogle().then((gid) => {
+      gid.initialize({
+        client_id: auth!.google_client_id!,
+        callback: async ({ credential }) => {
+          const r = await fetch('/admin/login/google', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ credential }) })
+          const d = await r.json().catch(() => ({}))
+          if (r.ok) onOk(d.token, d.user)
+          else setError(d.detail || 'Não foi possível entrar')
+        },
+      })
+      gid.renderButton(el, { theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with', locale: 'pt-BR', width: 280 })
+    }).catch((e) => setError((e as Error).message))
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- render the Google button once
+  }, [google])
   async function submit(e: FormEvent) {
     e.preventDefault()
     const r = await fetch('/admin/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password: pwd }) })
     const d = await r.json()
-    if (d.ok) { localStorage.setItem('admin', pwd); onOk() } else setError(true)
+    if (d.ok) onOk(d.token, d.user); else setError('Senha inválida')
   }
   return (
     <div className="admin admin--center">
-      <form className="admin__login" onSubmit={submit}>
+      <div className="admin__login">
         <h1><span className="logo">●</span> Administração</h1>
-        <input type="password" autoFocus value={pwd} onChange={(e) => { setPwd(e.target.value); setError(false) }} placeholder="Senha" className={error ? 'error' : ''} />
-        {error && <p className="admin__error">Senha inválida</p>}
-        <button type="submit" className="btn" disabled={!pwd}>Entrar</button>
-      </form>
+        {google ? (
+          <>
+            <p className="muted admin__login-hint">Entre com a conta Google cadastrada pela coordenação.</p>
+            <div ref={button} className="admin__google" />
+          </>
+        ) : (
+          <form className="admin__login-form" onSubmit={submit}>
+            <input type="password" autoFocus value={pwd} onChange={(e) => { setPwd(e.target.value); setError(null) }} placeholder="Senha" className={error ? 'error' : ''} />
+            <button type="submit" className="btn" disabled={!pwd}>Entrar</button>
+          </form>
+        )}
+        {error && <p className="admin__error">{error}</p>}
+      </div>
     </div>
   )
 }
 
-function Shell({ onLogout }: { onLogout: () => void }) {
+function Shell({ me, onLogout }: { me: AdminUser; onLogout: () => void }) {
   const params = new URLSearchParams(location.search)
-  const [tab, setTab] = useState<Tab>((params.get('tab') as Tab) || 'rooms')
+  const owner = me.role === 'owner'
+  const tabs = TABS.filter(([t]) => owner || CHECKER_TABS.includes(t))
+  const asked = params.get('tab') as Tab
+  const [tab, setTab] = useState<Tab>(tabs.some(([t]) => t === asked) ? asked : tabs[0][0])
   const [rooms, setRooms] = useState<Room[]>([])
   const [roomId, setRoomId] = useState<string>(params.get('room') || '')
   const [toast, setToast] = useState<string | null>(null)
@@ -190,7 +234,7 @@ function Shell({ onLogout }: { onLogout: () => void }) {
       <nav className="sidebar">
         <div className="sidebar__brand"><span className="logo">●</span> Checagem ao vivo</div>
         <div className="sidebar__nav">
-          {TABS.map(([t, label]) => (
+          {tabs.map(([t, label]) => (
             <button key={t} className={`sidebar__item${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
               {label}
               {t === 'rooms' && live > 0 && <span className="sidebar__count sidebar__count--live">{live} ao vivo</span>}
@@ -201,14 +245,19 @@ function Shell({ onLogout }: { onLogout: () => void }) {
         <div className="sidebar__foot">
           <a className="sidebar__item" href="/" target="_blank" rel="noreferrer">Ver como espectador ↗</a>
           <a className="sidebar__item" href="/#review">Revisão offline</a>
+          <div className="sidebar__user" title={me.email}>
+            {me.picture ? <img src={me.picture} alt="" referrerPolicy="no-referrer" /> : <span className="sidebar__avatar">{(me.name || me.email)[0]?.toUpperCase()}</span>}
+            <span className="sidebar__who"><span>{me.name || me.email}</span><span className="muted">{owner ? 'Owner' : 'Checador'}</span></span>
+          </div>
           <button type="button" className="sidebar__item" onClick={onLogout}>Sair</button>
         </div>
       </nav>
       <main className="shell__main">
         {tab === 'rooms' && <RoomsPage rooms={rooms} reload={loadRooms} notify={notify} openClaims={(id) => { setRoomId(id); setTab('claims') }} />}
-        {tab === 'claims' && <ClaimsPage rooms={rooms} room={room} onPick={setRoomId} reload={loadRooms} notify={notify} />}
+        {tab === 'claims' && <ClaimsPage rooms={rooms} room={room} onPick={setRoomId} reload={loadRooms} notify={notify} owner={owner} me={me} />}
         {tab === 'news' && <NewsPage notify={notify} />}
         {tab === 'glossary' && <GlossaryPage notify={notify} />}
+        {tab === 'users' && owner && <UsersPage me={me} notify={notify} />}
       </main>
       {toast && <div className="toast" onClick={() => setToast(null)}>{toast}</div>}
     </div>
@@ -415,41 +464,128 @@ function ActivitySection({ roomId, live }: { roomId: string; live: boolean }) {
 }
 
 // ---- Checagens --------------------------------------------------------------------------------
-function ClaimsPage({ rooms, room, onPick, reload, notify }: { rooms: Room[]; room: Room | undefined; onPick: (id: string) => void; reload: () => Promise<void>; notify: (m: string) => void }) {
+const STATUS_PT: Record<ReviewStatus, string> = { draft: 'Aguardando', published: 'Publicada', irrelevant: 'Irrelevante' }
+const STATUS_FILTERS: [ReviewStatus | 'all', string][] = [['draft', 'Aguardando'], ['published', 'Publicadas'], ['irrelevant', 'Irrelevantes'], ['all', 'Todas']]
+const statusOf = (c: Claim): ReviewStatus => c.status ?? 'published'
+const CARD_SWAP_MS = 120 // the exit animation; a fast server still waits this long so the action is felt
+const LEASE_RENEW_MS = 45_000 // the server holds a review for 120 s; renew well before that while the card is open
+
+interface Edits { verdict: Final; explanation: string; sources: Source[]; quote: string; speaker: string }
+
+function ReviewerDialog({ initial, onSave, onClose }: { initial: string; onSave: (name: string) => void; onClose?: () => void }) {
+  const [name, setName] = useState(initial)
+  return (
+    <Dialog title="Quem está revisando?" onClose={onClose ?? (() => {})}>
+      <form className="form" onSubmit={(e) => { e.preventDefault(); if (name.trim()) onSave(name.trim()) }}>
+        <Field label="Seu nome" hint="Aparece para a redação enquanto você revisa uma análise e em quem publicou. Não aparece no site.">
+          <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Ana Souza" />
+        </Field>
+        <button type="submit" className="btn" disabled={!name.trim()}>Começar a revisar</button>
+      </form>
+    </Dialog>
+  )
+}
+
+function ClaimsPage({ rooms, room, onPick, reload, notify, owner, me }: { rooms: Room[]; room: Room | undefined; onPick: (id: string) => void; reload: () => Promise<void>; notify: (m: string) => void; owner: boolean; me: AdminUser }) {
   const session = useSession()
-  const [filter, setFilter] = useState<'all' | Verdict>('all')
+  const [status, setStatus] = useState<ReviewStatus | 'all'>('draft')
+  const [verdictFilter, setVerdictFilter] = useState<'all' | Verdict>('all')
   const [q, setQ] = useState('')
-  const [selected, setSelected] = useState<string | null>(null)
+  // with Google sign-in the reviewer is the signed-in person; otherwise (password/open) a name typed once per browser
+  const google = me.mode === 'google'
+  const [typedName, setTypedName] = useState(reviewerName)
+  const reviewer = google ? me.name || me.email : typedName
+  const [askName, setAskName] = useState(false)
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [opened, setOpened] = useState<Claim | null>(null) // the server's copy until the WS delivers its own
   const url = room?.url
   useEffect(() => {
-    if (url) session.start(url, '', 0, false, false, false, true)
+    if (url) session.start(url, '', 0, false, false, false, true, true)
     else session.stop()
+    setOpenId(null)
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- (re)subscribe only when the room changes
   }, [url])
+  const serverNow = () => Date.now() / 1000 - session.clockOffset
+  const heldByOther = (c: Claim) => !!c.claimed_by && c.claimed_by !== reviewer && (c.claimed_until ?? 0) > serverNow()
+  const skippedByMe = (c: Claim) => !!reviewer && (c.skipped_by ?? []).includes(reviewer)
 
   const visible = useMemo(() => {
     const needle = q.trim().toLowerCase()
-    return [...session.claims]
-      .filter((c) => filter === 'all' || c.verdict === filter)
-      .filter((c) => !needle || c.text.toLowerCase().includes(needle) || c.explanation.toLowerCase().includes(needle))
-      .sort((a, b) => b.start - a.start)
-  }, [session.claims, filter, q])
+    return session.claims
+      .filter((c) => status === 'all' || statusOf(c) === status)
+      .filter((c) => verdictFilter === 'all' || c.verdict === verdictFilter)
+      .filter((c) => !needle || c.text.toLowerCase().includes(needle) || c.explanation.toLowerCase().includes(needle) || (c.speaker ?? '').toLowerCase().includes(needle))
+      // the queue in speaking order (same order and tie-break as the server's "next"); history newest first
+      .sort((a, b) => (status === 'draft' ? a.start - b.start || (a.id < b.id ? -1 : 1) : b.start - a.start))
+  }, [session.claims, status, verdictFilter, q])
   const counts = useMemo(() => {
-    const c: Record<Verdict, number> = { pending: 0, fake: 0, valid: 0, inconclusive: 0 }
-    for (const cl of session.claims) c[cl.verdict]++
+    const c: Record<ReviewStatus, number> = { draft: 0, published: 0, irrelevant: 0 }
+    for (const cl of session.claims) c[statusOf(cl)]++
     return c
   }, [session.claims])
-  const claim = session.claims.find((c) => c.id === selected)
+  const ready = session.claims.filter((c) => statusOf(c) === 'draft' && c.verdict !== 'pending' && !c.deep_pending && !heldByOther(c) && !skippedByMe(c)).length
+  const claim = (openId && (session.claims.find((c) => c.id === openId) ?? (opened?.id === openId ? opened : null))) || null
 
-  async function save(c: Claim, verdict: Final, explanation: string, sources: Source[], text: string, speaker: string) {
-    if (!url) return
-    await api('/admin/claim', { method: 'POST', body: JSON.stringify({ url, claim_id: c.id, verdict, explanation, sources, text, speaker }) })
+  const afterName = useRef<(() => void) | null>(null)
+  function needName(then: () => void): boolean {
+    if (google || reviewerName()) return false
+    afterName.current = then // carry on with what was clicked once the name is saved
+    setAskName(true)
+    return true
   }
-  async function remove(c: Claim) {
-    if (!room) return
-    await api(`/admin/claims/${room.video_id}/${c.id}`, { method: 'DELETE' })
-    setSelected(null)
+  const body = (extra: object = {}) => JSON.stringify({ url, reviewer: google ? undefined : reviewerName(), ...extra })
+  async function openClaim(c: Claim) {
+    if (needName(() => openClaim(c)) || !url) return
+    if (heldByOther(c)) { notify(`${c.claimed_by} está revisando esta análise`); return }
+    try {
+      const r = await api<{ claim: Claim }>(`/admin/review/${c.id}/lease`, { method: 'POST', body: body() })
+      setOpened(r.claim)
+      setOpenId(c.id)
+    } catch (e) { notify((e as Error).message) }
   }
+  async function next(after?: string, clickedAt?: number) {
+    if (needName(() => next(after)) || !url) return
+    try {
+      const r = await api<{ claim: Claim | null }>('/admin/review/next', { method: 'POST', body: body({ after }) })
+      const left = clickedAt === undefined ? 0 : CARD_SWAP_MS - (performance.now() - clickedAt)
+      if (left > 0) await new Promise((ok) => setTimeout(ok, left)) // never more than the animation itself
+      if (r.claim) { setOpened(r.claim); setOpenId(r.claim.id) } else { setOpenId(null); notify('Nenhuma análise aguardando revisão agora') }
+    } catch (e) { notify((e as Error).message) }
+  }
+  function release(id: string) {
+    api(`/admin/review/${id}/release`, { method: 'POST', body: body() }).catch(() => {})
+  }
+  function close() {
+    if (openId) release(openId)
+    setOpenId(null)
+  }
+  async function skip(): Promise<boolean> {
+    if (!openId) return false
+    const id = openId
+    const t0 = performance.now()
+    try { await api(`/admin/review/${id}/skip`, { method: 'POST', body: body() }) } catch (e) { notify((e as Error).message); return false }
+    await next(id, t0) // the server never offers it to me again; others still get it
+    return true
+  }
+  async function decide(c: Claim, action: 'publish' | 'irrelevant', edits?: Edits): Promise<boolean> {
+    const t0 = performance.now()
+    try {
+      await api(`/admin/review/${c.id}/decide`, { method: 'POST', body: body({ action, rev: c.rev ?? 0, ...edits }) })
+    } catch (e) { notify((e as Error).message); return false }
+    if (statusOf(c) === 'draft') await next(c.id, t0) // working the queue: the card after this one, in speaking order
+    else setOpenId(null) // a correction of an already published claim: back to the list
+    return true
+  }
+  // keep the review while the card is open; if someone else took it over (lease expired), say so and close
+  useEffect(() => {
+    if (!openId || !url) return
+    const t = setInterval(() => {
+      api(`/admin/review/${openId}/lease`, { method: 'POST', body: JSON.stringify({ url, reviewer }) })
+        .catch((e) => { notify((e as Error).message); setOpenId(null) })
+    }, LEASE_RENEW_MS) // closing the tab without "×" just lets the lease expire
+    return () => clearInterval(t)
+  }, [openId, url, reviewer, notify])
+
   async function toggle() {
     if (!room) return
     try {
@@ -464,105 +600,229 @@ function ClaimsPage({ rooms, room, onPick, reload, notify }: { rooms: Room[]; ro
       <div className="page__content">
         <PageHeader
           title={rooms.length > 1 ? (
-            <select className="title-select" value={room?.id ?? ''} onChange={(e) => { onPick(e.target.value); setSelected(null) }}>
+            <select className="title-select" value={room?.id ?? ''} onChange={(e) => { close(); onPick(e.target.value) }}>
               {rooms.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
             </select>
           ) : room?.name ?? 'Checagens'}
-          meta={st && <span className={`state state--${st.cls}`}><span className="state__dot" />{st.word}</span>}>
-          {room && !room.complete && (
-            <button type="button" className={room.processing ? 'btn btn--stop' : 'btn'} onClick={toggle}>{room.processing ? 'Parar' : 'Iniciar checagem'}</button>
+          meta={<>
+            {st && <span className={`state state--${st.cls}`}><span className="state__dot" />{st.word}</span>}
+            {google ? <span className="muted">revisando como {reviewer}</span>
+              : reviewer && <button type="button" className="link" onClick={() => setAskName(true)} title="Trocar o nome">revisando como {reviewer}</button>}
+          </>}>
+          {room && <button type="button" className="btn" onClick={() => next()} disabled={ready === 0}>Revisar{ready > 0 && ` (${ready})`}</button>}
+          {owner && room && !room.complete && (
+            <button type="button" className="btn btn--stop" onClick={toggle}>{room.processing ? 'Parar' : 'Iniciar checagem'}</button>
           )}
         </PageHeader>
         <div className="toolbar">
           <div className="pills">
-            {(['all', 'fake', 'valid', 'inconclusive', 'pending'] as const).map((f) => (
-              <button key={f} type="button" className={`pill${filter === f ? ' active' : ''}`} onClick={() => setFilter(f)}>
-                {f === 'all' ? 'Todas' : f === 'pending' ? 'Verificando' : VERDICT_LABEL[f]} <span className="pill__n">{f === 'all' ? session.claims.length : counts[f]}</span>
+            {STATUS_FILTERS.map(([f, label]) => (
+              <button key={f} type="button" className={`pill${status === f ? ' active' : ''}`} onClick={() => setStatus(f)}>
+                {label} <span className="pill__n">{f === 'all' ? session.claims.length : counts[f]}</span>
               </button>
             ))}
           </div>
+          <select className="search search--select" value={verdictFilter} onChange={(e) => setVerdictFilter(e.target.value as typeof verdictFilter)} title="Veredito da máquina">
+            <option value="all">Todos os vereditos</option>
+            {(['fake', 'valid', 'inconclusive', 'pending'] as const).map((v) => <option key={v} value={v}>{VERDICT_LABEL[v]}</option>)}
+          </select>
           <input className="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar…" />
         </div>
         {!room && <Empty><p>Crie uma sala primeiro.</p></Empty>}
         {room && visible.length === 0 && (
-          <Empty><p className="muted">{session.claims.length === 0 ? 'Nenhuma afirmação ainda — as checagens aparecem aqui em tempo real.' : 'Nada com esse filtro.'}</p></Empty>
+          <Empty><p className="muted">{session.claims.length === 0 ? 'Nenhuma afirmação ainda — as análises da máquina aparecem aqui em tempo real.'
+            : status === 'draft' ? 'Nada aguardando revisão.' : 'Nada com esse filtro.'}</p></Empty>
         )}
         <div className="rows">
-          {visible.map((c) => (
-            <button key={c.id} type="button" className={`row row--claim claim--${c.verdict}${selected === c.id ? ' active' : ''}`} onClick={() => setSelected(c.id)}>
-              <span className="claim__badge">{c.verdict === 'pending' && <span className="spinner" aria-hidden />}{VERDICT_LABEL[c.verdict]}</span>
-              <span className="row__main"><span className="row__title row__title--normal">{c.speaker && <strong>{c.speaker}: </strong>}{c.text}</span></span>
-              {c.method === 'human' && <span className="chip">editada</span>}
-              <span className="row__meta">{c.verdict !== 'pending' && `${Math.round(c.confidence * 100)}% · `}{fmt(c.start)}</span>
-              <span className="row__chevron">›</span>
-            </button>
-          ))}
+          {visible.map((c) => {
+            const other = heldByOther(c)
+            const s = statusOf(c)
+            return (
+              <button key={c.id} type="button" className={`row row--claim claim--${c.verdict} row--${s}${openId === c.id ? ' active' : ''}${other ? ' row--held' : ''}`} onClick={() => openClaim(c)}>
+                <span className="claim__badge">{c.verdict === 'pending' && <span className="spinner" aria-hidden />}{VERDICT_LABEL[c.verdict]}</span>
+                <span className="row__main"><span className="row__title row__title--normal">{c.speaker && <strong>{c.speaker}: </strong>}{c.text}</span></span>
+                {other ? <span className="chip chip--held" title="Está com o card aberto">✎ {c.claimed_by}</span>
+                  : <span className={`chip chip--${s}`} title={c.reviewed_by ? `por ${c.reviewed_by}` : undefined}>{STATUS_PT[s]}{c.method === 'human' && ' · editada'}{s === 'draft' && skippedByMe(c) && ' · você pulou'}</span>}
+                <span className="row__meta">{c.verdict !== 'pending' && `${Math.round(c.confidence * 100)}% · `}{fmt(c.start)}</span>
+                <span className="row__chevron">›</span>
+              </button>
+            )
+          })}
         </div>
       </div>
-      {claim && <ClaimPanel key={claim.id} claim={claim} onClose={() => setSelected(null)} onSave={save} onDelete={remove} onRecheck={session.recheck} notify={notify} />}
+      {claim && (
+        <ReviewCard key={`${claim.id}-${claim.verdict === 'pending'}`} claim={claim} transcript={session.transcript} queue={ready}
+          onClose={close} onSkip={skip} onDecide={decide} onRecheck={session.recheck} />
+      )}
+      {askName && <ReviewerDialog initial={reviewer} onClose={reviewer ? () => setAskName(false) : undefined}
+        onSave={(n) => { setReviewerName(n); setTypedName(n); setAskName(false); afterName.current?.(); afterName.current = null }} />}
     </div>
   )
 }
 
-function ClaimPanel({ claim: c, onClose, onSave, onDelete, onRecheck, notify }: {
-  claim: Claim; onClose: () => void; onSave: (c: Claim, v: Final, e: string, s: Source[], t: string, sp: string) => Promise<void>; onDelete: (c: Claim) => Promise<void>
-  onRecheck: (id: string) => void; notify: (m: string) => void
+function ReviewCard({ claim: live, transcript, queue, onClose, onSkip, onDecide, onRecheck }: {
+  claim: Claim; transcript: TranscriptSegment[]; queue: number; onClose: () => void; onSkip: () => Promise<boolean>
+  onDecide: (c: Claim, action: 'publish' | 'irrelevant', edits?: Edits) => Promise<boolean>; onRecheck: (id: string) => void
 }) {
-  const initialVerdict: Final = c.verdict === 'pending' ? 'inconclusive' : c.verdict
+  useEscape(onClose)
+  // while the card animates out, it keeps showing what was decided on (the live claim turns "published"
+  // under it, which would swap the buttons mid-animation)
+  const [frozen, setFrozen] = useState<Claim | null>(null)
+  const c = frozen ?? live
+  const draft = statusOf(c) === 'draft'
+  const pending = c.verdict === 'pending'
+  const initialVerdict: Final = pending ? 'inconclusive' : c.verdict as Final
+  const initialQuote = c.quote || c.text // what the site shows: the speaker's own words
   const [verdict, setVerdict] = useState<Final>(initialVerdict)
-  const [text, setText] = useState(c.text)
+  const [quote, setQuote] = useState(initialQuote)
   const [speaker, setSpeaker] = useState(c.speaker ?? '')
   const [explanation, setExplanation] = useState(c.explanation)
   const [sources, setSources] = useState<Source[]>(c.sources)
-  const [saving, setSaving] = useState(false)
-  const cleanSources = sources.filter((s) => s.url.trim()).map((s) => ({ title: s.title.trim(), url: s.url.trim() }))
-  const dirty = verdict !== initialVerdict || explanation !== c.explanation || text.trim() !== c.text || speaker.trim() !== (c.speaker ?? '')
-    || JSON.stringify(cleanSources) !== JSON.stringify(c.sources)
-  async function submit(e: FormEvent) {
-    e.preventDefault()
-    if (!dirty) return
-    setSaving(true)
-    try { await onSave(c, verdict, explanation, cleanSources, text.trim() || c.text, speaker.trim()) } catch (err) { notify((err as Error).message) } finally { setSaving(false) }
+  const [busy, setBusy] = useState<'publish' | 'irrelevant' | 'skip' | null>(null)
+  const [titling, setTitling] = useState<number | null>(null) // source row whose page title is being fetched
+  // pasting a link fills an empty title with the page's own (the server reads it: browsers can't cross-origin)
+  async function titleFor(i: number, url: string) {
+    setTitling(i)
+    try {
+      const { title } = await api<{ title: string }>(`/admin/page-title?url=${encodeURIComponent(url)}`)
+      if (title) setSources((ss) => ss.map((x, j) => (j === i && !x.title.trim() && x.url.trim() === url ? { ...x, title } : x)))
+    } catch { /* no title: the person types one, or leaves it empty */ } finally { setTitling((t) => (t === i ? null : t)) }
   }
-  const formId = `claim-${c.id}`
+  const cleanSources = sources.filter((s) => s.url.trim()).map((s) => ({ title: s.title.trim(), url: s.url.trim() }))
+  const dirty = verdict !== initialVerdict || explanation !== c.explanation || quote.trim() !== initialQuote || speaker.trim() !== (c.speaker ?? '')
+    || JSON.stringify(cleanSources) !== JSON.stringify(c.sources)
+  const excerpt = transcript.filter((s) => s.start >= c.start - 24 && s.start <= c.end + 8).sort((a, b) => a.start - b.start)
+  // the card animates out while the request runs (no added wait); the next card animates in when it arrives
+  async function act(action: 'publish' | 'irrelevant' | 'skip') {
+    setFrozen(live)
+    setBusy(action)
+    const ok = action === 'skip' ? await onSkip() : await onDecide(c, action, action === 'publish'
+      ? { verdict, explanation, sources: cleanSources, quote: quote.trim() || initialQuote, speaker: speaker.trim() } : undefined)
+    if (!ok) { setBusy(null); setFrozen(null) } // failed (e.g. someone else changed it): the card comes back
+  }
+  const canPublish = !busy && !(pending && verdict === initialVerdict && !dirty) && (draft || statusOf(c) === 'irrelevant' || dirty)
+  const publishLabel = draft ? 'Publicar' : statusOf(c) === 'irrelevant' ? 'Publicar no site' : 'Salvar correção'
   return (
-    <Panel title="Checagem" meta={<>{fmt(c.start)}{c.method && ` · ${METHOD_PT[c.method] ?? c.method}`}{c.verdict !== 'pending' && ` · ${Math.round(c.confidence * 100)}%`}</>} onClose={onClose}
-      actions={<button type="submit" form={formId} className="btn" disabled={!dirty || saving}>{saving ? 'Salvando…' : 'Publicar'}</button>}
-      footer={
-        <>
-          {c.verdict !== 'pending' && !c.deep_pending
-            ? <button type="button" className="link" onClick={() => onRecheck(c.id)}>Rechecar com IA</button>
-            : <span className="muted">{c.deep_pending ? 'Checagem profunda em andamento…' : 'Verificando…'}</span>}
-          <button type="button" className="link link--danger" onClick={() => { if (confirm('Excluir esta afirmação para todos os espectadores?')) onDelete(c).catch((e) => notify(e.message)) }}>Excluir</button>
-        </>
-      }>
-      <form id={formId} className="form" onSubmit={submit} onKeyDown={cmdEnter}>
-        <Field label="Quem falou" hint="Aparece antes da fala para o público. Corrigir só o nome não altera o veredito.">
-          <input value={speaker} onChange={(e) => setSpeaker(e.target.value)} placeholder="Ex.: Lula, Flávio Bolsonaro" />
-        </Field>
-        <Field label="Afirmação" hint="O que foi dito, com quem fez/recebeu o quê. Corrija se a extração trocou o sujeito.">
-          <textarea className={`quote claim--${c.verdict}`} value={text} onChange={(e) => setText(e.target.value)} rows={Math.min(6, Math.max(2, Math.ceil(text.length / 44)))} />
-        </Field>
-        <Field label="Veredito"><Segmented value={verdict} options={FINALS} onChange={setVerdict} /></Field>
-        <Field label="Explicação" hint="É o texto que o público lê embaixo da afirmação.">
-          <textarea value={explanation} onChange={(e) => setExplanation(e.target.value)} rows={Math.min(16, Math.max(5, Math.ceil(explanation.length / 44)))} />
-        </Field>
-        <div className="field">
-          <span className="field__label">Fontes</span>
-          <div className="list-edit">
-            {sources.map((s, i) => (
-              <div key={i} className="list-edit__row list-edit__row--source">
-                <input value={s.title} onChange={(e) => setSources(sources.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))} placeholder="Título" />
-                <input type="url" value={s.url} onChange={(e) => setSources(sources.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} placeholder="https://…" />
-                <button type="button" className="icon-btn" aria-label="Remover fonte" onClick={() => setSources(sources.filter((_, j) => j !== i))}>×</button>
-              </div>
-            ))}
-            <button type="button" className="link" onClick={() => setSources([...sources, { title: '', url: '' }])}>+ Adicionar fonte</button>
+    <div className="dialog__backdrop dialog__backdrop--review" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className={`dialog dialog--review claim--${verdict}${busy ? ` review--out-${busy}` : ''}`} role="dialog" aria-label="Revisar análise">
+        <header className="dialog__header review__header">
+          <span className="muted review__meta">
+            {fmt(c.start)}
+            {c.method && ` · máquina: ${METHOD_PT[c.method] ?? c.method}`}
+            {!pending && ` · ${VERDICT_LABEL[c.verdict]} ${Math.round(c.confidence * 100)}%`}
+            {` · ${STATUS_PT[statusOf(c)]}`}{c.reviewed_by && ` por ${c.reviewed_by}`}
+          </span>
+          <span className="spacer" />
+          {draft && queue > 1 && <span className="muted review__queue">{queue - 1} na fila</span>}
+          <button type="button" className="icon-btn" onClick={onClose} title="Fechar (Esc)" aria-label="Fechar">×</button>
+        </header>
+        <form id={`review-${c.id}`} className="form review__body" onSubmit={(e) => { e.preventDefault(); if (canPublish) act('publish') }} onKeyDown={cmdEnter}>
+          {pending && <p className="review__notice">A máquina ainda está verificando esta afirmação. Você pode esperar, decidir o veredito você mesmo ou marcar como irrelevante.</p>}
+          {c.deep_pending && <p className="review__notice">Checagem profunda em andamento — o veredito pode mudar.</p>}
+          <div className="field">
+            <div className="review__said-box">
+              <input className="review__speaker" value={speaker} onChange={(e) => setSpeaker(e.target.value)} placeholder="Quem falou" aria-label="Quem falou"
+                size={Math.max(8, speaker.length + 1)} />
+              <textarea className="review__quote" value={quote} onChange={(e) => setQuote(e.target.value)} aria-label="Frase como aparece no site"
+                rows={Math.min(5, Math.max(2, Math.ceil(quote.length / 60)))} />
+            </div>
           </div>
+          <div className="field">
+            <div className="review__verdict" aria-label="Veredito"><Segmented value={verdict} options={FINALS} onChange={setVerdict} /></div>
+          </div>
+          <Field label="Explicação">
+            <textarea value={explanation} onChange={(e) => setExplanation(e.target.value)} rows={Math.min(12, Math.max(3, Math.ceil(explanation.length / 70)))} />
+          </Field>
+          {excerpt.length > 0 && (
+            <details className="review__details">
+              <summary className="field__label">Trecho da transcrição</summary>
+              <div className="review__excerpt">
+                {excerpt.map((s) => <p key={s.id} className={s.start <= c.start && c.start < s.end ? 'review__said' : ''}><span className="transcript__time">{fmt(s.start)}</span>{s.text}</p>)}
+              </div>
+            </details>
+          )}
+          <div className="field">
+            <span className="field__label">Fontes</span>
+            <div className="list-edit">
+              {sources.map((s, i) => (
+                <div key={i} className="list-edit__row list-edit__row--source">
+                  <input type="url" value={s.url} onChange={(e) => setSources(sources.map((x, j) => (j === i ? { ...x, url: e.target.value } : x)))} placeholder="https://…"
+                    onPaste={(e) => { const url = e.clipboardData.getData('text').trim(); if (/^https?:\/\/\S+$/.test(url) && !s.title.trim()) titleFor(i, url) }} />
+                  <input value={s.title} onChange={(e) => setSources(sources.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)))}
+                    placeholder={titling === i ? 'Buscando título…' : 'Título (opcional)'} />
+                  <button type="button" className="icon-btn" aria-label="Remover fonte" onClick={() => setSources(sources.filter((_, j) => j !== i))}>×</button>
+                </div>
+              ))}
+              <button type="button" className="link" onClick={() => setSources([...sources, { title: '', url: '' }])}>+ Adicionar fonte</button>
+            </div>
+          </div>
+        </form>
+        <footer className="review__footer">
+          {draft && !pending && !c.deep_pending && <button type="button" className="link" onClick={() => onRecheck(c.id)}>Rechecar com IA</button>}
+          <span className="spacer" />
+          {draft && <button type="button" className={`btn btn--stop${busy === 'skip' ? ' btn--pressed' : ''}`} onClick={() => act('skip')} disabled={!!busy} title="Não aparece mais para você em Revisar; continua na fila dos outros">Pular</button>}
+          {statusOf(c) !== 'irrelevant' && (
+            <button type="button" className={`btn btn--stop${busy === 'irrelevant' ? ' btn--pressed' : ''}`} onClick={() => act('irrelevant')} disabled={!!busy} title={draft ? 'Não vai para o site' : 'Tira do site'}>
+              {busy === 'irrelevant' ? 'Salvando…' : draft ? 'Irrelevante' : 'Tirar do site'}
+            </button>
+          )}
+          <button type="submit" form={`review-${c.id}`} className={`btn${busy === 'publish' ? ' btn--pressed btn--published' : ''}`} disabled={!canPublish}>{busy === 'publish' ? 'Publicando…' : publishLabel}</button>
+        </footer>
+      </div>
+    </div>
+  )
+}
+
+// ---- Usuários (owners only) ----------------------------------------------------------------------
+interface ListedUser { email: string; role: 'owner' | 'checker'; name?: string | null; picture?: string | null; added_by?: string | null; added_at?: number | null; last_login?: number | null; fixed: boolean }
+
+function UsersPage({ me, notify }: { me: AdminUser; notify: (m: string) => void }) {
+  const [list, setList] = useState<ListedUser[] | null>(null)
+  const [email, setEmail] = useState('')
+  const [saving, setSaving] = useState(false)
+  const load = useCallback(() => api<ListedUser[]>('/admin/users').then(setList).catch((e) => notify((e as Error).message)), [notify])
+  // oxlint-disable-next-line react-hooks/set-state-in-effect -- initial load
+  useEffect(() => { load() }, [load])
+  async function add(e: FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      await api('/admin/users', { method: 'POST', body: JSON.stringify({ email: email.trim() }) })
+      setEmail('')
+      await load()
+    } catch (err) { notify((err as Error).message) } finally { setSaving(false) }
+  }
+  async function remove(u: ListedUser) {
+    if (!confirm(`Remover o acesso de ${u.email}? A pessoa sai do admin na hora.`)) return
+    try { await api(`/admin/users/${encodeURIComponent(u.email)}`, { method: 'DELETE' }); await load() } catch (err) { notify((err as Error).message) }
+  }
+  const checkers = list?.filter((u) => !u.fixed).length ?? 0
+  return (
+    <div className="page">
+      <div className="page__content">
+        <PageHeader title="Usuários" meta={list && `${list.length - checkers} owner${list.length - checkers === 1 ? '' : 's'} · ${checkers} checador${checkers === 1 ? '' : 'es'}`} />
+        <form className="toolbar users__add" onSubmit={add}>
+          <input className="search" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="e-mail do Google do checador" required />
+          <button type="submit" className="btn" disabled={saving || !email.trim()}>{saving ? 'Adicionando…' : 'Adicionar checador'}</button>
+          <span className="muted users__hint">Checadores revisam checagens e cuidam da base de notícias e do glossário. Não criam nem iniciam salas, nem gerenciam usuários.</span>
+        </form>
+        {list && list.length === 0 && <Empty><p className="muted">Ninguém cadastrado.</p></Empty>}
+        <div className="rows">
+          {list?.map((u) => (
+            <div key={u.email} className="row row--static">
+              {u.picture ? <img className="users__avatar" src={u.picture} alt="" referrerPolicy="no-referrer" /> : <span className="users__avatar users__avatar--empty">{(u.name || u.email)[0]?.toUpperCase()}</span>}
+              <span className="row__main">
+                <span className="row__title">{u.name || u.email}{u.email === me.email && <span className="muted"> · você</span>}</span>
+                <span className="row__sub">{u.name ? u.email : u.last_login ? '' : 'ainda não entrou'}</span>
+              </span>
+              <span className={`chip${u.role === 'owner' ? ' chip--owner' : ''}`}>{u.role === 'owner' ? 'Owner' : 'Checador'}</span>
+              <span className="row__meta">{u.fixed ? 'definido no servidor' : u.last_login ? `entrou ${ago(u.last_login)}` : u.added_by ? `por ${u.added_by}` : ''}</span>
+              {u.fixed ? <span className="users__remove" /> : <button type="button" className="link link--danger users__remove" onClick={() => remove(u)}>Remover</button>}
+            </div>
+          ))}
         </div>
-        {dirty && <p className="kbd-hint">⌘↵ publica para todos os espectadores</p>}
-      </form>
-    </Panel>
+      </div>
+    </div>
   )
 }
 

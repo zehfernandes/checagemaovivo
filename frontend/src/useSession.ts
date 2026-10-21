@@ -103,7 +103,7 @@ export function useSession() {
   }, [enqueue])
 
   const start = useCallback(
-    (url: string, language: string, startSeconds = 0, keep = false, fresh = false, save = false, watch = false) => {
+    (url: string, language: string, startSeconds = 0, keep = false, fresh = false, save = false, watch = false, review = false) => {
       setError(null)
       setLost(false)
       if (!keep) {
@@ -117,7 +117,7 @@ export function useSession() {
       setStatusText(keep ? 'Ressincronizando…' : 'Conectando…')
       setStatusCode(null)
       const socket = connect()
-      const payload = JSON.stringify({ type: 'start', url, language: language || null, start_seconds: startSeconds, fresh, save, watch, admin: adminPassword() })
+      const payload = JSON.stringify({ type: 'start', url, language: language || null, start_seconds: startSeconds, fresh, save, watch, review, admin: adminPassword() })
       if (socket.readyState === WebSocket.OPEN) socket.send(payload)
       else socket.addEventListener('open', () => socket.send(payload), { once: true })
     },

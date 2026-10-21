@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Claim, Verdict } from '../types'
-import { PUBLIC_VERDICT } from './feedData'
+import { VerdictPill } from './Feed'
 
 const LANES = 7
 const SPEED_PX_S = 120
@@ -134,10 +134,7 @@ export function Danmu({ claims, isLive, currentTime, enabled }: Props) {
           style={{ top: `${6 + b.lane * 12}%`, animationDuration: `${b.durMs}ms` }}
           title={b.explanation || undefined}
         >
-          <span className="danmu__badge">
-            {b.verdict === 'pending' && <span className="spinner" />}
-            {PUBLIC_VERDICT[b.verdict]}
-          </span>
+          <VerdictPill verdict={b.verdict} />
           {b.text}
         </div>
       ))}

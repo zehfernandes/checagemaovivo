@@ -16,7 +16,7 @@ import time
 import uuid
 from pathlib import Path
 
-from .config import BACKEND_DIR, settings
+from .config import settings
 from .factcheck import FactChecker, VerifyResult
 from .models import Verdict
 

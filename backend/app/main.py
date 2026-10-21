@@ -316,7 +316,7 @@ async def review_export(run: str):
                              headers={"Content-Disposition": f'attachment; filename="golden-{run}.jsonl"'})
 
 
-@app.get("/review/eval")
+@app.get("/review/eval", dependencies=[Depends(require_owner)])  # re-runs paid verification
 async def review_eval(run: str, rerun: bool = False):
     checker = make_factchecker(client, store) if rerun else None
     return await run_eval(review, checker, run, rerun)

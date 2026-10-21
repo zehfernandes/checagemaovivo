@@ -1,6 +1,6 @@
 """Re-extract the chunks behind audited claims with several extractor models and judge the fidelity of what comes out.
 Usage: python3 -m scripts.extract_eval data/fidelity_audit.json ~/prod_snapshot.json [--n-faithful 40]"""
-import argparse, asyncio, json, random, re, time
+import argparse, asyncio, json, random, time
 from collections import Counter
 from openai import AsyncOpenAI
 from app.config import settings

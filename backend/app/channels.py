@@ -220,6 +220,7 @@ class Channel:
             seg = ev["segment"]
             self.transcripts[seg["id"]] = ev
             self.processed_to = max(self.processed_to, seg["end"])
+            self._retries = 0  # audio is flowing again: a later drop gets a fresh set of reconnects
             self._put("transcript", seg["id"], seg["start"], ev)
             if self.info.clip_end is not None and seg["end"] >= self.info.clip_end and not self.complete:
                 self.complete = True

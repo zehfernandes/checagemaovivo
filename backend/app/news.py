@@ -220,9 +220,6 @@ class NewsStore:
                 return self._vrows[i], s
         return None
 
-    def verdict_count(self) -> int:
-        return len(self._vrows)
-
     def has_url(self, url: str) -> bool:
         return self.db.execute("SELECT 1 FROM docs WHERE url = ?", (url,)).fetchone() is not None
 
@@ -340,7 +337,7 @@ class NewsStore:
                 feeds = await asyncio.gather(*(http.get(u) for u in self.feeds.values()), return_exceptions=True)
                 candidates: list[dict] = []
                 seen: set[str] = set()
-                for (source, feed_url), res in zip(self.feeds.items(), feeds):
+                for source, res in zip(self.feeds, feeds):
                     if isinstance(res, Exception):
                         log.warning("feed %s failed: %s", source, res)
                         continue
@@ -360,10 +357,10 @@ class NewsStore:
                 async def grab(c: dict) -> dict | None:
                     async with sem:
                         try:
-                            final, text, page_title = await self._fetch_page(http, c["url"])
+                            _, text, page_title = await self._fetch_page(http, c["url"])
                         except Exception as ex:  # noqa: BLE001
                             log.debug("article %s failed: %s", c["url"], ex)
-                            final, text, page_title = c["url"], "", ""
+                            text, page_title = "", ""
                     if len(text) < 200:
                         text = trafilatura.html2txt(c["summary"]) if c["summary"] else ""
                     if len(text) < 120:

@@ -90,7 +90,7 @@ export function Review() {
   async function runEval() {
     setEvaluating(true); setEvalResult('')
     try {
-      const r = await fetch(`/review/eval?run=${encodeURIComponent(run)}&rerun=true`)
+      const r = await fetch(`/review/eval?run=${encodeURIComponent(run)}&rerun=true`, { headers: adminHeaders() })
       const d = await r.json()
       setEvalResult(JSON.stringify(d.rerun ?? d, null, 2))
     } finally { setEvaluating(false) }

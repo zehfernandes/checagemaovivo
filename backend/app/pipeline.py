@@ -224,7 +224,7 @@ class Pipeline:
         async with self.verify_sem:
             try:
                 r = await self.checker.deep_verify(claim.text, context)
-            except Exception as e:  # noqa: BLE001
+            except Exception:  # noqa: BLE001
                 log.exception("deep verification failed")
                 r = VerifyResult(claim.verdict, claim.confidence, claim.explanation, claim.sources, claim.method or "web")
         self._apply(claim, r)

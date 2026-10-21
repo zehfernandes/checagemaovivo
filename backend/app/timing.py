@@ -17,7 +17,7 @@ _WORD = re.compile(r"\w+", re.UNICODE)
 CUSHION_S = 1.5  # reveal slightly after the sentence closes rather than a hair before
 _STOP = {"que", "com", "para", "uma", "dos", "das", "não", "nao", "mais", "esse", "essa", "este", "esta",
          "isso", "ele", "ela", "eles", "elas", "você", "voce", "nós", "nos", "por", "como", "mas", "foi",
-         "ser", "tem", "está", "esta", "são", "sao", "aos", "pelo", "pela", "até", "ate", "seu", "sua"}
+         "ser", "tem", "está", "são", "sao", "aos", "pelo", "pela", "até", "ate", "seu", "sua"}
 
 
 def _norm(s: str) -> str:

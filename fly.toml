@@ -23,6 +23,10 @@ primary_region = "gru"
   auto_stop_machines = "off"   # keep the shared processing + WebSockets alive
   auto_start_machines = true
   min_machines_running = 1
+  [http_service.concurrency]   # Fly defaults to 25 connections; every viewer holds a WebSocket
+    type = "connections"
+    soft_limit = 4000
+    hard_limit = 5000
 
 [[vm]]
   size = "shared-cpu-2x"

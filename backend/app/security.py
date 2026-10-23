@@ -1,7 +1,7 @@
 """Security headers and per-IP limits for the public site.
 
 - Headers: a Content-Security-Policy that only lets the page load scripts, frames and connections from this site,
-  YouTube (player), Google (admin login) and Plausible (analytics); no framing by other sites (clickjacking of the
+  YouTube and Globo (players), Google (admin login) and Plausible (analytics); no framing by other sites (clickjacking of the
   admin); HSTS on the production host.
 - Limits: requests per minute and open WebSockets per client IP, so one script cannot take the single machine (and
   the checking that runs on it) down. Generous on purpose: a newsroom or an event venue puts many people behind one
@@ -44,7 +44,7 @@ def csp(script_hashes: list[str]) -> str:
         "img-src 'self' data: https:",  # speaker photos (data:), outlet logos, Google avatars, YouTube
         "font-src 'self' data:",
         f"connect-src 'self' wss: {google}/gsi/ https://plausible.io",
-        f"frame-src {youtube} {google}",
+        f"frame-src {youtube} {google} https://s.videos.globo.com",  # Globo's iframe player (g1 rooms)
         "frame-ancestors 'none'",
         "object-src 'none'",
         "base-uri 'self'",

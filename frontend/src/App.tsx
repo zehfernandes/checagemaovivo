@@ -117,7 +117,7 @@ export default function App() {
   }, [roomUrl])
 
   const typedId = extractVideoId(url)
-  // Only YouTube has an embedded player. g1/Globo (and anything else yt-dlp reads) is checked from
+  // YouTube gets the synced player, g1/Globo a plain iframe below; anything else yt-dlp reads is checked from
   // the audio alone: the viewer gets the claims and a link to watch on the original site.
   const external = !!session.info && (session.info.source ?? 'youtube') !== 'youtube'
   const videoId = external ? null : session.info?.video_id || (typedId && typedId.length === 11 ? typedId : null)
@@ -130,6 +130,9 @@ export default function App() {
   const waiting = session.state === 'error' && !session.lost && session.statusCode === 'not_started'
   const pageUrl = session.info?.page_url || url
   const label = sourceLabel(session.info?.source, pageUrl)
+  // g1/Globo: yt-dlp's id is the Globo video id, which Globo's iframe player plays (no time API, so no sync)
+  const globoId = external && /^\d{6,}$/.test(session.info?.video_id ?? '') && /^https?:\/\/([^/]+\.)?globo\.com\//.test(pageUrl)
+    ? session.info!.video_id : null
   const isLive = session.info?.is_live ?? true
   // The player reports its position twice a second; on a live only reconnects need it, so it stays
   // in a ref instead of re-rendering the whole page every tick.
@@ -259,6 +262,11 @@ export default function App() {
               text="Esta página atualiza sozinha quando a redação iniciar a checagem." href={pageUrl} cta={`Assistir no ${label}`} />
           ) : videoId && playerError === null ? (
             <Player videoId={videoId} onTime={onTime} liveDelay={delayed ? delay : 0} clip={clip} onError={setPlayerError} />
+          ) : globoId ? (
+            <div className="player">
+              <iframe src={`https://s.videos.globo.com/p3/amp/index.html?videosids=${globoId}`} title={session.info?.title || label}
+                allow="autoplay; fullscreen; encrypted-media; picture-in-picture" allowFullScreen />
+            </div>
           ) : external ? (
             <StageNotice tone={isLive ? 'live' : undefined} kicker={isLive ? `Ao vivo no ${label}` : `Transmissão no ${label}`}
               title={session.info?.title || room?.name || 'Checagem ao vivo'}

@@ -103,7 +103,8 @@ export default function App() {
       clearInterval(t)
     }
   }, [])
-  const room = rooms?.find((r) => r.id === roomId) ?? rooms?.[0]
+  // no ?room=: the room being checked live, else the first one
+  const room = rooms?.find((r) => r.id === roomId) ?? rooms?.find((r) => r.is_live && r.processing) ?? rooms?.[0]
   const roomUrl = room?.url
   // the room's registered speakers decide whose claims are shown (and the photos)
   const roster = room?.speakers
@@ -208,6 +209,8 @@ export default function App() {
     const u = url.trim()
     const youtube = !!typedId && typedId.length === 11
     if (!u || (!roomUrl && !youtube && !isHttpUrl(u))) return
+    // wait for the room list (and the room's URL): starting the default video first leaks its claims into the room
+    if (rooms === null || (roomUrl && u !== roomUrl)) return
     const isNew = u !== startedFor.current
     const lost = session.state === 'error' && session.lost
     const waiting = session.state === 'error' && !lost && !!roomUrl
@@ -216,7 +219,7 @@ export default function App() {
     const t = setTimeout(begin, isNew ? (roomUrl || youtube ? 0 : 800) : lost ? 2000 : 15000)
     return () => clearTimeout(t)
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [session.state, session.lost, url, roomUrl, typedId])
+  }, [session.state, session.lost, url, roomUrl, typedId, rooms])
 
   const clip = useMemo<[number, number] | undefined>(() => {
     const i = session.info

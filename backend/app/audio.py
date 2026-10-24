@@ -64,6 +64,17 @@ def _ytdlp_cmd() -> list[str]:
     return [exe] if exe else ["python3", "-m", "yt_dlp"]
 
 
+def _cookie_args() -> list[str]:
+    """--cookies with the GLOBO_COOKIE login (GLBID value): Globoplay lives answer 401 without one."""
+    if not settings.globo_cookie:
+        return []
+    path = os.path.join("/tmp", "globo_cookies.txt")
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as f:
+        f.write(f"# Netscape HTTP Cookie File\n.globo.com\tTRUE\t/\tTRUE\t2147483647\tGLBID\t{settings.globo_cookie}\n")
+    return ["--cookies", path]
+
+
 async def resolve_stream(url: str, attempts: int = 3) -> tuple[StreamInfo, str]:
     """Return stream metadata and a direct audio URL ffmpeg can read.
     YouTube intermittently answers "No video formats found!" / transient 403s; retry briefly."""
@@ -93,7 +104,7 @@ FORMATS = ["bestaudio[protocol^=m3u8]/bestaudio/best", "bestaudio*/best*", None]
 
 async def _resolve_once(url: str, fmt: str | None = FORMATS[0]) -> tuple[StreamInfo, str]:
     node = _node_path()
-    cmd = [*_ytdlp_cmd(), *(["--js-runtimes", f"node:{node}"] if node else []), *shlex.split(settings.ytdlp_args),
+    cmd = [*_ytdlp_cmd(), *(["--js-runtimes", f"node:{node}"] if node else []), *shlex.split(settings.ytdlp_args), *_cookie_args(),
            *(["-f", fmt] if fmt else []), "-j", "--no-playlist", "--no-warnings", url]
     proc = await asyncio.create_subprocess_exec(
         *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
@@ -120,7 +131,9 @@ async def _resolve_once(url: str, fmt: str | None = FORMATS[0]) -> tuple[StreamI
     meta = StreamInfo(
         video_id=info.get("id", ""),
         title=info.get("title", ""),
-        is_live=bool(info.get("is_live")) or live_status == "is_live",
+        # yt-dlp's Globo extractor never sets is_live; its lives are the ones without a duration
+        is_live=bool(info.get("is_live")) or live_status == "is_live"
+        or (info.get("extractor_key") == "Globo" and not info.get("duration")),
         duration=info.get("duration"),
         source=source_of(url),
         page_url=url,

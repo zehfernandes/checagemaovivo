@@ -65,7 +65,8 @@ export function Compact() {
     const t = setInterval(() => setNow(Date.now()), 15_000) // "há 2 min" labels
     return () => clearInterval(t)
   }, [])
-  const room = rooms?.find((r) => r.id === roomId) ?? rooms?.[0]
+  // no ?room=: the room being checked live, else the first one
+  const room = rooms?.find((r) => r.id === roomId) ?? rooms?.find((r) => r.is_live && r.processing) ?? rooms?.[0]
   const url = room?.url
   // the room's registered speakers decide whose claims are shown (and the photos)
   const roster = room?.speakers
